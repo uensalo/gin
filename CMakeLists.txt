@@ -3,8 +3,8 @@ project(fmd C)
 
 set(CMAKE_C_STANDARD 99)
 
-set(BUILD_OPENMP ON)
-set(DEBUG OFF)
+set(BUILD_OPENMP OFF)
+set(DEBUG ON)
 
 if(DEBUG)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
@@ -22,4 +22,4 @@ if(BUILD_OPENMP)
     endif()
 endif()
 
-add_executable(fmd main.c include/fmd_common.h include/fmd_table.h)
+add_executable(fmd main.c include/fmd_common.h include/fmd_table.h include/fmd_bitstream.h src/fmd_bitstream.c)

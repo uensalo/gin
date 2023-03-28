@@ -3,6 +3,11 @@
 
 #include "fmd_common.h"
 
+typedef struct fmd_kv_ {
+     uint8_t *key;
+     uint8_t *value;
+} fmd_kv_t;
+
 typedef struct fmd_buffer_ {
     byte_t *buf;
     pos_t size; // number of items
