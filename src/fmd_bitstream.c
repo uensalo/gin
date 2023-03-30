@@ -32,27 +32,6 @@ void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words) {
     *bs = b;
 }
 
-#ifdef BRANCHING
-void fmd_bs_init_read_word_branchless(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
-    upos_t word_idx = bit_idx >> WORD_LOG_BITS;
-    upos_t bit_s = (bit_idx & WORD_LOG_MASK);
-    upos_t bit_e = (read_size_in_bits + bit_idx - 1) & WORD_LOG_MASK;
-
-    // cache some table values
-    word_t mask_shift_left_64_bit_s = mask_shift_left_64[bit_s];
-    word_t mask_shift_right_64_63_m_bit_e = mask_shift_right_64[63 - bit_e];
-
-    word_t r1 =  bs->words[word_idx] & mask_shift_right_64[64 - read_size_in_bits];
-    word_t r2 = (bs->words[word_idx] & (mask_shift_left_64_bit_s & mask_shift_right_64_63_m_bit_e)) >> bit_s;
-    word_t r3 = ((bs->words[word_idx] & mask_shift_left_64_bit_s) >> (bit_s)) |
-                ((bs->words[word_idx + 1] & mask_shift_right_64_63_m_bit_e) << (64 - bit_s));
-
-    *read_val = mask_if[bit_s == 0] & r1 +
-                mask_if[(bit_s != 0) && (bit_e >= bit_s)] & r2 +
-                mask_if[(bit_s != 0) && (bit_e < bit_s)]  & r3;
-}
-#else
-#include <stdio.h>
 void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
     if(!read_size_in_bits) return;
     upos_t word_idx = bit_idx >> WORD_LOG_BITS;
@@ -67,7 +46,6 @@ void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bit
                     ((bs->words[word_idx + 1] & mask_shift_right_64[63 - bit_e]) << (64 - bit_s));
     }
 }
-#endif
 
 void fmd_bs_init_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos_t write_size_in_bits) {
     if(write_size_in_bits == 0) return;
