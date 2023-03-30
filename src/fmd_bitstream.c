@@ -22,7 +22,7 @@ void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words) {
         *bs = NULL;
         return;
     }
-    b->words = calloc(BS_INIT_SIZE_WORDS, sizeof(word_t));
+    b->words = calloc(no_words, sizeof(word_t));
     if(!b->words) {
         free(b);
         *bs = NULL;
@@ -54,6 +54,7 @@ void fmd_bs_init_read_word_branchless(fmd_bs_t *bs, upos_t bit_idx, upos_t read_
 #else
 #include <stdio.h>
 void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
+    if(!read_size_in_bits) return;
     upos_t word_idx = bit_idx >> WORD_LOG_BITS;
     upos_t bit_s = (bit_idx & WORD_LOG_MASK);
     upos_t bit_e = (read_size_in_bits + bit_idx - 1) & WORD_LOG_MASK;
@@ -78,8 +79,6 @@ void fmd_bs_init_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos
     upos_t word_idx = bit_idx >> WORD_LOG_BITS;
     upos_t bit_s = bit_idx & WORD_LOG_MASK;
     upos_t bit_e = (bit_idx + write_size_in_bits - 1) & WORD_LOG_MASK;
-    printf("%d,%d,%d\n", word_idx, bs->cap_in_words, bit_e);
-    fflush(stdout);
     if (bit_s == 0) { // word aligned write, write no_bits_to_write many bits from data
         bs->words[word_idx] &= mask_shift_left_64[write_size_in_bits];
         bs->words[word_idx] |= write_val & mask_shift_right_64[64 - write_size_in_bits];
