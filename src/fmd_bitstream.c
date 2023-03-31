@@ -32,6 +32,22 @@ void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words) {
     *bs = b;
 }
 
+void fmd_bs_init_from_buffer(char *buf, size_t buf_size, fmd_bs_t **bs) {
+    fmd_bs_t *b = calloc(1, sizeof(fmd_bs_t));
+    if(!b) {
+        *bs = NULL;
+        return;
+    }
+    b->words = calloc(1, sizeof(word_t) * ((buf_size >> WORD_LOG_BITS) + 1));
+    if(!b->words) {
+        free(b);
+        *bs = NULL;
+        return;
+    }
+    memcpy((char*)b->words, buf, buf_size);
+    *bs = b;
+}
+
 void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
     if(!read_size_in_bits) return;
     upos_t word_idx = bit_idx >> WORD_LOG_BITS;
@@ -69,5 +85,13 @@ void fmd_bs_init_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos
         bs->words[word_idx++] |= (write_val << bit_s);
         bs->words[word_idx] &= mask_shift_left_64[++bit_e];
         bs->words[word_idx] |= (write_val >> (64 - bit_s)) & ~mask_shift_left_64[bit_e];
+    }
+}
+
+void fmd_bs_free(fmd_bs_t **bs) {
+    if(bs && *bs) {
+        free((*bs)->words);
+        free(*bs);
+        *bs = NULL;
     }
 }

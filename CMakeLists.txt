@@ -8,9 +8,35 @@ set(DEBUG ON)
 
 if(DEBUG)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
+    set(BUILD_OPENMP OFF)
 else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIC")
 endif()
+
+set(PROJECT_ROOT_DIR   ${CMAKE_SOURCE_DIR})
+set(PROJECT_SOURCE_DIR ${PROJECT_ROOT_DIR}/src)
+set(PROJECT_HEADER_DIR ${PROJECT_ROOT_DIR}/include)
+set(PROJECT_EXTERN_DIR ${PROJECT_ROOT_DIR}/extern)
+
+set(C_FILES
+    ${PROJECT_SOURCE_DIR}/fmd_bitstream.c
+    ${PROJECT_SOURCE_DIR}/fmd_table.c
+)
+set(H_FILES
+    ${PROJECT_HEADER_DIR}/fmd_common.h
+    ${PROJECT_HEADER_DIR}/fmd_table.h
+    ${PROJECT_HEADER_DIR}/fmd_bitstream.h
+)
+
+add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
+add_library(fmd_lib_static STATIC ${C_FILES} ${H_FILES})
+
+target_include_directories(
+        fmd_lib        PUBLIC ${PROJECT_HEADER_DIR}/
+)
+target_include_directories(
+        fmd_lib_static PUBLIC ${PROJECT_HEADER_DIR}/
+)
 
 if(BUILD_OPENMP)
     find_package(OpenMP)
@@ -22,4 +48,5 @@ if(BUILD_OPENMP)
     endif()
 endif()
 
-add_executable(fmd main.c include/fmd_common.h include/fmd_table.h include/fmd_bitstream.h src/fmd_bitstream.c)
+add_executable(fmd main.c)
+target_link_libraries(fmd fmd_lib_static)
