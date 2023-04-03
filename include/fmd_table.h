@@ -2,28 +2,30 @@
 #define FMD_FMD_TABLE_H
 
 #include "fmd_common.h"
+#include "fmd_tree.h"
 
-typedef int (*key_cmp)(void*, void*);
-typedef pos_t (*key_hash)(void*);
-
-typedef struct fmd_kv_ {
-     void *k;
-     void *v;
-} fmd_kv_t;
-
-typedef struct fmd_buffer_ {
-    fmd_kv_t *buf;
-    pos_t size; // number of items
-    pos_t cap;  // number capacity in the number of items
-} fmd_vec_t;
+#define FMD_HT_INIT_SIZE 53
+#define FMD_REHASH_FACTOR 2
 
 typedef struct fmd_table_ {
-    fmd_vec_t *buckets;
-    pos_t no_buckets;
-    key_cmp cmp;
-    key_hash hsh;
-    pos_t no_items;
+    pos_t size;
+    pos_t capacity;
+    fmd_fstruct_t *key_f;
+    fmd_fstruct_t *val_f;
+    fmd_tree_node_t **roots;
+    pos_t *items_per_bucket;
 } fmd_table_t;
+
+unsigned long djb2(const char *str) {
+    unsigned long hash = 5381;
+    int c;
+
+    while ((c = *str++)) {
+        hash = ((hash << 5) + hash) + c;
+    }
+
+    return hash;
+}
 
 
 #endif //FMD_FMD_TABLE_H

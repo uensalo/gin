@@ -1,0 +1,185 @@
+#include "fmd_tree.h"
+
+fmd_tree_node_t *fmd_tree_node_init(void* key, void* value, fmd_tree_node_t *parent) {
+    fmd_tree_node_t *node = (fmd_tree_node_t *)calloc(1, sizeof(fmd_tree_node_t));
+    if(!node) {
+        return NULL;
+    }
+    node->key = key;
+    node->value = value;
+    node->left = NULL;
+    node->right = NULL;
+    node->parent = parent;
+    node->color = RED;
+    return node;
+}
+
+fmd_tree_node_t *fmd_tree_node_grandparent(fmd_tree_node_t *node) {
+    return !node || !node->parent ? NULL : node->parent->parent;
+}
+
+void fmd_tree_node_rotate_left(fmd_tree_node_t **root, fmd_tree_node_t *x) {
+    fmd_tree_node_t *y = x->right;
+    x->right = y->left;
+
+    if (y->left) {
+        y->left->parent = x;
+    }
+    y->parent = x->parent;
+
+    if (!x->parent) {
+        (*root) = y;
+    } else if (x == x->parent->left) {
+        x->parent->left = y;
+    } else {
+        x->parent->right = y;
+    }
+
+    y->left = x;
+    x->parent = y;
+}
+
+void fmd_tree_node_rotate_right(fmd_tree_node_t **root, fmd_tree_node_t *x) {
+    fmd_tree_node_t *y = x->left;
+    x->left = y->right;
+
+    if (y->right) {
+        y->right->parent = x;
+    }
+    y->parent = x->parent;
+
+    if (!x->parent) {
+        (*root) = y;
+    } else if (x == x->parent->right) {
+        x->parent->right = y;
+    } else {
+        x->parent->left = y;
+    }
+    y->right = x;
+    x->parent = y;
+}
+
+void fmd_tree_node_fix_violation(fmd_tree_node_t **root, fmd_tree_node_t *node) {
+    fmd_tree_node_t *parent = NULL;
+    fmd_tree_node_t *grandparent = NULL;
+    while ((node != *root) && (node->color == RED) &&
+           (node->parent->color == RED)) {
+        parent = node->parent;
+        grandparent = fmd_tree_node_grandparent(node);
+
+        if (parent == grandparent->left) {
+            fmd_tree_node_t *uncle = grandparent->right;
+
+            if (uncle && uncle->color == RED) {
+                grandparent->color = RED;
+                parent->color = BLACK;
+                uncle->color = BLACK;
+                node = grandparent;
+            } else {
+                if (node == parent->right) {
+                    fmd_tree_node_rotate_left(root, parent);
+                    node = parent;
+                    parent = node->parent;
+                }
+                fmd_tree_node_rotate_right(root, grandparent);
+                rbt_color_t tempColor = parent->color;
+                parent->color = grandparent->color;
+                grandparent->color = tempColor;
+                node = parent;
+            }
+        } else {
+            fmd_tree_node_t *uncle = grandparent->left;
+            if (uncle && uncle->color == RED) {
+                grandparent->color = RED;
+                parent->color = BLACK;
+                uncle->color = BLACK;
+                node = grandparent;
+            } else {
+                if (node == parent->left) {
+                    fmd_tree_node_rotate_right(root, parent);
+                    node = parent;
+                    parent = node->parent;
+                }
+                fmd_tree_node_rotate_left(root, grandparent);
+                rbt_color_t tempColor = parent->color;
+                parent->color = grandparent->color;
+                grandparent->color = tempColor;
+                node = parent;
+            }
+        }
+    }
+    (*root)->color = BLACK;
+}
+
+bool fmd_tree_node_insert(fmd_tree_node_t **root, void* key, void* value, fmd_fstruct_t *key_f) {
+    fmd_tree_node_t *node = (*root);
+    fmd_tree_node_t *parent = NULL;
+    while (node) {
+        parent = node;
+        int cmpval = key_f->comp_f(key, node->key);
+        if (cmpval < 0) {
+            node = node->left;
+        } else if (cmpval > 0) {
+            node = node->right;
+        } else {
+            return false; // do not allow duplicates
+        }
+    }
+    fmd_tree_node_t *tmp = fmd_tree_node_init(key, value, parent);
+    if (!parent) {
+        (*root) = tmp;
+    } else if (key_f->comp_f(tmp->key, parent->key) < 0) {
+        parent->left = tmp;
+    } else {
+        parent->right = tmp;
+    }
+    fmd_tree_node_fix_violation(root, tmp);
+    return true;
+}
+
+fmd_tree_node_t *fmd_tree_node_search(fmd_tree_node_t *root, void *key, fmd_fstruct_t *key_f) {
+    while (root) {
+        int cmpval = key_f->comp_f(key,root->key);
+        if (cmpval < 0) {
+            root = root->left;
+        } else if (cmpval > 0) {
+            root = root->right;
+        } else {
+            return root;
+        }
+    }
+    return NULL;
+}
+
+pos_t fmd_tree_node_height(fmd_tree_node_t *root) {
+    return root ? 1 + MAX2(fmd_tree_node_height(root->left), fmd_tree_node_height(root->right)) : -1;
+}
+
+void fmd_tree_node_free(fmd_tree_node_t *node, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f) {
+    if (!node) {
+        return;
+    }
+    key_f->free_f(node->key);
+    val_f->free_f(node->value);
+    fmd_tree_node_free(node->left, key_f, val_f);
+    fmd_tree_node_free(node->right, key_f, val_f);
+    free(node);
+}
+
+fmd_tree_node_t *fmd_tree_node_copy(fmd_tree_node_t *node, fmd_tree_node_t *parent, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f) {
+    if (!node) {
+        return NULL;
+    }
+    void *key_cpy = key_f->copy_f(node->key);
+    void *val_cpy = val_f->copy_f(node->value);
+    fmd_tree_node_t *tmp = fmd_tree_node_init(key_cpy, val_cpy, parent);
+    if (!tmp) {
+        key_f->free_f(key_cpy);
+        val_f->free_f(val_cpy);
+        return NULL;
+    }
+    tmp->color = node->color;
+    tmp->left = fmd_tree_node_copy(node->left, tmp, key_f, val_f);
+    tmp->right = fmd_tree_node_copy(node->right, tmp, key_f, val_f);
+    return tmp;
+}

@@ -88,10 +88,9 @@ void fmd_bs_init_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos
     }
 }
 
-void fmd_bs_free(fmd_bs_t **bs) {
-    if(bs && *bs) {
-        free((*bs)->words);
-        free(*bs);
-        *bs = NULL;
+void fmd_bs_free(fmd_bs_t *bs) {
+    if(bs) {
+        free(bs->words);
+        free(bs);
     }
 }
