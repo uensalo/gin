@@ -1,6 +1,6 @@
 #include "fmd_vector.h"
 
-void fmd_vector_init(fmd_vector_t **vec, pos_t initial_capacity) {
+void fmd_vector_init(fmd_vector_t **vec, pos_t initial_capacity, fmd_fstruct_t *f) {
     fmd_vector_t *v = calloc(1, sizeof(fmd_vector_t));
     if(!v) {
         *vec = NULL;
@@ -9,6 +9,7 @@ void fmd_vector_init(fmd_vector_t **vec, pos_t initial_capacity) {
     v->size = 0;
     v->capacity = initial_capacity;
     v->data = malloc(initial_capacity * sizeof(void *));
+    v->f = f;
     *vec = v;
 }
 
@@ -18,13 +19,11 @@ void fmd_vector_free(fmd_vector_t *vec) {
 }
 
 void fmd_vector_grow(fmd_vector_t *vec) {
-    vec->capacity *= 2;
-    vec->data = realloc(vec->data, vec->capacity * sizeof(void *));
+    vec->data = realloc(vec->data, (vec->capacity *= 2) * sizeof(void *));
 }
 
 void fmd_vector_shrink(fmd_vector_t *vec) {
-    vec->capacity /= 2;
-    vec->data = realloc(vec->data, vec->capacity * sizeof(void *));
+    vec->data = realloc(vec->data, (vec->capacity /= 2) * sizeof(void *));
 }
 
 void fmd_vector_append(fmd_vector_t *vec, void *value) {
@@ -48,26 +47,20 @@ void fmd_vector_insert(fmd_vector_t *vec, pos_t index, void *value) {
     if (vec->size == vec->capacity) {
         fmd_vector_grow(vec);
     }
-    memmove(&vec->data[index + 1], &vec->data[index], (vec->size - index) * sizeof(void *));
+    memmove(&vec->data[index + 1], &vec->data[index], (vec->size - index) * sizeof(void*));
     vec->data[index] = value;
     vec->size++;
 }
 
 void fmd_vector_delete(fmd_vector_t *vec, pos_t index, void **item) {
     void *tmp = vec->data[index];
-    memmove(&vec->data[index], &vec->data[index + 1], (vec->size - index - 1) * sizeof(void *));
+    memmove(&vec->data[index], &vec->data[index + 1], (vec->size - index - 1) * sizeof(void*));
     vec->size--;
     if (vec->size < vec->capacity / 4) {
         fmd_vector_shrink(vec);
     }
     if(item)
         *item = tmp;
-}
-
-void fmd_vector_swap_(void **a, void **b) {
-    void *temp = *a;
-    *a = *b;
-    *b = temp;
 }
 
 void fmd_qs_helper_(void **arr, pos_t left, pos_t right, fcomp comp_f) {
@@ -84,9 +77,9 @@ void fmd_qs_helper_(void **arr, pos_t left, pos_t right, fcomp comp_f) {
                 arr[j + 1] = key;
             }
         } else {
-            pos_t pivot_index = left + rand() % (right - left + 1);
+            pos_t pivot_index = left + (pos_t)rand() % (right - left + 1);
             void *pivot = arr[pivot_index];
-            fmd_vector_swap_(&arr[pivot_index], &arr[left]);
+            fmd_swap(&arr[pivot_index], &arr[left]);
             pos_t i = left + 1;
             pos_t j = right;
             while (true) {
@@ -97,14 +90,13 @@ void fmd_qs_helper_(void **arr, pos_t left, pos_t right, fcomp comp_f) {
                     j--;
                 }
                 if (i <= j) {
-                    fmd_vector_swap_(&arr[i], &arr[j]);
-                    i++;
-                    j--;
+                    fmd_swap(&arr[i], &arr[j]);
+                    i++;j--;
                 } else {
                     break;
                 }
             }
-            fmd_vector_swap_(&arr[left], &arr[j]);
+            fmd_swap(&arr[left], &arr[j]);
             pivot_index = j;
             fmd_qs_helper_(arr, left, pivot_index, comp_f);
             fmd_qs_helper_(arr, pivot_index + 1, right, comp_f);
@@ -112,6 +104,39 @@ void fmd_qs_helper_(void **arr, pos_t left, pos_t right, fcomp comp_f) {
     }
 }
 
-void fmd_vector_sort(fmd_vector_t *vec, fcomp comp_f) {
-    fmd_qs_helper_(vec->data, 0, vec->size - 1, comp_f);
+void fmd_vector_sort(fmd_vector_t *vec) {
+    fmd_qs_helper_(vec->data, 0, vec->size - 1, vec->f->comp_f);
+}
+
+int fmd_vector_comp(fmd_vector_t *v1, fmd_vector_t *v2) {
+    if(v1->size!=v2->size) return -1;
+    for(pos_t i = 0; i < v1->size; i++) {
+        int cmp = v1->f->comp_f(v1->data[i],v2->data[i]);
+        if(cmp) return -1;
+    }
+    return 0;
+}
+
+upos_t fmd_vector_hash(fmd_vector_t *v) {
+    // fnv again
+    const uint64_t prime = 1099511628211LLU;
+    uint64_t hash = 14695981039346656037LLU;
+    for (size_t i = 0; i < v->size; ++i) {
+        upos_t hash_item = v->f->hash_f(v->data[i]);
+        hash ^= hash_item;
+        hash *= prime;
+    }
+    return hash;
+}
+
+fmd_vector_t *fmd_vector_copy(fmd_vector_t *v) {
+    fmd_vector_t *cpy = calloc(1, sizeof(fmd_vector_t));
+    cpy->data = calloc(v->capacity, sizeof(void*));
+    cpy->size = v->size;
+    cpy->capacity = v->capacity;
+    cpy->f = v->f;
+    for(pos_t i = 0; i < v->size; i++) {
+        cpy->data[i] = v->f->copy_f(cpy->data[i]);
+    }
+    return v;
 }

@@ -1,30 +1,32 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include <fmd_tree.h>
+#include <fmd_table.h>
+#include <fmd_bitstream.h>
 #include <time.h>
 
+void print_tree_trav(fmd_tree_node_t *node, void *p) {
+    printf("%d, %d\n", node->key, node->value);
+}
+
 int main() {
-    fmd_tree_node_t *root = NULL;
-
-    int no_elems = 100;
-
-    for(int i = no_elems; i >= 0; i--) {
-        fmd_tree_node_insert(&root, i, i*i, &prm_fstruct);
+    fmd_table_t *table;
+    fmd_table_init(&table, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    int no_items = 10000;
+    for(int i = 0; i <= no_items; i++) {
+        fmd_bs_t *bs;
+        fmd_bs_init_reserve(&bs, 3);
+        fmd_bs_init_write_word(bs,0,i*i,32);
+        fmd_table_insert(table, i, bs);
     }
+    fmd_table_rehash(&table, table->capacity*2);
 
-    for(int i = 0; i <= no_elems; i++) {
-        //fmd_tree_node_t* l = fmd_tree_node_search(root, i, &prm_fstruct);
-        //printf("%d, %d\n",l->key, l->value);
+    for(int i = no_items; i >= 0; i--) {
+        fmd_bs_t *bs = 0;
+        bool a = fmd_table_lookup(table, i, &bs);
+        if(!a) exit(-1);
+        word_t val;
+        fmd_bs_init_read_word(bs,0,32, &val);
+        printf("%d, %d\n", i, val);
     }
-    //printf("%d\n", fmd_tree_node_height(root));
-    //fmd_tree_node_free(root, &prm_fstruct, &prm_fstruct);
-
-    fmd_tree_node_t *cpy = fmd_tree_node_copy(root, NULL, &prm_fstruct, &prm_fstruct);
-
-    for(int i = 0; i <= no_elems; i++) {
-        fmd_tree_node_t* l = fmd_tree_node_search(cpy, i, &prm_fstruct);
-        printf("%d, %d\n",l->key, l->value);
-    }
-
     return 0;
 }

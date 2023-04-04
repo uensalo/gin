@@ -94,3 +94,28 @@ void fmd_bs_free(fmd_bs_t *bs) {
         free(bs);
     }
 }
+
+fmd_bs_t *fmd_bs_copy(fmd_bs_t *bs) {
+    fmd_bs_t *cpy;
+    fmd_bs_init_reserve(&cpy, bs->cap_in_words);
+    if(!cpy) return NULL;
+    memcpy(cpy->words, bs->words, sizeof(word_t)*bs->cap_in_words);
+    return cpy;
+}
+
+int fmd_bs_comp(fmd_bs_t *bs1, fmd_bs_t *bs2) {
+    return bs1->cap_in_words == bs2->cap_in_words ? memcmp(bs1->words, bs2->words, bs1->cap_in_words * sizeof(word_t)) : -1;
+}
+
+upos_t fmd_bs_hash(fmd_bs_t *bs) {
+    // fnv1a_64
+    const uint64_t prime = 1099511628211LLU;
+    uint64_t hash = 14695981039346656037LLU;
+
+    const uint8_t* data = (const uint8_t*)bs->words;
+    for (size_t i = 0; i < bs->cap_in_words; ++i) {
+        hash ^= (uint64_t)data[i];
+        hash *= prime;
+    }
+    return hash;
+}
