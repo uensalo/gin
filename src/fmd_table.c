@@ -78,7 +78,7 @@ fmd_table_t *fmd_table_copy(fmd_table_t *table) {
     copy->items_per_bucket = calloc(table->capacity, sizeof(pos_t));
     copy->capacity = table->capacity;
     for(pos_t i = 0; i < table->capacity; i++) {
-        copy->roots[i] = fmd_tree_node_copy(table->roots[i],table->key_f,table->val_f);
+        copy->roots[i] = fmd_tree_node_copy(table->roots[i], NULL, table->key_f,table->val_f);
     }
     copy->size = table->size;
     return copy;
