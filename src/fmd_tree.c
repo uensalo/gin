@@ -221,27 +221,27 @@ upos_t fmd_tree_node_hash(fmd_tree_node_t *node, fmd_fstruct_t *key_f) {
 }
 
 // traversals
-void fmd_tree_node_preorder(fmd_tree_node_t *root, void *p, ftrav f) {
+void fmd_tree_node_preorder(fmd_tree_node_t *root, void *p, ftrav_kv f) {
     if(root) {
-        f(root, p);
+        f(root->key, root->value, p);
         fmd_tree_node_preorder(root->left,p,f);
         fmd_tree_node_preorder(root->right,p,f);
     }
 }
 
-void fmd_tree_node_inorder(fmd_tree_node_t *root, void *p, ftrav f) {
+void fmd_tree_node_inorder(fmd_tree_node_t *root, void *p, ftrav_kv f) {
     if(root) {
         fmd_tree_node_inorder(root->left,p,f);
-        f(root, p);
+        f(root->key, root->value, p);
         fmd_tree_node_inorder(root->right,p,f);
     }
 }
 
-void fmd_tree_node_postorder(fmd_tree_node_t *root, void *p, ftrav f) {
+void fmd_tree_node_postorder(fmd_tree_node_t *root, void *p, ftrav_kv f) {
     if(root) {
         fmd_tree_node_postorder(root->left,p,f);
         fmd_tree_node_postorder(root->right,p,f);
-        f(root, p);
+        f(root->key, root->value, p);
     }
 }
 
@@ -305,14 +305,14 @@ fmd_tree_t *fmd_tree_copy(fmd_tree_t *tree) {
     return copy;
 }
 
-void fmd_tree_preorder(fmd_tree_t *tree, void *p, ftrav f) {
+void fmd_tree_preorder(fmd_tree_t *tree, void *p, ftrav_kv f) {
     fmd_tree_node_preorder(tree->root, p, f);
 }
 
-void fmd_tree_inorder(fmd_tree_t *tree, void *p, ftrav f) {
+void fmd_tree_inorder(fmd_tree_t *tree, void *p, ftrav_kv f) {
     fmd_tree_node_inorder(tree->root, p, f);
 }
 
-void fmd_tree_postorder(fmd_tree_t *tree, void *p, ftrav f) {
+void fmd_tree_postorder(fmd_tree_t *tree, void *p, ftrav_kv f) {
     fmd_tree_node_postorder(tree->root, p, f);
 }

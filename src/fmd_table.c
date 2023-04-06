@@ -94,3 +94,10 @@ upos_t fmd_table_hash(fmd_table_t *table) {
     }
     return hash;
 }
+
+void fmd_table_traverse(fmd_table_t *table, void *p, ftrav_kv f) {
+    if (!table) return;
+    for (pos_t i = 0; i < table->capacity; i++) {
+        fmd_tree_node_preorder(table->roots[i], p, f);
+    }
+}

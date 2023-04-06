@@ -12,7 +12,6 @@ typedef struct fmd_tree_node_ {
     struct fmd_tree_node_ *parent;
     rbt_color_t color;
 } fmd_tree_node_t;
-typedef void (*ftrav)(fmd_tree_node_t *node, void *p);
 
 fmd_tree_node_t *fmd_tree_node_init(void* key, void* value, fmd_tree_node_t *parent);
 fmd_tree_node_t *fmd_tree_node_grandparent(fmd_tree_node_t *node);
@@ -26,9 +25,9 @@ void fmd_tree_node_free(fmd_tree_node_t *node, fmd_fstruct_t *key_f, fmd_fstruct
 fmd_tree_node_t *fmd_tree_node_copy(fmd_tree_node_t *node, fmd_tree_node_t *parent, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
 int fmd_tree_node_comp(fmd_tree_node_t *n1, fmd_tree_node_t *n2, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
 upos_t fmd_tree_node_hash(fmd_tree_node_t *node, fmd_fstruct_t *key_f);
-void fmd_tree_node_preorder(fmd_tree_node_t *root, void *p, ftrav f);
-void fmd_tree_node_inorder(fmd_tree_node_t *root, void *p, ftrav f);
-void fmd_tree_node_postorder(fmd_tree_node_t *root, void *p, ftrav f);
+void fmd_tree_node_preorder(fmd_tree_node_t *root, void *p, ftrav_kv f);
+void fmd_tree_node_inorder(fmd_tree_node_t *root, void *p, ftrav_kv f);
+void fmd_tree_node_postorder(fmd_tree_node_t *root, void *p, ftrav_kv f);
 
 // clean, exposed API to the mess above
 typedef struct fmd_tree {
@@ -48,9 +47,9 @@ upos_t fmd_tree_hash(fmd_tree_t *tree);
 fmd_tree_t *fmd_tree_copy(fmd_tree_t *tree);
 
 // traversals
-void fmd_tree_preorder(fmd_tree_t *tree, void *p, ftrav f);
-void fmd_tree_inorder(fmd_tree_t *tree, void *p, ftrav f);
-void fmd_tree_postorder(fmd_tree_t *tree, void *p, ftrav f);
+void fmd_tree_preorder(fmd_tree_t *tree, void *p, ftrav_kv f);
+void fmd_tree_inorder(fmd_tree_t *tree, void *p, ftrav_kv f);
+void fmd_tree_postorder(fmd_tree_t *tree, void *p, ftrav_kv f);
 
 static fmd_fstruct_t fmd_fstruct_tree = {
     fmd_tree_comp,

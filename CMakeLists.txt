@@ -24,7 +24,8 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_tree.c
     ${PROJECT_SOURCE_DIR}/fmd_vector.c
     ${PROJECT_SOURCE_DIR}/fmd_string.c
-    #${PROJECT_SOURCE_DIR}/fmd_alphabet.c
+    ${PROJECT_SOURCE_DIR}/fmd_graph.c
+    ${PROJECT_SOURCE_DIR}/fmd_min_heap.c
 )
 set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_common.h
@@ -33,7 +34,8 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_tree.h
     ${PROJECT_HEADER_DIR}/fmd_vector.h
     ${PROJECT_HEADER_DIR}/fmd_string.h
-    #${PROJECT_HEADER_DIR}/fmd_alphabet.h
+    ${PROJECT_HEADER_DIR}/fmd_graph.h
+    ${PROJECT_HEADER_DIR}/fmd_min_heap.h
 )
 
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})

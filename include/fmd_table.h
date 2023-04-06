@@ -27,6 +27,7 @@ void fmd_table_rehash(fmd_table_t **table, pos_t new_capacity);
 int fmd_table_comp(fmd_table_t *t1, fmd_table_t *t2);
 fmd_table_t *fmd_table_copy(fmd_table_t *table);
 upos_t fmd_table_hash(fmd_table_t *table);
+void fmd_table_traverse(fmd_table_t *table, void *p, ftrav_kv f);
 
 static fmd_fstruct_t fmd_fstruct_table = {
     fmd_table_comp,
@@ -34,4 +35,5 @@ static fmd_fstruct_t fmd_fstruct_table = {
     fmd_table_free,
     fmd_table_copy
 };
+
 #endif //FMD_FMD_TABLE_H

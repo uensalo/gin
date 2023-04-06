@@ -20,6 +20,7 @@ typedef int    (*fcomp)(void*, void*);
 typedef upos_t (*fhash)(void*);
 typedef void   (*ffree)(void*);
 typedef void*  (*fcopy)(void*);
+typedef void   (*ftrav_kv)(void *key, void *value, void *p);
 
 typedef struct fmd_fstruct {
     fcomp comp_f;
