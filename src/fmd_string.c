@@ -3,23 +3,23 @@
 void fmd_string_init(fmd_string_t **str, pos_t size) {
     fmd_string_t *s = calloc(1, sizeof(fmd_string_t));
     if(!s) return;
-    s->seq = calloc((s->capacity=size)+1, sizeof(fmd_char_t));
+    s->seq = calloc((s->capacity=size)+1, sizeof(char_t));
     *str = s;
 }
 
 void fmd_string_init_cstr(fmd_string_t **str, char *string) {
     size_t len = strlen(string);
     fmd_string_t *s = calloc(1, sizeof(fmd_string_t));
-    s->seq = calloc((s->capacity=2*(pos_t)len)+1, sizeof(fmd_char_t));
+    s->seq = calloc((s->capacity=2*(pos_t)len)+1, sizeof(char_t));
     s->size = (pos_t)len;
-    memcpy(s->seq, string, s->size * sizeof(fmd_char_t));
+    memcpy(s->seq, string, s->size * sizeof(char_t));
     *str = s;
 }
 
-void fmd_string_append(fmd_string_t *str, fmd_char_t c) {
+void fmd_string_append(fmd_string_t *str, char_t c) {
     if(str->size == str->capacity) {
-        str->seq = realloc(str->seq, ((str->capacity *= 2)+1) * sizeof(fmd_char_t));
-        memset(str->seq + str->size, 0, (str->size+1) * sizeof(fmd_char_t));
+        str->seq = realloc(str->seq, ((str->capacity *= 2)+1) * sizeof(char_t));
+        memset(str->seq + str->size, FMD_STRING_TERMINATOR, (str->size+1) * sizeof(char_t));
     }
     str->seq[str->size++] = c;
 }
@@ -29,20 +29,20 @@ void fmd_string_delete(fmd_string_t *str, pos_t pos) {
         str->seq[i] = str->seq[i+1];
     }
     str->size--;
-    str->seq[str->size] = 0;
+    str->seq[str->size] = FMD_STRING_TERMINATOR;
 }
 
-void fmd_string_insert(fmd_string_t *str, pos_t pos, fmd_char_t c) {
+void fmd_string_insert(fmd_string_t *str, pos_t pos, char_t c) {
     if(str->size == str->capacity) {
-        str->seq = realloc(str->seq, ((str->capacity *= 2)+1) * sizeof(fmd_char_t));
-        memset(str->seq + str->size, 0, (str->size+1) * sizeof(fmd_char_t));
+        str->seq = realloc(str->seq, ((str->capacity *= 2)+1) * sizeof(char_t));
+        memset(str->seq + str->size, 0, (str->size+1) * sizeof(char_t));
     }
     for(pos_t i = str->size; i > pos; i--) {
         str->seq[i] = str->seq[i-1];
     }
     str->seq[pos] = c;
     str->size++;
-    str->seq[str->size] = 0;
+    str->seq[str->size] = FMD_STRING_TERMINATOR;
 }
 
 void fmd_string_substring(fmd_string_t *s, pos_t start, pos_t end, fmd_string_t **subs) {
@@ -52,7 +52,7 @@ void fmd_string_substring(fmd_string_t *s, pos_t start, pos_t end, fmd_string_t 
     }
     pos_t substring_length = end - start;
     fmd_string_init(subs, substring_length);
-    memcpy((*subs)->seq, s->seq + start, substring_length * sizeof(fmd_char_t));
+    memcpy((*subs)->seq, s->seq + start, substring_length * sizeof(char_t));
     (*subs)->size = substring_length;
     (*subs)->seq[substring_length] = 0;
 }
@@ -200,7 +200,7 @@ void fmd_string_cigar(fmd_edit_op_t *edits, pos_t edits_len, fmd_string_t **ciga
     fmd_string_t *out;
     fmd_string_init(&out, edits_len);
     for (pos_t i = 0; i < edits_len; i++) {
-        fmd_char_t c;
+        char_t c;
         switch (edits[i]) {
             case MATCH: {
                 c = 'M';
@@ -234,12 +234,12 @@ void fmd_string_free(fmd_string_t *str) {
 fmd_string_t *fmd_string_copy(fmd_string_t *str) {
     fmd_string_t *copy = calloc(1, sizeof(fmd_string_t));
     if(!copy) return NULL;
-    copy->seq = calloc(str->capacity, sizeof(fmd_char_t));
+    copy->seq = calloc(str->capacity, sizeof(char_t));
     if(!copy->seq) {
         free(copy);
         return NULL;
     }
-    memcpy(copy->seq, str->seq, sizeof(fmd_char_t) * str->size);
+    memcpy(copy->seq, str->seq, sizeof(char_t) * str->size);
     copy->size = str->size;
     copy->capacity = str->capacity;
     return copy;
@@ -262,7 +262,7 @@ upos_t fmd_string_hash(fmd_string_t *s) {
     const upos_t prime = 1099511628211LLU;
     upos_t hash = 14695981039346656037LLU;
     uint64_t *seq64 = (uint64_t*)s->seq;
-    int block_size = sizeof(uint64_t) / sizeof(fmd_char_t);
+    int block_size = sizeof(uint64_t) / sizeof(char_t);
     for (pos_t i = 0; i < s->size/block_size; ++i) {
         hash ^= seq64[i];
         hash *= prime;

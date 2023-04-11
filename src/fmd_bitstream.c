@@ -48,7 +48,7 @@ void fmd_bs_init_from_buffer(char *buf, size_t buf_size, fmd_bs_t **bs) {
     *bs = b;
 }
 
-void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
+void fmd_bs_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
     if(!read_size_in_bits) return;
     upos_t word_idx = bit_idx >> WORD_LOG_BITS;
     upos_t bit_s = (bit_idx & WORD_LOG_MASK);
@@ -63,7 +63,7 @@ void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bit
     }
 }
 
-void fmd_bs_init_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos_t write_size_in_bits) {
+void fmd_bs_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos_t write_size_in_bits) {
     if(write_size_in_bits == 0) return;
     while (bit_idx + write_size_in_bits > (bs->cap_in_words << WORD_LOG_BITS)) {
         bs->words = realloc(bs->words, sizeof(word_t) * bs->cap_in_words * 2);

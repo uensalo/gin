@@ -28,6 +28,10 @@ bool fmd_table_insert(fmd_table_t *table, void *key, void *value) {
     if(inserted) {
         ++table->size;
         ++table->items_per_bucket[index];
+        if((double)table->items_per_bucket[index] > (double)table->capacity * FMD_REHASH_FACTOR) {
+            pos_t next_size = fmd_next_prime_after(2 * table->capacity);
+            fmd_table_rehash(&table, next_size);
+        }
         return true;
     }
     return false;

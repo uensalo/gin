@@ -5,7 +5,7 @@
 #include "fmd_tree.h"
 
 #define FMD_HT_INIT_SIZE 53
-#define FMD_REHASH_FACTOR 0.75
+#define FMD_REHASH_FACTOR 0.50
 
 typedef struct fmd_table_ {
     pos_t size;

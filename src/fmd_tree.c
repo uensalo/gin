@@ -144,6 +144,51 @@ fmd_tree_node_t *fmd_tree_node_search(fmd_tree_node_t *root, void *key, fmd_fstr
     return NULL;
 }
 
+bool fmd_tree_node_replace(fmd_tree_node_t *root, void* key, void* value, void **old_value, fmd_fstruct_t *key_f) {
+    while (root) {
+        int cmpval = key_f->comp_f(key,root->key);
+        if (cmpval < 0) {
+            root = root->left;
+        } else if (cmpval > 0) {
+            root = root->right;
+        } else {
+            *old_value = root->value;
+            root->value = value;
+            return true;
+        }
+    }
+    return false;
+}
+
+bool fmd_tree_node_replace_if_not_insert(fmd_tree_node_t **root, void* key, void* value, void** old_value, fmd_fstruct_t *key_f) {
+    fmd_tree_node_t *node = (*root);
+    fmd_tree_node_t *parent = NULL;
+    while (node) {
+        parent = node;
+        int cmpval = key_f->comp_f(key, node->key);
+        if (cmpval < 0) {
+            node = node->left;
+        } else if (cmpval > 0) {
+            node = node->right;
+        } else {
+            *old_value = node->value;
+            node->value = value;
+            return true;
+        }
+    }
+    fmd_tree_node_t *tmp = fmd_tree_node_init(key, value, parent);
+    if (!parent) {
+        (*root) = tmp;
+    } else if (key_f->comp_f(tmp->key, parent->key) < 0) {
+        parent->left = tmp;
+    } else {
+        parent->right = tmp;
+    }
+    *old_value = NULL;
+    fmd_tree_node_fix_violation(root, tmp);
+    return false;
+}
+
 pos_t fmd_tree_node_height(fmd_tree_node_t *root) {
     return root ? 1 + MAX2(fmd_tree_node_height(root->left), fmd_tree_node_height(root->right)) : -1;
 }
@@ -255,6 +300,7 @@ void fmd_tree_init(fmd_tree_t **tree, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f
     t->val_f = val_f;
     t->no_items = 0;
     t->root = NULL;
+    *tree = t;
 }
 
 bool fmd_tree_insert(fmd_tree_t *tree, void *key, void *value) {
@@ -268,6 +314,22 @@ bool fmd_tree_search(fmd_tree_t *tree, void *key, void **value) {
     if(!node) return false;
     *value = node->value;
     return true;
+}
+
+bool fmd_tree_replace(fmd_tree_t *tree, void *key, void *value, void **old_value) {
+    void *tmp = NULL;
+    bool replaced = fmd_tree_node_replace(tree->root, key, value, &tmp, tree->key_f);
+    *old_value = tmp;
+    return replaced;
+}
+
+
+bool fmd_tree_replace_if_not_insert(fmd_tree_t *tree, void *key, void *value, void **old_value) {
+    void *tmp = NULL;
+    bool replaced = fmd_tree_node_replace_if_not_insert(&tree->root, key, value, &tmp, tree->key_f);
+    if(!replaced) ++tree->no_items;
+    *old_value = tmp;
+    return replaced;
 }
 
 void fmd_tree_height(fmd_tree_t *tree, pos_t *height) {

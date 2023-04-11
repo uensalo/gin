@@ -151,8 +151,8 @@ typedef struct fmd_bs_ {
 void fmd_bs_init(fmd_bs_t **bs);
 void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words);
 void fmd_bs_init_from_buffer(char *buf, size_t buf_size, fmd_bs_t **bs);
-void fmd_bs_init_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val);
-void fmd_bs_init_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos_t write_size_in_bits);
+void fmd_bs_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val);
+void fmd_bs_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos_t write_size_in_bits);
 void fmd_bs_free(fmd_bs_t *bs);
 // functions to wrap into an fstruct
 fmd_bs_t *fmd_bs_copy(fmd_bs_t *bs);
