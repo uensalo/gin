@@ -3,8 +3,8 @@
 
 void fmd_fmi_init(fmd_fmi_t **fmi,
                   fmd_string_t *string,
-                  pos_t rank_sample_rate,
-                  pos_t isa_sample_rate) {
+                  int_t rank_sample_rate,
+                  int_t isa_sample_rate) {
     fmd_fmi_t *f = calloc(1, sizeof(fmd_fmi_t));
     if(!f) {
         *fmi = NULL;
@@ -55,7 +55,7 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
         *fmi = NULL;
         return;
     }
-    for(pos_t i = 0; i < string->size; i++) {
+    for(int_t i = 0; i < string->size; i++) {
         char_t c = string->seq[i];
         fmd_tree_insert(char_set, (void*)c, 0);
     }
@@ -85,8 +85,8 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
     int64_t *sa = calloc(string->size+1, sizeof(uint64_t));
     divsufsort64((sauchar_t*)string->seq, (saidx64_t*)sa, string->size+1);
     fmd_string_t *bwt;
-    fmd_string_init(&bwt, (pos_t)f->no_chars);
-    for(pos_t i = 0; i < (pos_t)f->no_chars; i++) {
+    fmd_string_init(&bwt, (int_t)f->no_chars);
+    for(int_t i = 0; i < (int_t)f->no_chars; i++) {
         int64_t sa_val = sa[i];
         bwt->seq[i] = sa_val ? string->seq[sa_val-1] : FMD_STRING_TERMINATOR;
         if((sa_val % f->isa_sample_rate) == 0) {
@@ -112,7 +112,7 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
     /******************************************************
     * Step 3a - Write the header
     ******************************************************/
-    pos_t widx = 0;
+    int_t widx = 0;
     fmd_bs_write_word(bits, widx, f->no_chars, FMD_FMI_CHAR_COUNT_BIT_LENGTH);
     widx+=FMD_FMI_CHAR_COUNT_BIT_LENGTH;
     fmd_bs_write_word(bits, widx, f->no_chars_per_block, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH);
@@ -124,7 +124,7 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
     /******************************************************
     * Step 3b - Write the alphabet
     ******************************************************/
-    for(pos_t i = 0; i < f->alphabet->size; i++) {
+    for(int_t i = 0; i < f->alphabet->size; i++) {
         fmd_bs_write_word(bits, widx, (word_t)f->alphabet->data[i], FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH);
         widx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
         word_t encoding;
@@ -145,23 +145,23 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
     * Step 3d - Write rank caches and payloads
     ******************************************************/
     f->bv_start_offset = widx;
-    pos_t no_blocks = 1 + (bwt->size - 1) / f->no_chars_per_block;
+    int_t no_blocks = 1 + (bwt->size - 1) / f->no_chars_per_block;
     count_t *block_count = calloc(f->alphabet_size, sizeof(count_t));
-    for(pos_t c = 0; c < f->alphabet_size; c++) {
+    for(int_t c = 0; c < f->alphabet_size; c++) {
         fmd_bs_write_word(bits, widx, block_count[c], FMD_FMI_CHAR_COUNT_BIT_LENGTH);
         widx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
     }
-    for(pos_t i = 0; i < no_blocks; i++) {
-        pos_t s = i * (pos_t)f->no_chars_per_block;
-        pos_t e = MIN2((i + 1) * (pos_t)f->no_chars_per_block,bwt->size);
-        for(pos_t j = s; j < e; j++) {
-            pos_t enc;
+    for(int_t i = 0; i < no_blocks; i++) {
+        int_t s = i * (int_t)f->no_chars_per_block;
+        int_t e = MIN2((i + 1) * (int_t)f->no_chars_per_block,bwt->size);
+        for(int_t j = s; j < e; j++) {
+            int_t enc;
             bool found = fmd_table_lookup(f->c2e, (void*)bwt->seq[j], (void*)&enc);
             ++block_count[enc];
             fmd_bs_write_word(bits, widx, enc, f->no_bits_per_char);
             widx += f->no_bits_per_char;
         }
-        for(pos_t c = 0; c < f->alphabet_size; c++) {
+        for(int_t c = 0; c < f->alphabet_size; c++) {
             fmd_bs_write_word(bits, widx, block_count[c], FMD_FMI_CHAR_COUNT_BIT_LENGTH);
             widx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
         }
@@ -171,7 +171,7 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
     ******************************************************/
     count_t cum = 0;
     f->char_counts = calloc(f->alphabet_size, sizeof(count_t));
-    for(pos_t i = 0; i < f->alphabet_size; i++) {
+    for(int_t i = 0; i < f->alphabet_size; i++) {
         f->char_counts[i] = cum;
         cum += block_count[i];
     }
@@ -218,8 +218,8 @@ void fmd_fmi_init_charset_flatten(void *key, void *value, void *params) {
 
 void fmd_fmi_init_isa_write(void *key, void *value, void *params) {
     fmd_fmi_init_isa_write_p_t *p = (fmd_fmi_init_isa_write_p_t*)params;
-    upos_t widx = (upos_t) value / (upos_t) p->isa_sampling_rate;
-    upos_t bit_offset = widx * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH + p->base_bit_idx;
+    uint_t widx = (uint_t) value / (uint_t) p->isa_sampling_rate;
+    uint_t bit_offset = widx * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH + p->base_bit_idx;
     fmd_bs_write_word(p->bits, bit_offset, (word_t)key, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH);
 }
 
@@ -237,22 +237,22 @@ bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(fmi,encoding, qr->lo-1) : 0ull;
     count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(fmi,encoding, qr->hi-1) : 0ull;
     uint64_t base = fmi->char_counts[encoding];
-    qr->lo = (pos_t)(base + rank_lo_m_1);
-    qr->hi = (pos_t)(base + rank_hi_m_1);
+    qr->lo = (int_t)(base + rank_lo_m_1);
+    qr->hi = (int_t)(base + rank_hi_m_1);
     --qr->pos;
     return true;
 }
 
-count_t fmd_fmi_rank(fmd_fmi_t *fmi, word_t enc, pos_t pos) {
+count_t fmd_fmi_rank(fmd_fmi_t *fmi, word_t enc, int_t pos) {
     // todo: read from short side
-    upos_t block_idx = pos / fmi->no_chars_per_block;
-    upos_t block_size = (fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + fmi->no_bits_per_char * fmi->no_chars_per_block);
-    upos_t rank_cache_idx = fmi->bv_start_offset + block_idx * block_size;
-    upos_t chars_idx = rank_cache_idx + fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
-    upos_t char_offset_into_block = pos % fmi->no_chars_per_block;
+    uint_t block_idx = pos / fmi->no_chars_per_block;
+    uint_t block_size = (fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + fmi->no_bits_per_char * fmi->no_chars_per_block);
+    uint_t rank_cache_idx = fmi->bv_start_offset + block_idx * block_size;
+    uint_t chars_idx = rank_cache_idx + fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+    uint_t char_offset_into_block = pos % fmi->no_chars_per_block;
     word_t rank = 0;
     fmd_bs_read_word(fmi->bits, rank_cache_idx + enc * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &rank);
-    for(pos_t i = 0; i <= char_offset_into_block; i++) {
+    for(int_t i = 0; i <= char_offset_into_block; i++) {
         word_t read_enc = 0;
         fmd_bs_read_word(fmi->bits, chars_idx, fmi->no_bits_per_char, &read_enc);
         rank += enc == read_enc;
@@ -265,9 +265,9 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     fmd_vector_t *rval;
     fmd_vector_init(&rval, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
     if(!rval) return NULL;
-    for(pos_t j = (pos_t)qr->lo; j < (pos_t)qr->hi; j++) {
+    for(int_t j = (int_t)qr->lo; j < (int_t)qr->hi; j++) {
         count_t count = 0;
-        pos_t i = j;
+        int_t i = j;
         while(1) {
             count_t sa_entry = -1;
             bool found = fmd_table_lookup(fmi->isa, (void*)i, &sa_entry);
@@ -275,11 +275,11 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 // sa sample not found, traverse bwt
                 count++;
                 // get rank of char at index i of the bwt
-                word_t encoding = fmd_fmi_get(fmi, (pos_t)i);
+                word_t encoding = fmd_fmi_get(fmi, (int_t)i);
                 // get rank of the char at the same index
-                uint64_t rank = fmd_fmi_rank(fmi, encoding, (pos_t)i);
+                uint64_t rank = fmd_fmi_rank(fmi, encoding, (int_t)i);
                 // compute the next index
-                i = (pos_t)(fmi->char_counts[encoding] + rank - 1);
+                i = (int_t)(fmi->char_counts[encoding] + rank - 1);
             } else {
                 // sa entry is present, interpolate and compute entry in next range
                 fmd_vector_append(rval,(void*)(sa_entry + count));
@@ -290,11 +290,11 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     return rval;
 }
 
-word_t fmd_fmi_get(fmd_fmi_t *fmi, pos_t pos) {
+word_t fmd_fmi_get(fmd_fmi_t *fmi, int_t pos) {
     // todo: read from short side
-    upos_t block_idx = pos / fmi->no_chars_per_block;
-    upos_t block_size = (fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + fmi->no_bits_per_char * fmi->no_chars_per_block);
-    upos_t char_idx = fmi->bv_start_offset + block_idx * block_size + fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + (pos % fmi->no_chars_per_block) * fmi->no_bits_per_char;
+    uint_t block_idx = pos / fmi->no_chars_per_block;
+    uint_t block_size = (fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + fmi->no_bits_per_char * fmi->no_chars_per_block);
+    uint_t char_idx = fmi->bv_start_offset + block_idx * block_size + fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + (pos % fmi->no_chars_per_block) * fmi->no_bits_per_char;
     word_t read_enc = 0;
     fmd_bs_read_word(fmi->bits, char_idx, fmi->no_bits_per_char, &read_enc);
     return read_enc;
@@ -330,7 +330,7 @@ void fmd_fmi_free(fmd_fmi_t *fmi) {
     }
 }
 
-upos_t fmd_fmi_hash(fmd_fmi_t *fmi) {
+uint_t fmd_fmi_hash(fmd_fmi_t *fmi) {
     return fmd_bs_hash(fmi->bits);
 }
 

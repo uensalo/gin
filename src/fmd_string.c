@@ -1,6 +1,6 @@
 #include "fmd_string.h"
 
-void fmd_string_init(fmd_string_t **str, pos_t size) {
+void fmd_string_init(fmd_string_t **str, int_t size) {
     fmd_string_t *s = calloc(1, sizeof(fmd_string_t));
     if(!s) return;
     s->seq = calloc((s->capacity=size)+1, sizeof(char_t));
@@ -10,8 +10,8 @@ void fmd_string_init(fmd_string_t **str, pos_t size) {
 void fmd_string_init_cstr(fmd_string_t **str, char *string) {
     size_t len = strlen(string);
     fmd_string_t *s = calloc(1, sizeof(fmd_string_t));
-    s->seq = calloc((s->capacity=2*(pos_t)len)+1, sizeof(char_t));
-    s->size = (pos_t)len;
+    s->seq = calloc((s->capacity=2*(int_t)len)+1, sizeof(char_t));
+    s->size = (int_t)len;
     memcpy(s->seq, string, s->size * sizeof(char_t));
     *str = s;
 }
@@ -24,20 +24,20 @@ void fmd_string_append(fmd_string_t *str, char_t c) {
     str->seq[str->size++] = c;
 }
 
-void fmd_string_delete(fmd_string_t *str, pos_t pos) {
-    for(pos_t i = pos; i < str->size-1; i++) {
+void fmd_string_delete(fmd_string_t *str, int_t pos) {
+    for(int_t i = pos; i < str->size-1; i++) {
         str->seq[i] = str->seq[i+1];
     }
     str->size--;
     str->seq[str->size] = FMD_STRING_TERMINATOR;
 }
 
-void fmd_string_insert(fmd_string_t *str, pos_t pos, char_t c) {
+void fmd_string_insert(fmd_string_t *str, int_t pos, char_t c) {
     if(str->size == str->capacity) {
         str->seq = realloc(str->seq, ((str->capacity *= 2)+1) * sizeof(char_t));
         memset(str->seq + str->size, 0, (str->size+1) * sizeof(char_t));
     }
-    for(pos_t i = str->size; i > pos; i--) {
+    for(int_t i = str->size; i > pos; i--) {
         str->seq[i] = str->seq[i-1];
     }
     str->seq[pos] = c;
@@ -45,55 +45,55 @@ void fmd_string_insert(fmd_string_t *str, pos_t pos, char_t c) {
     str->seq[str->size] = FMD_STRING_TERMINATOR;
 }
 
-void fmd_string_substring(fmd_string_t *s, pos_t start, pos_t end, fmd_string_t **subs) {
+void fmd_string_substring(fmd_string_t *s, int_t start, int_t end, fmd_string_t **subs) {
     if (start >= end || start >= s->size || end > s->size) {
         *subs = NULL;
         return;
     }
-    pos_t substring_length = end - start;
+    int_t substring_length = end - start;
     fmd_string_init(subs, substring_length);
     memcpy((*subs)->seq, s->seq + start, substring_length * sizeof(char_t));
     (*subs)->size = substring_length;
     (*subs)->seq[substring_length] = 0;
 }
 
-void fmd_string_edit_distance(fmd_string_t *str1, fmd_string_t *str2, pos_t *dist, fmd_edit_op_t **edits, pos_t *edits_len) {
+void fmd_string_edit_distance(fmd_string_t *str1, fmd_string_t *str2, int_t *dist, fmd_edit_op_t **edits, int_t *edits_len) {
     // init matrix
 #define VAL(m, i ,j, n) (m)[(i) * (n) + (j)]
-    pos_t n = str1->size + 1;
-    pos_t m = str2->size + 1;
-    pos_t *dp = calloc(n*m, sizeof(pos_t));
+    int_t n = str1->size + 1;
+    int_t m = str2->size + 1;
+    int_t *dp = calloc(n*m, sizeof(int_t));
 
     fmd_edit_op_t *cigar = calloc(n+m, sizeof(fmd_edit_op_t));
 
-    for(pos_t i = 1; i < n; i++) {
+    for(int_t i = 1; i < n; i++) {
         VAL(dp, i, 0, m) = i;
     }
-    for(pos_t j = 1; j < m; j++) {
+    for(int_t j = 1; j < m; j++) {
         VAL(dp, 0, j, m) = j;
     }
-    for(pos_t i = 1; i < n; i++) {
-        for(pos_t j = 1; j < m; j++) {
+    for(int_t i = 1; i < n; i++) {
+        for(int_t j = 1; j < m; j++) {
             if(str1->seq[i-1] == str2->seq[j-1]) {
                 VAL(dp, i, j, m) = VAL(dp, i-1,j-1, m);
             } else {
-                pos_t mismatch = VAL(dp, i-1, j-1, m) + 1;
-                pos_t insert = VAL(dp, i-1, j, m) + 1;
-                pos_t delete = VAL(dp, i, j-1, m) + 1;
-                pos_t minval =  MIN3(mismatch, insert, delete);
+                int_t mismatch = VAL(dp, i-1, j-1, m) + 1;
+                int_t insert = VAL(dp, i-1, j, m) + 1;
+                int_t delete = VAL(dp, i, j-1, m) + 1;
+                int_t minval =  MIN3(mismatch, insert, delete);
                 VAL(dp, i, j, m) = minval;
             }
         }
     }
     // retval and traceback
-    pos_t i = n-1;
-    pos_t j = m-1;
-    pos_t t = 0;
+    int_t i = n-1;
+    int_t j = m-1;
+    int_t t = 0;
     while(i > 0 && j > 0) {
-        pos_t overwrite = VAL(dp, i-1, j-1, m);
-        pos_t insert = VAL(dp, i-1, j, m);
-        pos_t delete = VAL(dp, i, j-1, m);
-        pos_t minval = MIN3(overwrite, insert, delete);
+        int_t overwrite = VAL(dp, i-1, j-1, m);
+        int_t insert = VAL(dp, i-1, j, m);
+        int_t delete = VAL(dp, i, j-1, m);
+        int_t minval = MIN3(overwrite, insert, delete);
         fmd_edit_op_t op;
         if(minval == overwrite) {
             op = str1->seq[i-1] == str2->seq[j-1] ? MATCH : MISMATCH;
@@ -122,8 +122,8 @@ void fmd_string_edit_distance(fmd_string_t *str1, fmd_string_t *str2, pos_t *dis
     *edits_len = t;
     *edits = cigar;
     // reverse the cigar string
-    pos_t a = t-1;
-    pos_t b = 0;
+    int_t a = t-1;
+    int_t b = 0;
     while(a > b) {
         fmd_edit_op_t tmp = cigar[a];
         cigar[a] = cigar[b];
@@ -134,14 +134,14 @@ void fmd_string_edit_distance(fmd_string_t *str1, fmd_string_t *str2, pos_t *dis
 #undef VAL
 }
 
-void fmd_string_phase(fmd_string_t *str1, fmd_string_t *str2, fmd_edit_op_t *edits, pos_t edits_len, fmd_string_t **p1, fmd_string_t **p2) {
+void fmd_string_phase(fmd_string_t *str1, fmd_string_t *str2, fmd_edit_op_t *edits, int_t edits_len, fmd_string_t **p1, fmd_string_t **p2) {
     fmd_string_t *s1,*s2;
     fmd_string_init(&s1, edits_len+1);
     fmd_string_init(&s2, edits_len+1);
 
-    pos_t r1 = 0;
-    pos_t r2 = 0;
-    for(pos_t i = 0; i < edits_len; i++) {
+    int_t r1 = 0;
+    int_t r2 = 0;
+    for(int_t i = 0; i < edits_len; i++) {
         switch (edits[i]) {
             case MATCH:
             case MISMATCH: {
@@ -170,9 +170,9 @@ void fmd_string_phase_cigar(fmd_string_t *str1, fmd_string_t *str2, fmd_string_t
     fmd_string_init(&s1, cigar->size+1);
     fmd_string_init(&s2, cigar->size+1);
 
-    pos_t r1 = 0;
-    pos_t r2 = 0;
-    for(pos_t i = 0; i < cigar->size; i++) {
+    int_t r1 = 0;
+    int_t r2 = 0;
+    for(int_t i = 0; i < cigar->size; i++) {
         switch (cigar->seq[i]) {
             case 'M':
             case 'X': {
@@ -196,10 +196,10 @@ void fmd_string_phase_cigar(fmd_string_t *str1, fmd_string_t *str2, fmd_string_t
     *p2 = s2;
 }
 
-void fmd_string_cigar(fmd_edit_op_t *edits, pos_t edits_len, fmd_string_t **cigar) {
+void fmd_string_cigar(fmd_edit_op_t *edits, int_t edits_len, fmd_string_t **cigar) {
     fmd_string_t *out;
     fmd_string_init(&out, edits_len);
-    for (pos_t i = 0; i < edits_len; i++) {
+    for (int_t i = 0; i < edits_len; i++) {
         char_t c;
         switch (edits[i]) {
             case MATCH: {
@@ -246,8 +246,8 @@ fmd_string_t *fmd_string_copy(fmd_string_t *str) {
 }
 
 int fmd_string_comp(fmd_string_t *s1, fmd_string_t *s2) {
-    pos_t min_len = s1->size > s2->size ? s2->size : s1->size;
-    pos_t i;
+    int_t min_len = s1->size > s2->size ? s2->size : s1->size;
+    int_t i;
     for(i = 0; i < min_len; i++) {
         if(s1->seq[i] < s2->seq[i])
             return -1;
@@ -258,16 +258,16 @@ int fmd_string_comp(fmd_string_t *s1, fmd_string_t *s2) {
     return s1->size > s2->size ? -1 : 1;
 }
 
-upos_t fmd_string_hash(fmd_string_t *s) {
-    const upos_t prime = 1099511628211LLU;
-    upos_t hash = 14695981039346656037LLU;
+uint_t fmd_string_hash(fmd_string_t *s) {
+    const uint_t prime = 1099511628211LLU;
+    uint_t hash = 14695981039346656037LLU;
     uint64_t *seq64 = (uint64_t*)s->seq;
     int block_size = sizeof(uint64_t) / sizeof(char_t);
-    for (pos_t i = 0; i < s->size/block_size; ++i) {
+    for (int_t i = 0; i < s->size/block_size; ++i) {
         hash ^= seq64[i];
         hash *= prime;
     }
-    for(pos_t i = (s->size/block_size)*block_size; s->size; i++) {
+    for(int_t i = (s->size/block_size)*block_size; s->size; i++) {
         hash ^= s->seq[i];
         hash *= prime;
     }

@@ -7,7 +7,8 @@ set(BUILD_OPENMP OFF)
 set(DEBUG ON)
 
 if(DEBUG)
-    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
+    add_link_options(-fsanitize=address)
+    #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
     set(BUILD_OPENMP OFF)
 else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIC")
@@ -28,8 +29,8 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_string.c
     ${PROJECT_SOURCE_DIR}/fmd_graph.c
     ${PROJECT_SOURCE_DIR}/fmd_min_heap.c
-    #${PROJECT_SOURCE_DIR}/fmd_alphabet.c
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
+    ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
 )
 set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_common.h
@@ -40,8 +41,8 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_string.h
     ${PROJECT_HEADER_DIR}/fmd_graph.h
     ${PROJECT_HEADER_DIR}/fmd_min_heap.h
-    #${PROJECT_HEADER_DIR}/fmd_alphabet.h
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
+    ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
 )
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
 add_library(fmd_lib_static STATIC ${C_FILES} ${H_FILES})

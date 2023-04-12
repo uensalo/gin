@@ -16,11 +16,11 @@ void fmd_vertex_free(fmd_vertex_t *vertex) {
     free(vertex);
 }
 
-upos_t fmd_vertex_hash(fmd_vertex_t *vertex) {
+uint_t fmd_vertex_hash(fmd_vertex_t *vertex) {
     // djb2
-    upos_t hash = 5381;
+    uint_t hash = 5381;
     hash = ((hash << 5) + hash) + (size_t)vertex->id;
-    upos_t label_hash = fmd_string_hash(vertex->label);
+    uint_t label_hash = fmd_string_hash(vertex->label);
     hash = ((hash << 5) + hash) + label_hash;
     return hash;
 }
@@ -69,9 +69,9 @@ void fmd_graph_insert_edge(fmd_graph_t *graph, vid_t source, vid_t destination) 
     fmd_vector_append(neighbors, destination);
 }
 
-upos_t fmd_graph_hash(fmd_graph_t *graph) {
-    upos_t vertices_hash = fmd_table_hash(graph->vertices);
-    upos_t edges_hash = fmd_table_hash(graph->incoming_neighbors);
+uint_t fmd_graph_hash(fmd_graph_t *graph) {
+    uint_t vertices_hash = fmd_table_hash(graph->vertices);
+    uint_t edges_hash = fmd_table_hash(graph->incoming_neighbors);
     return (vertices_hash * 31) + edges_hash;
 }
 

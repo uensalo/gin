@@ -48,11 +48,11 @@ void fmd_bs_init_from_buffer(char *buf, size_t buf_size, fmd_bs_t **bs) {
     *bs = b;
 }
 
-void fmd_bs_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, word_t *read_val) {
+void fmd_bs_read_word(fmd_bs_t *bs, uint_t bit_idx, uint_t read_size_in_bits, word_t *read_val) {
     if(!read_size_in_bits) return;
-    upos_t word_idx = bit_idx >> WORD_LOG_BITS;
-    upos_t bit_s = (bit_idx & WORD_LOG_MASK);
-    upos_t bit_e = (read_size_in_bits + bit_idx - 1) & WORD_LOG_MASK;
+    uint_t word_idx = bit_idx >> WORD_LOG_BITS;
+    uint_t bit_s = (bit_idx & WORD_LOG_MASK);
+    uint_t bit_e = (read_size_in_bits + bit_idx - 1) & WORD_LOG_MASK;
     if (bit_s == 0) {
         *read_val = bs->words[word_idx] & mask_shift_right_64[64 - read_size_in_bits];
     } else if (bit_e >= bit_s) {
@@ -63,16 +63,16 @@ void fmd_bs_read_word(fmd_bs_t *bs, upos_t bit_idx, upos_t read_size_in_bits, wo
     }
 }
 
-void fmd_bs_write_word(fmd_bs_t *bs, upos_t bit_idx, word_t write_val, upos_t write_size_in_bits) {
+void fmd_bs_write_word(fmd_bs_t *bs, uint_t bit_idx, word_t write_val, uint_t write_size_in_bits) {
     if(write_size_in_bits == 0) return;
     while (bit_idx + write_size_in_bits > (bs->cap_in_words << WORD_LOG_BITS)) {
         bs->words = realloc(bs->words, sizeof(word_t) * bs->cap_in_words * 2);
         memset(bs->words + bs->cap_in_words, 0, bs->cap_in_words * sizeof(word_t));
         bs->cap_in_words *= 2;
     }
-    upos_t word_idx = bit_idx >> WORD_LOG_BITS;
-    upos_t bit_s = bit_idx & WORD_LOG_MASK;
-    upos_t bit_e = (bit_idx + write_size_in_bits - 1) & WORD_LOG_MASK;
+    uint_t word_idx = bit_idx >> WORD_LOG_BITS;
+    uint_t bit_s = bit_idx & WORD_LOG_MASK;
+    uint_t bit_e = (bit_idx + write_size_in_bits - 1) & WORD_LOG_MASK;
     if (bit_s == 0) { // word aligned write, write no_bits_to_write many bits from data
         bs->words[word_idx] &= mask_shift_left_64[write_size_in_bits];
         bs->words[word_idx] |= write_val & mask_shift_right_64[64 - write_size_in_bits];
@@ -107,7 +107,7 @@ int fmd_bs_comp(fmd_bs_t *bs1, fmd_bs_t *bs2) {
     return bs1->cap_in_words == bs2->cap_in_words ? memcmp(bs1->words, bs2->words, bs1->cap_in_words * sizeof(word_t)) : -1;
 }
 
-upos_t fmd_bs_hash(fmd_bs_t *bs) {
+uint_t fmd_bs_hash(fmd_bs_t *bs) {
     // fnv1a_64
     const uint64_t prime = 1099511628211LLU;
     uint64_t hash = 14695981039346656037LLU;

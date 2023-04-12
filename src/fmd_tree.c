@@ -189,7 +189,7 @@ bool fmd_tree_node_replace_if_not_insert(fmd_tree_node_t **root, void* key, void
     return false;
 }
 
-pos_t fmd_tree_node_height(fmd_tree_node_t *root) {
+int_t fmd_tree_node_height(fmd_tree_node_t *root) {
     return root ? 1 + MAX2(fmd_tree_node_height(root->left), fmd_tree_node_height(root->right)) : -1;
 }
 
@@ -244,18 +244,18 @@ int fmd_tree_node_comp(fmd_tree_node_t *t1, fmd_tree_node_t *t2, fmd_fstruct_t *
     return 0;
 }
 
-upos_t fmd_tree_node_hash(fmd_tree_node_t *node, fmd_fstruct_t *key_f) {
+uint_t fmd_tree_node_hash(fmd_tree_node_t *node, fmd_fstruct_t *key_f) {
     uint64_t hash = 14695981039346656037LLU;
     if(node) {
         const uint64_t prime = 1099511628211LLU;
-        upos_t h = key_f->hash_f(node->key);
+        uint_t h = key_f->hash_f(node->key);
         if(node->left) {
-            upos_t hl = fmd_tree_node_hash(node->left, key_f);
+            uint_t hl = fmd_tree_node_hash(node->left, key_f);
             h ^= hl;
             h *= prime;
         }
         if(node->right) {
-            upos_t hr = fmd_tree_node_hash(node->right, key_f);
+            uint_t hr = fmd_tree_node_hash(node->right, key_f);
             h ^= hr;
             h *= prime;
         }
@@ -332,8 +332,8 @@ bool fmd_tree_replace_if_not_insert(fmd_tree_t *tree, void *key, void *value, vo
     return replaced;
 }
 
-void fmd_tree_height(fmd_tree_t *tree, pos_t *height) {
-    pos_t h = fmd_tree_node_height(tree->root);
+void fmd_tree_height(fmd_tree_t *tree, int_t *height) {
+    int_t h = fmd_tree_node_height(tree->root);
     *height = h;
 }
 
@@ -349,7 +349,7 @@ int fmd_tree_comp(fmd_tree_t *t1, fmd_tree_t *t2) {
     return fmd_tree_node_comp(t1->root,t2->root,t1->key_f,t1->val_f);
 }
 
-upos_t fmd_tree_hash(fmd_tree_t *tree) {
+uint_t fmd_tree_hash(fmd_tree_t *tree) {
     return fmd_tree_node_hash(tree->root, tree->key_f);
 }
 

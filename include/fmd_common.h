@@ -13,12 +13,12 @@
 #define MAX3(a,b,c) (MAX2((MAX2((a),(b))),(c)))
 #define MAX4(a,b,c,d) (MAX2((MAX3((a),(b),(c))),(d)))
 
-typedef uint8_t  byte_t;
-typedef int64_t  pos_t;
-typedef uint64_t upos_t;
+//typedef uint8_t  byte_t;
+typedef int64_t  int_t;
+typedef uint64_t uint_t;
 
 typedef int    (*fcomp)(void*, void*);
-typedef upos_t (*fhash)(void*);
+typedef uint_t (*fhash)(void*);
 typedef void   (*ffree)(void*);
 typedef void*  (*fcopy)(void*);
 typedef void   (*ftrav_kv)(void *key, void *value, void *p);
@@ -34,8 +34,8 @@ typedef struct fmd_fstruct {
 static int prm_comp_f(void *a, void *b) {
     return a < b ? -1 : (a == b ? 0 : 1);
 }
-static upos_t prm_hash_f(void *a) {
-    return (pos_t)a;
+static uint_t prm_hash_f(void *a) {
+    return (int_t)a;
 }
 static void prm_free(void *a) {
 }
@@ -77,10 +77,10 @@ static int64_t fmd_ceil_log2(uint64_t x) {
     return (int64_t)y;
 }
 
-static bool fmd_test_miller_rabin(pos_t n, pos_t d) {
-    pos_t a = 2 + rand() % (n - 4);
-    pos_t x = 1;
-    pos_t temp = d;
+static bool fmd_test_miller_rabin(int_t n, int_t d) {
+    int_t a = 2 + rand() % (n - 4);
+    int_t x = 1;
+    int_t temp = d;
     while (temp > 0) {
         if (temp % 2 == 1) {
             x = (x * a) % n;
@@ -105,15 +105,15 @@ static bool fmd_test_miller_rabin(pos_t n, pos_t d) {
     return false;
 }
 
-static bool fmd_is_prime(pos_t n) {
-    const pos_t no_iter = 5; // error = (1/4)^no_iter
+static bool fmd_is_prime(int_t n) {
+    const int_t no_iter = 5; // error = (1/4)^no_iter
     if (n <= 1 || n == 4) {
         return false;
     }
     if (n <= 3) {
         return true;
     }
-    pos_t d = n - 1;
+    int_t d = n - 1;
     while (d % 2 == 0) {
         d /= 2;
     }
@@ -125,11 +125,11 @@ static bool fmd_is_prime(pos_t n) {
     return true;
 }
 
-static pos_t fmd_next_prime_after(pos_t n) {
+static int_t fmd_next_prime_after(int_t n) {
     if (n <= 1) {
         return 2;
     }
-    pos_t prime = n % 2 == 0 ? n + 1 : n + 2;
+    int_t prime = n % 2 == 0 ? n + 1 : n + 2;
     while (!fmd_is_prime(prime)) {
         prime += 2;
     }

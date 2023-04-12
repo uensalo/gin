@@ -1,6 +1,6 @@
 #include "fmd_vector.h"
 
-void fmd_vector_init(fmd_vector_t **vec, pos_t initial_capacity, fmd_fstruct_t *f) {
+void fmd_vector_init(fmd_vector_t **vec, int_t initial_capacity, fmd_fstruct_t *f) {
     fmd_vector_t *v = calloc(1, sizeof(fmd_vector_t));
     if(!v) {
         *vec = NULL;
@@ -43,7 +43,7 @@ void fmd_vector_pop(fmd_vector_t *vec, void **item) {
         *item = tmp;
 }
 
-void fmd_vector_insert(fmd_vector_t *vec, pos_t index, void *value) {
+void fmd_vector_insert(fmd_vector_t *vec, int_t index, void *value) {
     if (vec->size == vec->capacity) {
         fmd_vector_grow(vec);
     }
@@ -52,7 +52,7 @@ void fmd_vector_insert(fmd_vector_t *vec, pos_t index, void *value) {
     vec->size++;
 }
 
-void fmd_vector_delete(fmd_vector_t *vec, pos_t index, void **item) {
+void fmd_vector_delete(fmd_vector_t *vec, int_t index, void **item) {
     void *tmp = vec->data[index];
     memmove(&vec->data[index], &vec->data[index + 1], (vec->size - index - 1) * sizeof(void*));
     vec->size--;
@@ -63,12 +63,12 @@ void fmd_vector_delete(fmd_vector_t *vec, pos_t index, void **item) {
         *item = tmp;
 }
 
-void fmd_qs_helper_(void **arr, pos_t left, pos_t right, fcomp comp_f) {
+void fmd_qs_helper_(void **arr, int_t left, int_t right, fcomp comp_f) {
     if (left < right) {
         if (right - left <= 10) {
-            for (pos_t i = left + 1; i <= right; i++) {
+            for (int_t i = left + 1; i <= right; i++) {
                 void *key = arr[i];
-                pos_t j = i - 1;
+                int_t j = i - 1;
 
                 while (j >= left && comp_f(arr[j], key) > 0) {
                     arr[j + 1] = arr[j];
@@ -77,11 +77,11 @@ void fmd_qs_helper_(void **arr, pos_t left, pos_t right, fcomp comp_f) {
                 arr[j + 1] = key;
             }
         } else {
-            pos_t pivot_index = left + (pos_t)rand() % (right - left + 1);
+            int_t pivot_index = left + (int_t)rand() % (right - left + 1);
             void *pivot = arr[pivot_index];
             fmd_swap(&arr[pivot_index], &arr[left]);
-            pos_t i = left + 1;
-            pos_t j = right;
+            int_t i = left + 1;
+            int_t j = right;
             while (true) {
                 while (i <= j && comp_f(arr[i], pivot) < 0) {
                     i++;
@@ -110,19 +110,19 @@ void fmd_vector_sort(fmd_vector_t *vec) {
 
 int fmd_vector_comp(fmd_vector_t *v1, fmd_vector_t *v2) {
     if(v1->size!=v2->size) return -1;
-    for(pos_t i = 0; i < v1->size; i++) {
+    for(int_t i = 0; i < v1->size; i++) {
         int cmp = v1->f->comp_f(v1->data[i],v2->data[i]);
         if(cmp) return -1;
     }
     return 0;
 }
 
-upos_t fmd_vector_hash(fmd_vector_t *v) {
+uint_t fmd_vector_hash(fmd_vector_t *v) {
     // fnv again
     const uint64_t prime = 1099511628211LLU;
     uint64_t hash = 14695981039346656037LLU;
     for (size_t i = 0; i < v->size; ++i) {
-        upos_t hash_item = v->f->hash_f(v->data[i]);
+        uint_t hash_item = v->f->hash_f(v->data[i]);
         hash ^= hash_item;
         hash *= prime;
     }
@@ -135,7 +135,7 @@ fmd_vector_t *fmd_vector_copy(fmd_vector_t *v) {
     cpy->size = v->size;
     cpy->capacity = v->capacity;
     cpy->f = v->f;
-    for(pos_t i = 0; i < v->size; i++) {
+    for(int_t i = 0; i < v->size; i++) {
         cpy->data[i] = v->f->copy_f(cpy->data[i]);
     }
     return v;

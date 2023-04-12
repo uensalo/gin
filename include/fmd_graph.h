@@ -13,7 +13,7 @@ typedef struct {
 } fmd_vertex_t;
 void fmd_vertex_init(fmd_vertex_t **vertex, vid_t id, fmd_string_t *label);
 void fmd_vertex_free(fmd_vertex_t *vertex);
-upos_t fmd_vertex_hash(fmd_vertex_t *vertex);
+uint_t fmd_vertex_hash(fmd_vertex_t *vertex);
 int fmd_vertex_comp(fmd_vertex_t *v1, fmd_vertex_t *v2);
 fmd_vertex_t *fmd_vertex_copy(fmd_vertex_t *vertex);
 
@@ -35,7 +35,7 @@ void fmd_graph_init(fmd_graph_t **graph);
 void fmd_graph_free(fmd_graph_t *graph);
 void fmd_graph_insert_vertex(fmd_graph_t *graph, vid_t id, fmd_string_t *label);
 void fmd_graph_insert_edge(fmd_graph_t *graph, int source, int destination);
-upos_t fmd_graph_hash(fmd_graph_t *graph);
+uint_t fmd_graph_hash(fmd_graph_t *graph);
 int fmd_graph_comp(fmd_graph_t *g1, fmd_graph_t *g2);
 fmd_graph_t *fmd_graph_copy(fmd_graph_t *graph);
 

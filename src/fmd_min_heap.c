@@ -1,6 +1,6 @@
 #include "fmd_min_heap.h"
 
-void fmd_min_heap_init(fmd_min_heap_t **heap, pos_t capacity, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f) {
+void fmd_min_heap_init(fmd_min_heap_t **heap, int_t capacity, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f) {
     *heap = (fmd_min_heap_t *)malloc(sizeof(fmd_min_heap_t));
     (*heap)->data = (fmd_min_heap_kv_t **)calloc(capacity, sizeof(fmd_min_heap_kv_t *));
     (*heap)->capacity = capacity;
@@ -59,9 +59,9 @@ bool fmd_min_heap_peek(fmd_min_heap_t *heap, void **key, void **value) {
     return true;
 }
 
-void fmd_min_heap_sift_up(fmd_min_heap_t *heap, pos_t index) {
+void fmd_min_heap_sift_up(fmd_min_heap_t *heap, int_t index) {
     while (index > 0) {
-        pos_t parent = (index - 1) / 2;
+        int_t parent = (index - 1) / 2;
         if (heap->key_f->comp_f(heap->data[parent]->key, heap->data[index]->key) <= 0) {
             break;
         }
@@ -72,10 +72,10 @@ void fmd_min_heap_sift_up(fmd_min_heap_t *heap, pos_t index) {
     }
 }
 
-void fmd_min_heap_sift_down(fmd_min_heap_t *heap, pos_t index) {
+void fmd_min_heap_sift_down(fmd_min_heap_t *heap, int_t index) {
     while (2 * index + 1 < heap->size) {
-        pos_t smallest = 2 * index + 1;
-        pos_t right = 2 * index + 2;
+        int_t smallest = 2 * index + 1;
+        int_t right = 2 * index + 2;
         if (right < heap->size && heap->key_f->comp_f(heap->data[right]->key, heap->data[smallest]->key) < 0) {
             smallest = right;
         }
@@ -93,7 +93,7 @@ int fmd_min_heap_comp(fmd_min_heap_t *h1, fmd_min_heap_t *h2) {
     if (h1->size != h2->size) {
         return (int)(h1->size - h2->size);
     }
-    for (pos_t i = 0; i < h1->size; ++i) {
+    for (int_t i = 0; i < h1->size; ++i) {
         int key_comp = h1->key_f->comp_f(h1->data[i]->key, h2->data[i]->key);
         if (key_comp != 0) {
             return key_comp;
@@ -102,11 +102,11 @@ int fmd_min_heap_comp(fmd_min_heap_t *h1, fmd_min_heap_t *h2) {
     return 0;
 }
 
-upos_t fmd_min_heap_hash(fmd_min_heap_t *heap) {
-    const upos_t prime = 1099511628211LLU;
-    upos_t hash = 14695981039346656037LLU;
-    for (pos_t i = 0; i < heap->size; ++i) {
-        upos_t key_hash = heap->key_f->hash_f(heap->data[i]->key);
+uint_t fmd_min_heap_hash(fmd_min_heap_t *heap) {
+    const uint_t prime = 1099511628211LLU;
+    uint_t hash = 14695981039346656037LLU;
+    for (int_t i = 0; i < heap->size; ++i) {
+        uint_t key_hash = heap->key_f->hash_f(heap->data[i]->key);
         hash ^= key_hash;
         hash *= prime;
     }
@@ -120,7 +120,7 @@ fmd_min_heap_t *fmd_min_heap_copy(fmd_min_heap_t *heap) {
     copy->key_f = heap->key_f;
     copy->val_f = heap->val_f;
     copy->data = calloc(copy->capacity, sizeof(fmd_min_heap_kv_t *));
-    for (pos_t i = 0; i < copy->size; ++i) {
+    for (int_t i = 0; i < copy->size; ++i) {
         fmd_min_heap_kv_t *kv = calloc(1, sizeof(fmd_min_heap_kv_t));
         kv->key = heap->key_f->copy_f(heap->data[i]->key);
         kv->value = heap->val_f->copy_f(heap->data[i]->value);

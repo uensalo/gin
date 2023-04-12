@@ -22,11 +22,11 @@ bool fmd_tree_node_insert(fmd_tree_node_t **root, void* key, void* value, fmd_fs
 fmd_tree_node_t *fmd_tree_node_search(fmd_tree_node_t *root, void* key, fmd_fstruct_t *key_f);
 bool fmd_tree_node_replace(fmd_tree_node_t *root, void* key, void* value, void** old_value, fmd_fstruct_t *key_f);
 bool fmd_tree_node_replace_if_not_insert(fmd_tree_node_t **root, void* key, void* value, void** old_value, fmd_fstruct_t *key_f);
-pos_t fmd_tree_node_height(fmd_tree_node_t *root);
+int_t fmd_tree_node_height(fmd_tree_node_t *root);
 void fmd_tree_node_free(fmd_tree_node_t *node, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
 fmd_tree_node_t *fmd_tree_node_copy(fmd_tree_node_t *node, fmd_tree_node_t *parent, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
 int fmd_tree_node_comp(fmd_tree_node_t *n1, fmd_tree_node_t *n2, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
-upos_t fmd_tree_node_hash(fmd_tree_node_t *node, fmd_fstruct_t *key_f);
+uint_t fmd_tree_node_hash(fmd_tree_node_t *node, fmd_fstruct_t *key_f);
 void fmd_tree_node_preorder(fmd_tree_node_t *root, void *p, ftrav_kv f);
 void fmd_tree_node_inorder(fmd_tree_node_t *root, void *p, ftrav_kv f);
 void fmd_tree_node_postorder(fmd_tree_node_t *root, void *p, ftrav_kv f);
@@ -36,7 +36,7 @@ typedef struct fmd_tree {
     fmd_tree_node_t *root;
     fmd_fstruct_t *key_f;
     fmd_fstruct_t *val_f;
-    pos_t no_items;
+    int_t no_items;
 } fmd_tree_t;
 
 void fmd_tree_init(fmd_tree_t **tree, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
@@ -44,10 +44,10 @@ bool fmd_tree_insert(fmd_tree_t *tree, void *key, void *value);
 bool fmd_tree_search(fmd_tree_t *tree, void *key, void **value);
 bool fmd_tree_replace(fmd_tree_t *tree, void *key, void *value, void **old_value);
 bool fmd_tree_replace_if_not_insert(fmd_tree_t *tree, void *key, void *value, void **old_value);
-void fmd_tree_height(fmd_tree_t *tree, pos_t *height);
+void fmd_tree_height(fmd_tree_t *tree, int_t *height);
 void fmd_tree_free(fmd_tree_t *tree);
 int fmd_tree_comp(fmd_tree_t *t1, fmd_tree_t *t2);
-upos_t fmd_tree_hash(fmd_tree_t *tree);
+uint_t fmd_tree_hash(fmd_tree_t *tree);
 fmd_tree_t *fmd_tree_copy(fmd_tree_t *tree);
 
 // traversals

@@ -6,6 +6,10 @@
 #include <time.h>
 #include <fmd_graph.h>
 #include <fmd_fmi.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <limits.h>
+#include <stdbool.h>
 
 /*
 // fmi unit test
@@ -53,6 +57,52 @@ for(int i = 0; i < vec->size; i++) {
 printf("\n");
  */
 
+#include "fmd_interval_merge_tree.h"
+
+void print_intervals(fmd_vector_t *intervals) {
+    for (int_t i = 0; i < intervals->size; i++) {
+        fmd_imt_interval_t *interval = intervals->data[i];
+        printf("(%ld, %ld)", interval->lo, interval->hi);
+        if (i < intervals->size - 1) {
+            printf(", ");
+        }
+    }
+    printf("\n");
+}
+
 int main() {
+    fmd_vector_t *intervals1, *intervals2;
+    fmd_vector_init(&intervals1, 10, &fmd_fstruct_imt_interval);
+    fmd_vector_init(&intervals2, 10, &fmd_fstruct_imt_interval);
+
+    fmd_imt_interval_t i1_1 = {1, 3};
+    fmd_imt_interval_t i1_2 = {7, 9};
+    fmd_imt_interval_t i1_3 = {15, 18};
+
+    fmd_imt_interval_t i2_1 = {5, 6};
+    fmd_imt_interval_t i2_2 = {11, 14};
+    fmd_imt_interval_t i2_3 = {19, 20};
+
+    fmd_vector_append(intervals1, &i1_1);
+    fmd_vector_append(intervals1, &i1_2);
+    fmd_vector_append(intervals1, &i1_3);
+
+    fmd_vector_append(intervals2, &i2_1);
+    fmd_vector_append(intervals2, &i2_2);
+    fmd_vector_append(intervals2, &i2_3);
+
+    printf("Intervals 1: ");
+    print_intervals(intervals1);
+    printf("Intervals 2: ");
+    print_intervals(intervals2);
+
+    fmd_vector_t *merged_intervals = fmd_imt_merge_intervals(intervals1, intervals2);
+    printf("Merged Intervals: ");
+    print_intervals(merged_intervals);
+
+    fmd_vector_free(intervals1);
+    fmd_vector_free(intervals2);
+    fmd_vector_free(merged_intervals);
+
     return 0;
 }
