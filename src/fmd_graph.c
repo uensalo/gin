@@ -58,15 +58,17 @@ void fmd_graph_insert_vertex(fmd_graph_t *graph, vid_t id, fmd_string_t *label) 
     fmd_vertex_t *vertex;
     fmd_vertex_init(&vertex, id, label);
     fmd_table_insert(graph->vertices, id, vertex);
+    fmd_vector_append(graph->vertex_list, vertex);
+
+    fmd_vector_t *neighbors;
+    fmd_vector_init(&neighbors, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    fmd_table_insert(graph->incoming_neighbors, id, neighbors);
 }
 
 void fmd_graph_insert_edge(fmd_graph_t *graph, vid_t source, vid_t destination) {
     fmd_vector_t *neighbors;
-    if (!fmd_table_lookup(graph->incoming_neighbors, source, &neighbors)) {
-        fmd_vector_init(&neighbors, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
-        fmd_table_insert(graph->incoming_neighbors, source, neighbors);
-    }
-    fmd_vector_append(neighbors, destination);
+    fmd_table_lookup(graph->incoming_neighbors, destination, &neighbors);
+    fmd_vector_append(neighbors, source);
 }
 
 uint_t fmd_graph_hash(fmd_graph_t *graph) {

@@ -18,6 +18,7 @@ set(PROJECT_ROOT_DIR   ${CMAKE_SOURCE_DIR})
 set(PROJECT_SOURCE_DIR ${PROJECT_ROOT_DIR}/src)
 set(PROJECT_HEADER_DIR ${PROJECT_ROOT_DIR}/include)
 set(PROJECT_EXTERN_DIR ${PROJECT_ROOT_DIR}/extern)
+set(PROJECT_TESTS_DIR  ${PROJECT_ROOT_DIR}/tests)
 ################################################################################
 # library file definitions
 ################################################################################
@@ -31,6 +32,7 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_min_heap.c
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
     ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
+    ${PROJECT_SOURCE_DIR}/fmd_fmd.c
 )
 set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_common.h
@@ -43,6 +45,7 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_min_heap.h
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
+    ${PROJECT_HEADER_DIR}/fmd_fmd.h
 )
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
 add_library(fmd_lib_static STATIC ${C_FILES} ${H_FILES})
@@ -77,3 +80,10 @@ target_link_libraries(fmd_lib_static PUBLIC divsufsort_static)
 ################################################################################
 add_executable(fmd main.c)
 target_link_libraries(fmd fmd_lib_static)
+
+file(GLOB unit_tests "${PROJECT_TESTS_DIR}/*.c")
+foreach(unit_test ${unit_tests})
+    get_filename_component(TEST_NAME ${unit_test} NAME_WE [CACHE])
+    add_executable(${TEST_NAME} ${unit_test})
+    target_link_libraries(${TEST_NAME} fmd_lib_static)
+endforeach()

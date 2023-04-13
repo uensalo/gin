@@ -273,3 +273,23 @@ uint_t fmd_string_hash(fmd_string_t *s) {
     }
     return hash;
 }
+
+void fmd_string_concat(fmd_string_t **concat, fmd_string_t *s1, fmd_string_t *s2) {
+    int_t total_size = s1->size + s2->size;
+    fmd_string_init(concat, total_size);
+    memcpy((*concat)->seq, s1->seq, s1->size * sizeof(char_t));
+    memcpy((*concat)->seq + s1->size, s2->seq, s2->size * sizeof(char_t));
+    (*concat)->size = total_size;
+    (*concat)->seq[total_size] = FMD_STRING_TERMINATOR;
+}
+
+void fmd_string_concat_mut(fmd_string_t *s1, fmd_string_t *s2) {
+    int_t total_size = s1->size + s2->size;
+    if (total_size > s1->capacity) {
+        s1->seq = realloc(s1->seq, (total_size + 1) * sizeof(char_t));
+        s1->capacity = total_size;
+    }
+    memcpy(s1->seq + s1->size, s2->seq, s2->size * sizeof(char_t));
+    s1->size = total_size;
+    s1->seq[total_size] = FMD_STRING_TERMINATOR;
+}

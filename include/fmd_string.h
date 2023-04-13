@@ -36,6 +36,9 @@ fmd_string_t *fmd_string_copy(fmd_string_t *str);
 int fmd_string_comp(fmd_string_t *s1, fmd_string_t *s2);
 uint_t fmd_string_hash(fmd_string_t *s);
 
+void fmd_string_concat(fmd_string_t **concat, fmd_string_t *s1, fmd_string_t *s2);
+void fmd_string_concat_mut(fmd_string_t *s1, fmd_string_t *s2);
+
 static fmd_fstruct_t fmd_fstruct_string = {
     fmd_string_comp,
     fmd_string_hash,

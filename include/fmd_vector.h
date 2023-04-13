@@ -20,7 +20,9 @@ void fmd_vector_pop(fmd_vector_t *vec, void **item);
 void fmd_vector_insert(fmd_vector_t *vec, int_t index, void *value);
 void fmd_vector_delete(fmd_vector_t *vec, int_t index, void **item);
 void fmd_qs_helper_(void **arr, int_t left, int_t right, fcomp comp_f);
+void fmd_qs_arg_helper_(void **arr, void **args, int_t left, int_t right, fcomp comp_f);
 void fmd_vector_sort(fmd_vector_t *vec);
+void fmd_vector_argsort(fmd_vector_t **args, fmd_vector_t *vec);
 // other functions to wrap in a fstruct
 int fmd_vector_comp(fmd_vector_t *v1, fmd_vector_t *v2);
 uint_t fmd_vector_hash(fmd_vector_t *v);

@@ -1,10 +1,33 @@
 #include "fmd_fmi.h"
 #include "string.h"
 
+fmd_fmi_qr_t *fmd_fmi_qr_init(int_t lo, int_t hi, int_t pos, fmd_string_t *pattern) {
+    fmd_fmi_qr_t *qr = calloc(1, sizeof(fmd_fmi_qr_t));
+    qr->lo = lo;
+    qr->hi = hi;
+    qr->pos = pos;
+    qr->pattern = pattern;
+    return qr;
+}
+void fmd_fmi_qr_free(fmd_fmi_qr_t *qr) {
+    if(qr) free(qr);
+}
+
 void fmd_fmi_init(fmd_fmi_t **fmi,
                   fmd_string_t *string,
                   int_t rank_sample_rate,
                   int_t isa_sample_rate) {
+    int64_t *sa = calloc(string->size+1, sizeof(uint64_t));
+    divsufsort64((sauchar_t*)string->seq, (saidx64_t*)sa, string->size+1);
+    fmd_fmi_init_with_sa(fmi,string,sa,rank_sample_rate,isa_sample_rate);
+    free(sa);
+}
+
+void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
+                          fmd_string_t *string,
+                          int_t *sa,
+                          int_t rank_sample_rate,
+                          int_t isa_sample_rate) {
     fmd_fmi_t *f = calloc(1, sizeof(fmd_fmi_t));
     if(!f) {
         *fmi = NULL;
@@ -82,8 +105,8 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
         *fmi = NULL;
         return;
     }
-    int64_t *sa = calloc(string->size+1, sizeof(uint64_t));
-    divsufsort64((sauchar_t*)string->seq, (saidx64_t*)sa, string->size+1);
+    //int64_t *sa = calloc(string->size+1, sizeof(uint64_t));
+    //divsufsort64((sauchar_t*)string->seq, (saidx64_t*)sa, string->size+1);
     fmd_string_t *bwt;
     fmd_string_init(&bwt, (int_t)f->no_chars);
     for(int_t i = 0; i < (int_t)f->no_chars; i++) {
@@ -94,7 +117,7 @@ void fmd_fmi_init(fmd_fmi_t **fmi,
         }
     }
     bwt->size = string->size+1;
-    free(sa);
+    //free(sa);
     /**************************************************************************
     * Step 3 - Encode everything into the bitvector (blocks, ranks, sa, abc)
     *************************************************************************/
@@ -240,6 +263,25 @@ bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     qr->lo = (int_t)(base + rank_lo_m_1);
     qr->hi = (int_t)(base + rank_hi_m_1);
     --qr->pos;
+    return true;
+}
+
+bool fmd_fmi_query_precedence_range(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
+    // traverse the LF-mapping
+    // compute the rank of the symbol for lo-1 and hi-1
+    word_t encoding;
+    bool found = fmd_table_lookup(fmi->c2e, c, &encoding);
+    if(!found) {
+        qr->lo = 0;
+        qr->hi = 0;
+        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
+        return false;
+    }
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(fmi,encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(fmi,encoding, qr->hi-1) : 0ull;
+    uint64_t base = fmi->char_counts[encoding];
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
     return true;
 }
 

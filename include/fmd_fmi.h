@@ -38,11 +38,19 @@ typedef struct {
     int_t pos;
     fmd_string_t *pattern;
 } fmd_fmi_qr_t; // query record
+fmd_fmi_qr_t *fmd_fmi_qr_init(int_t lo, int_t hi, int_t pos, fmd_string_t *pattern);
+void fmd_fmi_qr_free(fmd_fmi_qr_t *qr);
 
 void fmd_fmi_init(fmd_fmi_t **fmi,
                   fmd_string_t *string,
                   int_t rank_sample_rate,
                   int_t isa_sample_rate);
+
+void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
+                          fmd_string_t *string,
+                          int_t *sa,
+                          int_t rank_sample_rate,
+                          int_t isa_sample_rate);
 count_t fmd_fmi_query_count(fmd_fmi_t *fmi, fmd_string_t *string);
 fmd_vector_t *fmd_fmi_query_locate(fmd_fmi_t *fmi, fmd_string_t *string);
 
@@ -60,6 +68,7 @@ typedef struct fmd_fmi_init_isa_write_p_ {
 } fmd_fmi_init_isa_write_p_t;
 void fmd_fmi_init_isa_write(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
 bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr);
+bool fmd_fmi_query_precedence_range(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr, char_t c, int_t *lo, int_t *hi);
 count_t fmd_fmi_rank(fmd_fmi_t *fmi, word_t enc, int_t pos);
 fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr);
 word_t fmd_fmi_get(fmd_fmi_t *fmi, int_t pos);

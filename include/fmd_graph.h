@@ -6,7 +6,7 @@
 #include <fmd_tree.h>
 #include <fmd_vector.h>
 
-typedef int vid_t;
+typedef int_t vid_t;
 typedef struct {
     vid_t id;
     fmd_string_t *label;
@@ -34,7 +34,7 @@ typedef struct {
 void fmd_graph_init(fmd_graph_t **graph);
 void fmd_graph_free(fmd_graph_t *graph);
 void fmd_graph_insert_vertex(fmd_graph_t *graph, vid_t id, fmd_string_t *label);
-void fmd_graph_insert_edge(fmd_graph_t *graph, int source, int destination);
+void fmd_graph_insert_edge(fmd_graph_t *graph, vid_t source, vid_t destination);
 uint_t fmd_graph_hash(fmd_graph_t *graph);
 int fmd_graph_comp(fmd_graph_t *g1, fmd_graph_t *g2);
 fmd_graph_t *fmd_graph_copy(fmd_graph_t *graph);
