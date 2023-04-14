@@ -1,5 +1,31 @@
 #include "fmd_fmd.h"
 
+fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_cadet) {
+    fmd_fork_node_t *fn = calloc(1, sizeof(fmd_fork_node_t));
+    fn->parent = (struct fmd_fork_node_t*)parent;
+    fn->vertex_lo = vlo;
+    fn->vertex_hi = vhi;
+    fn->pos = pos;
+    fn->is_leaf = is_leaf;
+    fn->is_dead = is_dead;
+    fn->is_cadet = is_cadet;
+    return fn;
+}
+
+fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern) {
+    fmd_fmd_qr_t *qr = calloc(1, sizeof(fmd_fmd_qr_t));
+    qr->cur_fork = cur_fork;
+    qr->lo = lo;
+    qr->hi = hi;
+    qr->pos = pos;
+    qr->pattern = pattern;
+    return qr;
+}
+
+void fmd_fmd_qr_free(fmd_fmd_qr_t *q) {
+    if(q) free(q);
+}
+
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate) {
     fmd_fmd_t *f = calloc(1, sizeof(fmd_fmd_t));
     if(!f || !graph) {
@@ -160,7 +186,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_vector_t *kv_pairs;
     fmd_vector_init(&kv_pairs, V, &fmd_fstruct_vector); // vector holds interval lists
     for(int_t i = 0; i < V; i++) {
-        int_t vid = (int_t)c_0_bwt_to_text->data[i]; /* the -1 is CRUCIAL!!!!! */
+        int_t vid = (int_t)c_0_bwt_to_text->data[i];
         fmd_vector_t *neighbors;
         bool found = fmd_table_lookup(graph->incoming_neighbors, (void*)vid, (void*)&neighbors);
         assert(found);
@@ -180,7 +206,6 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
             printf("\n");
             // sort and compact neighbors_bwt_idx into intervals
             fmd_vector_sort(neighbors_bwt_idx);
-
             // compaction start
             int_t lo = (int_t) neighbors_bwt_idx->data[0];
             int_t hi = lo;
@@ -204,6 +229,8 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         }
         fmd_vector_append(kv_pairs, bwt_neighbor_intervals);
     }
+    f->bwt_to_vid = c_0_bwt_to_text;
+    fmd_vector_free(c_1_text_to_bwt);
     /******************************************************
     * Step 3d - Now, actually construct the tree
     ******************************************************/
@@ -223,6 +250,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
 void fmd_fmd_free(fmd_fmd_t *fmd) {
     if(fmd) {
         fmd_vector_free(fmd->permutation);
+        fmd_vector_free(fmd->bwt_to_vid);
         fmd_fmi_free(fmd->graph_fmi);
         fmd_imt_free(fmd->r2r_tree);
         free(fmd);
@@ -271,7 +299,7 @@ count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string) {
     return count;
 }
 
-fmd_vector_t *fmd_fmd_query_locate(fmd_fmd_t *fmd, fmd_string_t *string) {
+fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string) {
     // walk root count
     fmd_vector_t *locs;
     fmd_vector_init(&locs, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
@@ -317,6 +345,116 @@ fmd_vector_t *fmd_fmd_query_locate(fmd_fmd_t *fmd, fmd_string_t *string) {
         fmd_fmi_qr_free(query);
     }
     return locs;
+}
+
+void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
+    // walk root count
+    fmd_vector_t *leaves;
+    fmd_vector_init(&leaves, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    fmd_vector_t *graveyard;
+    fmd_vector_init(&graveyard, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    // push initial query
+    fmd_vector_t *stack;
+    fmd_vector_init(&stack, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    int_t V = fmd->permutation->size;
+    int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
+    int_t init_hi = fmd->graph_fmi->no_chars;
+    fmd_fork_node_t *root_fork = fmd_fork_node_init(NULL,
+                                                    -1, -1,
+                                                    string->size-1,
+                                                    false, false, false);
+    fmd_fmd_qr_t *root_query = fmd_fmd_qr_init(root_fork, init_lo, init_hi, string->size-1, string);
+    fmd_vector_append(stack, root_query);
+    while(stack->size > 0) {
+        // pop one from the stack
+        fmd_fmd_qr_t *query;
+        fmd_vector_pop(stack, (void*)&query);
+        while(query->pos > -1) {
+            // now check: are there any exhausted vertices?
+            int_t c_0_lo, c_0_hi;
+            bool okc = fmd_fmd_advance_query(fmd->graph_fmi, query);
+            bool ok = fmd_fmd_query_precedence_range(fmd->graph_fmi, query, fmd->c_0, &c_0_lo, &c_0_hi);
+            // if(!ok... // this check is not needed if everything goes ok in coding time
+            if (query->pos == -1) break;
+            // check if we need to fork into other vertices or not
+            if(c_0_hi > c_0_lo) {
+                // we have a walk having the current suffix of the query as a prefix
+                fmd_fork_node_t *royal_node = fmd_fork_node_init(query->cur_fork, query->cur_fork->vertex_lo, query->cur_fork->vertex_hi, query->pos, false, false, false);
+                fmd_vector_t *incoming_sa_intervals;
+                fmd_imt_query(fmd->r2r_tree, c_0_lo-1, c_0_hi-2, &incoming_sa_intervals);
+                for(int_t i = 0; i < incoming_sa_intervals->size; i++) {
+                    fmd_imt_interval_t *interval = incoming_sa_intervals->data[i];
+                    fmd_fork_node_t *cadet_node = fmd_fork_node_init(query->cur_fork, interval->lo, interval->hi+1, query->pos, false, false, true);
+                    fmd_fmd_qr_t *fork = fmd_fmd_qr_init(cadet_node, V+1+interval->lo, V+2+interval->hi, query->pos, string);
+                    fmd_vector_append(stack, fork);
+                }
+                query->cur_fork = royal_node;
+            }
+            if(!okc || query->lo == query->hi) {
+                fmd_fork_node_t *dead_node = fmd_fork_node_init(query->cur_fork, c_0_lo, c_0_hi, query->pos, true, true, false);
+                dead_node->sa_lo = query->lo;
+                dead_node->sa_hi = query->hi;
+                query->cur_fork = dead_node;
+                break;
+            }
+        }
+        if(!query->cur_fork->is_dead && !query->cur_fork->is_leaf) {
+            fmd_fork_node_t *leaf_node = fmd_fork_node_init(query->cur_fork, query->cur_fork->vertex_lo,
+                                                            query->cur_fork->vertex_hi, query->pos, true, false, false);
+            leaf_node->sa_lo = query->lo;
+            leaf_node->sa_hi = query->hi;
+            if(query->lo >= query->hi) {
+                leaf_node->is_dead = true;
+                fmd_vector_append(graveyard, leaf_node);
+            } else {
+                fmd_vector_append(leaves, leaf_node);
+            }
+        } else {
+            fmd_vector_append(graveyard, query->cur_fork);
+        }
+        fmd_fmd_qr_free(query);
+    }
+    *paths = leaves;
+    *dead_ends = graveyard;
+}
+
+bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr) {
+    // traverse the LF-mapping
+    // compute the rank of the symbol for lo-1 and hi-1
+    word_t encoding;
+    bool found = fmd_table_lookup(fmi->c2e, (void*)qr->pattern->seq[qr->pos], &encoding);
+    if(!found) {
+        qr->lo = 0;
+        qr->hi = 0;
+        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
+        return false;
+    }
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(fmi,encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(fmi,encoding, qr->hi-1) : 0ull;
+    uint64_t base = fmi->char_counts[encoding];
+    qr->lo = (int_t)(base + rank_lo_m_1);
+    qr->hi = (int_t)(base + rank_hi_m_1);
+    --qr->pos;
+    return true;
+}
+
+bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
+    // traverse the LF-mapping
+    // compute the rank of the symbol for lo-1 and hi-1
+    word_t encoding;
+    bool found = fmd_table_lookup(fmi->c2e, c, &encoding);
+    if(!found) {
+        qr->lo = 0;
+        qr->hi = 0;
+        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
+        return false;
+    }
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(fmi,encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(fmi,encoding, qr->hi-1) : 0ull;
+    uint64_t base = fmi->char_counts[encoding];
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
+    return true;
 }
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords) {

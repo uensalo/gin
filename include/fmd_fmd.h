@@ -15,6 +15,28 @@
 #define FMD_FMD_DEFAULT_a_0 ','
 #define FMD_FMD_DEFAULT_a_1 '.'
 
+typedef struct fmd_fork_node_{
+    struct fmd_fork_node_t *parent;
+    int_t vertex_lo;
+    int_t vertex_hi;
+    int_t sa_lo;
+    int_t sa_hi;
+    int_t pos;
+    bool is_leaf;
+    bool is_dead;
+    bool is_cadet; // used to be called is bastard
+} fmd_fork_node_t;
+fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_cadet);
+
+typedef struct fmd_fmd_qr_{
+    fmd_fork_node_t *cur_fork;
+    int_t lo;
+    int_t hi;
+    int_t pos;
+    fmd_string_t *pattern;
+} fmd_fmd_qr_t;
+fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern);
+void fmd_fmd_qr_free(fmd_fmd_qr_t *q);
 
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
@@ -22,18 +44,18 @@ typedef struct fmd_fmd_ {
     fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
     fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
     fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
+    fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
 } fmd_fmd_t;
 
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
 void fmd_fmd_free(fmd_fmd_t *fmd);
 
-typedef struct fmd_fmd_qr_{
-    fmd_fmi_qr_t fmi_state;
-    fmd_vector_t *visited;
-} fmd_fmd_qr_t;
-
 count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string);
-fmd_vector_t *fmd_fmd_query_locate(fmd_fmd_t *fmd, fmd_string_t *string);
+fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string);
+void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+
+bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);
+bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi);
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 

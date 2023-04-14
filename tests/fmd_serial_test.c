@@ -66,17 +66,38 @@ int main() {
     printf("= No permutations, fixed binary permutation encoding, serial                   =\n");
     printf("================================================================================\n");
     fmd_string_t *query1;
-    char *query1cstr = "GTTA";
+    char *query1cstr = "TAC";
     fmd_string_init_cstr(&query1, query1cstr);
     //count_t count = fmd_fmd_query_count(fmd, query1);
-    fmd_vector_t *locs = fmd_fmd_query_locate(fmd, query1);
+    //fmd_vector_t *locs = fmd_fmd_query_locate_basic(fmd, query1);
+    //printf("Locate for %s : { ", query1cstr);
+    //printf("}\n");
+    fmd_vector_t *paths,*dead;
+    fmd_fmd_query_locate_paths(fmd, query1, &paths, &dead);
 
     //printf("Count for %s : %lld\n", query1cstr, count);
-    printf("Locate for %s : { ", query1cstr);
-    for(int_t i = 0; i < locs->size; i++) {
-        printf("%d ", locs->data[i]);
+    int_t total_count = 0;
+    printf("Valid paths for: %s\n", query1cstr);
+    for(int_t i = 0; i < paths->size; i++) {
+        fmd_fork_node_t *cur = (fmd_fork_node_t*)paths->data[i];
+        total_count += cur->sa_hi - cur->sa_lo;
+        printf("Alive fork leaf node %d, sa[lo,hi) = [%d,%d)\n", i, cur->sa_lo, cur->sa_hi);
+        while(cur) {
+            printf("\tpos, [vlo,vhi) = %d, [%d,%d)\n", cur->pos, cur->vertex_lo, cur->vertex_hi);
+            cur = (fmd_fork_node_t*)cur->parent;
+        }
     }
-    printf("}\n");
+    printf("Dead explorations and partial matches: \n");
+    for(int_t i = 0; i < dead->size; i++) {
+        fmd_fork_node_t *cur = (fmd_fork_node_t*)dead->data[i];
+        printf("Dead fork leaf node %d, sa[lo,hi) = [%d,%d)\n", i, cur->sa_lo, cur->sa_hi);
+        while(cur) {
+            printf("\tpos, [vlo,vhi) = %d, [%d,%d)\n", cur->pos, cur->vertex_lo, cur->vertex_hi);
+            cur = (fmd_fork_node_t*)cur->parent;
+        }
+    }
+    printf("Actual count: %d\n", total_count);
+
     printf("================================================================================\n");
     printf("= FM-DIRECTORY COUNT-LOCATE TEST END                                           =\n");
     printf("================================================================================\n");
