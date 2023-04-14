@@ -30,6 +30,29 @@ fmd_graph_t *test_graph1() {
     return graph;
 }
 
+fmd_graph_t *test_graph2() {
+    char *l0 = "AACG";
+    char *l1 = "GGTA";
+    char *l2 = "CGAA";
+    fmd_string_t *l0s, *l1s, *l2s;
+    fmd_string_init_cstr(&l0s, l0);
+    fmd_string_init_cstr(&l1s, l1);
+    fmd_string_init_cstr(&l2s, l2);
+
+    fmd_graph_t *graph;
+    fmd_graph_init(&graph);
+
+    fmd_graph_insert_vertex(graph, 0, l0s);
+    fmd_graph_insert_vertex(graph, 1, l1s);
+    fmd_graph_insert_vertex(graph, 2, l2s);
+
+    fmd_graph_insert_edge(graph, 0, 1);
+    fmd_graph_insert_edge(graph, 1, 2);
+    fmd_graph_insert_edge(graph, 2, 0);
+
+    return graph;
+}
+
 int main() {
     printf("================================================================================\n");
     printf("= GRAPH INITIALIZATION TEST START                                              =\n");
@@ -97,6 +120,49 @@ int main() {
         }
     }
     printf("Actual count: %d\n", total_count);
+
+    printf("================================================================================\n");
+    printf("= FM-DIRECTORY COUNT-LOCATE TEST END                                           =\n");
+    printf("================================================================================\n");
+    printf("= FM-DIRECTORY INITIALIZATION TEST START                                       =\n");
+    printf("= Cyclic graph, no permutations, fixed binary permutation encoding             =\n");
+    printf("================================================================================\n");
+    fmd_fmd_t *fmd_cyclic;
+    fmd_graph_t *g2 = test_graph2();
+    fmd_fmd_init(&fmd_cyclic, g2, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, 1, 1);
+    printf("================================================================================\n");
+    printf("= FM-DIRECTORY INITIALIZATION TEST END                                         =\n");
+    printf("================================================================================\n");
+    printf("================================================================================\n");
+    printf("= FM-DIRECTORY COUNT-LOCATE TEST START                                         =\n");
+    printf("= Cyclic graph, no permutations, fixed binary permutation encoding             =\n");
+    printf("================================================================================\n");
+    fmd_string_t *query2;
+    char *query2cstr = "AACGGGTACGAAAACGGGTACGAAAACGGGTACGAAAACGGGTACGAAAACGGGTACGAA";
+    fmd_string_init_cstr(&query2, query2cstr);
+    fmd_vector_t *paths_cyclic,*dead_cyclic;
+    fmd_fmd_query_locate_paths(fmd_cyclic, query2, &paths_cyclic, &dead_cyclic);
+    int_t total_count_cycle = 0;
+    printf("Valid paths for: %s\n", query2cstr);
+    for(int_t i = 0; i < paths_cyclic->size; i++) {
+        fmd_fork_node_t *cur = (fmd_fork_node_t*)paths_cyclic->data[i];
+        total_count_cycle += cur->sa_hi - cur->sa_lo;
+        printf("Alive fork leaf node %d, sa[lo,hi) = [%d,%d)\n", i, cur->sa_lo, cur->sa_hi);
+        while(cur) {
+            printf("\tpos, [vlo,vhi) = %d, [%d,%d)\n", cur->pos, cur->vertex_lo, cur->vertex_hi);
+            cur = (fmd_fork_node_t*)cur->parent;
+        }
+    }
+    printf("Dead explorations and partial matches: \n");
+    for(int_t i = 0; i < dead_cyclic->size; i++) {
+        fmd_fork_node_t *cur = (fmd_fork_node_t*)dead_cyclic->data[i];
+        printf("Dead fork leaf node %d, sa[lo,hi) = [%d,%d)\n", i, cur->sa_lo, cur->sa_hi);
+        while(cur) {
+            printf("\tpos, [vlo,vhi) = %d, [%d,%d)\n", cur->pos, cur->vertex_lo, cur->vertex_hi);
+            cur = (fmd_fork_node_t*)cur->parent;
+        }
+    }
+    printf("Actual count: %d\n", total_count_cycle);
 
     printf("================================================================================\n");
     printf("= FM-DIRECTORY COUNT-LOCATE TEST END                                           =\n");
