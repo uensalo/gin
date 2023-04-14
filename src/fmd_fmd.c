@@ -80,6 +80,17 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         else printf("%c", '\0');
     }
     printf("\n");
+    printf("i:  ");
+    for(int_t i = 0; i < graph_encoding->size+1; i++) {
+        printf("%d ", i);
+    }
+    printf("\n");
+    printf("SA: ");
+    for(int_t i = 0; i < graph_encoding->size+1; i++) {
+        printf("%d ", sa[i]);
+    }
+    printf("\n");
+
     /**************************************************************************
     * Step 3 - Compute the query range translation index
     **************************************************************************/
@@ -132,6 +143,15 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_vector_free(c_1_bucket);
     fmd_vector_free(c_1_bwt_to_text);
     fmd_table_free(c_1_inversion_table);
+    // DEBUG PURPOSES
+    printf("C_0 BWT to text:\n");
+    for(int_t i = 0; i < c_0_bwt_to_text->size; i++) {
+        printf("%d:%d\n",i,c_0_bwt_to_text->data[i]);
+    }
+    printf("C_1 text to BWT:\n");
+    for(int_t i = 0; i < c_1_bwt_to_text->size; i++) {
+        printf("%d:%d\n",i,c_1_text_to_bwt->data[i]);
+    }
     /******************************************************
     * Step 3c - (key,value)s for the interval merge tree
     ******************************************************/
@@ -147,11 +167,17 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_vector_t *neighbors_bwt_idx;
         fmd_vector_init(&neighbors_bwt_idx, neighbors->size, &prm_fstruct);
         for(int_t j = 0; j < neighbors->size; j++) {
-            fmd_vector_append(neighbors_bwt_idx, (void*)c_1_text_to_bwt->data[j]);
+            fmd_vector_append(neighbors_bwt_idx, (void*)c_1_text_to_bwt->data[(vid_t)neighbors->data[j]]);
         }
         fmd_vector_t *bwt_neighbor_intervals;
         fmd_vector_init(&bwt_neighbor_intervals, neighbors->size, &fmd_fstruct_imt_interval);
         if(neighbors_bwt_idx->size) {
+            // DEBUG PURPOSES
+            printf("bwt-range of %d: ", vid);
+            for(int_t k = 0; k < neighbors_bwt_idx->size; k++) {
+                printf("%d ", neighbors_bwt_idx->data[k]);
+            }
+            printf("\n");
             // sort and compact neighbors_bwt_idx into intervals
             fmd_vector_sort(neighbors_bwt_idx);
 
@@ -264,8 +290,10 @@ fmd_vector_t *fmd_fmd_query_locate(fmd_fmd_t *fmd, fmd_string_t *string) {
         while(query->pos > -1) {
             // now check: are there any exhausted vertices?
             int_t c_0_lo, c_0_hi;
+            bool okc = fmd_fmi_advance_query(fmd->graph_fmi, query);
             bool ok = fmd_fmi_query_precedence_range(fmd->graph_fmi, query, fmd->c_0, &c_0_lo, &c_0_hi);
             // if(!ok... // this check is not needed if everything goes ok in coding time
+            if (query->pos == -1) break;
             // check if we need to fork into other vertices or not
             if(c_0_hi > c_0_lo) {
                 // we have a walk having the current suffix of the query as a prefix
@@ -277,7 +305,6 @@ fmd_vector_t *fmd_fmd_query_locate(fmd_fmd_t *fmd, fmd_string_t *string) {
                     fmd_vector_append(stack, fork);
                 }
             }
-            bool okc = fmd_fmi_advance_query(fmd->graph_fmi, query);
             if(!okc || query->lo == query->hi) {
                 break;
             }

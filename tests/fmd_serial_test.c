@@ -66,12 +66,12 @@ int main() {
     printf("= No permutations, fixed binary permutation encoding, serial                   =\n");
     printf("================================================================================\n");
     fmd_string_t *query1;
-    char *query1cstr = "ACCG";
+    char *query1cstr = "GTTA";
     fmd_string_init_cstr(&query1, query1cstr);
-    count_t count = fmd_fmd_query_count(fmd, query1);
+    //count_t count = fmd_fmd_query_count(fmd, query1);
     fmd_vector_t *locs = fmd_fmd_query_locate(fmd, query1);
 
-    printf("Count for %s : %lld\n", query1cstr, count);
+    //printf("Count for %s : %lld\n", query1cstr, count);
     printf("Locate for %s : { ", query1cstr);
     for(int_t i = 0; i < locs->size; i++) {
         printf("%d ", locs->data[i]);
