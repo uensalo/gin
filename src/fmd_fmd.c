@@ -164,11 +164,6 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         assert(found);
         fmd_vector_append(c_1_text_to_bwt, (void*)val);
     }
-    // free intermediate structures
-    fmd_vector_free(c_0_bucket);
-    fmd_vector_free(c_1_bucket);
-    fmd_vector_free(c_1_bwt_to_text);
-    fmd_table_free(c_1_inversion_table);
     // DEBUG PURPOSES
     printf("C_0 BWT to text:\n");
     for(int_t i = 0; i < c_0_bwt_to_text->size; i++) {
@@ -178,6 +173,11 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     for(int_t i = 0; i < c_1_bwt_to_text->size; i++) {
         printf("%d:%d\n",i,c_1_text_to_bwt->data[i]);
     }
+    // free intermediate structures
+    fmd_vector_free(c_0_bucket);
+    fmd_vector_free(c_1_bucket);
+    fmd_vector_free(c_1_bwt_to_text);
+    fmd_table_free(c_1_inversion_table);
     /******************************************************
     * Step 3c - (key,value)s for the interval merge tree
     ******************************************************/
