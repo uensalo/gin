@@ -79,7 +79,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_table_lookup(cword_map, (void*)i, (void*)&pcode_idx);
         fmd_string_concat_mut(graph_encoding, (fmd_string_t*)(cwords->data[pcode_idx]));
     }
-    // free irrelevant stuff
+    // free obsolete stuff
     fmd_vector_free(cwords);
     fmd_table_free(cword_map);
     /**************************************************************************
@@ -134,14 +134,15 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         //c_0_bucket->data[i] = (void*)sa[i];
         fmd_vector_append(c_0_bucket, (void*)sa[i]);
         // DEBUG PURPOSES
-        assert(graph_encoding->seq[sa[i]] == c_0);
+        //assert(graph_encoding->seq[sa[i]] == c_0);
     }
     for(int_t i = V+1; i <= 2*V; i++) {
         fmd_vector_append(c_1_bucket, (void*)sa[i]);
         // DEBUG PURPOSES
-        assert(graph_encoding->seq[sa[i]] == c_1);
+        //assert(graph_encoding->seq[sa[i]] == c_1);
     }
     // at this point, sa is no longer needed as slices are extraced
+    fmd_string_free(graph_encoding);
     free(sa); // frees gigs of memory :)
     /******************************************************
     * Step 3b - Compute rank translation tables
@@ -224,9 +225,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
             fmd_imt_interval_t *interval;
             fmd_imt_interval_init(&interval, lo, hi);
             fmd_vector_append(bwt_neighbor_intervals, interval);
-            // free the singular list
-            free(neighbors_bwt_idx);
         }
+        // free the singular list
+        fmd_vector_free(neighbors_bwt_idx);
         fmd_vector_append(kv_pairs, bwt_neighbor_intervals);
     }
     f->bwt_to_vid = c_0_bwt_to_text;
@@ -276,7 +277,7 @@ count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string) {
             // now check: are there any exhausted vertices?
             int_t c_0_lo, c_0_hi;
             bool ok = fmd_fmi_query_precedence_range(fmd->graph_fmi, query, fmd->c_0, &c_0_lo, &c_0_hi);
-            // if(!ok... // this check is not needed if everything goes ok in coding time
+            // if(!ok... // this check is not needed if everything goes ok in coding time :)
             // check if we need to fork into other vertices or not
             if(c_0_hi > c_0_lo) {
                 // we have a walk having the current suffix of the query as a prefix
@@ -287,6 +288,7 @@ count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string) {
                     fmd_fmi_qr_t *fork = fmd_fmi_qr_init(V+1+interval->lo, V+interval->hi+2, query->pos, string);
                     fmd_vector_append(stack, fork);
                 }
+                fmd_vector_free(incoming_sa_intervals);
             }
             bool okc = fmd_fmi_advance_query(fmd->graph_fmi, query);
             if(!okc || query->lo == query->hi) {
@@ -296,6 +298,7 @@ count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string) {
         count += query->hi - query->lo;
         fmd_fmi_qr_free(query);
     }
+    fmd_vector_free(stack);
     return count;
 }
 
@@ -320,7 +323,7 @@ fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string) {
             int_t c_0_lo, c_0_hi;
             bool okc = fmd_fmi_advance_query(fmd->graph_fmi, query);
             bool ok = fmd_fmi_query_precedence_range(fmd->graph_fmi, query, fmd->c_0, &c_0_lo, &c_0_hi);
-            // if(!ok... // this check is not needed if everything goes ok in coding time
+            // if(!ok... // this check is not needed if everything goes ok in coding time :)
             if (query->pos == -1) break;
             // check if we need to fork into other vertices or not
             if(c_0_hi > c_0_lo) {
@@ -332,6 +335,7 @@ fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string) {
                     fmd_fmi_qr_t *fork = fmd_fmi_qr_init(V+1+interval->lo, V+interval->hi+2, query->pos, string);
                     fmd_vector_append(stack, fork);
                 }
+                fmd_vector_free(incoming_sa_intervals);
             }
             if(!okc || query->lo == query->hi) {
                 break;
@@ -344,6 +348,7 @@ fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string) {
         fmd_vector_free(qlocs);
         fmd_fmi_qr_free(query);
     }
+    fmd_vector_free(stack);
     return locs;
 }
 
@@ -374,7 +379,7 @@ void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector
             int_t c_0_lo, c_0_hi;
             bool okc = fmd_fmd_advance_query(fmd->graph_fmi, query);
             bool ok = fmd_fmd_query_precedence_range(fmd->graph_fmi, query, fmd->c_0, &c_0_lo, &c_0_hi);
-            // if(!ok... // this check is not needed if everything goes ok in coding time
+            // if(!ok... // this check is not needed if everything goes ok in coding time :)
             if (query->pos == -1) break;
             // check if we need to fork into other vertices or not
             if(c_0_hi > c_0_lo) {
@@ -389,6 +394,7 @@ void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector
                     fmd_vector_append(stack, fork);
                 }
                 query->cur_fork = royal_node;
+                fmd_vector_free(incoming_sa_intervals);
             }
             if(!okc || query->lo == query->hi) {
                 fmd_fork_node_t *dead_node = fmd_fork_node_init(query->cur_fork, c_0_lo, c_0_hi, query->pos, true, true, false);
@@ -442,7 +448,7 @@ bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, 
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
     word_t encoding;
-    bool found = fmd_table_lookup(fmi->c2e, c, &encoding);
+    bool found = fmd_table_lookup(fmi->c2e, (void*)c, &encoding);
     if(!found) {
         qr->lo = 0;
         qr->hi = 0;
@@ -475,7 +481,6 @@ fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, in
             pos--;
         }
         codeword[len] = '\0'; // null terminate the codeword string
-        //printf("%s\n", codeword);
         fmd_string_t *copy;
         fmd_string_init_cstr(&copy, codeword);
         fmd_vector_append(rval, copy);

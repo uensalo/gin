@@ -163,7 +163,7 @@ void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, fmd_vector_t **interval
 
 fmd_vector_t *fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi) {
     if(node->lo == node->hi) {
-        return node->intervals;
+        return fmd_vector_copy(node->intervals); // important to return a copy for memory management purposes
     } else {
         int_t split = (node->lo + node->hi) / 2;
         if(hi <= split) {
@@ -226,5 +226,7 @@ fmd_vector_t *fmd_imt_merge_intervals(fmd_vector_t *i1, fmd_vector_t *i2) {
     if (current) {
         fmd_vector_append(result, current);
     }
+    fmd_vector_free(i1);
+    fmd_vector_free(i2);
     return result;
 }

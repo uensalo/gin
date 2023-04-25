@@ -44,7 +44,7 @@ void fmd_graph_init(fmd_graph_t **graph) {
     *graph = calloc(1, sizeof(fmd_graph_t));
     fmd_vector_init(&(*graph)->vertex_list, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
     fmd_table_init(&(*graph)->vertices, FMD_HT_INIT_SIZE, &prm_fstruct, &fmd_fstruct_vertex);
-    fmd_table_init(&(*graph)->incoming_neighbors, FMD_HT_INIT_SIZE, &prm_fstruct, &fmd_fstruct_vertex);
+    fmd_table_init(&(*graph)->incoming_neighbors, FMD_HT_INIT_SIZE, &prm_fstruct, &fmd_fstruct_vector);
 }
 
 void fmd_graph_free(fmd_graph_t *graph) {
@@ -57,18 +57,18 @@ void fmd_graph_free(fmd_graph_t *graph) {
 void fmd_graph_insert_vertex(fmd_graph_t *graph, vid_t id, fmd_string_t *label) {
     fmd_vertex_t *vertex;
     fmd_vertex_init(&vertex, id, label);
-    fmd_table_insert(graph->vertices, id, vertex);
+    fmd_table_insert(graph->vertices, (void*)id, vertex);
     fmd_vector_append(graph->vertex_list, vertex);
 
     fmd_vector_t *neighbors;
     fmd_vector_init(&neighbors, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
-    fmd_table_insert(graph->incoming_neighbors, id, neighbors);
+    fmd_table_insert(graph->incoming_neighbors, (void*)id, neighbors);
 }
 
 void fmd_graph_insert_edge(fmd_graph_t *graph, vid_t source, vid_t destination) {
     fmd_vector_t *neighbors;
-    fmd_table_lookup(graph->incoming_neighbors, destination, &neighbors);
-    fmd_vector_append(neighbors, source);
+    fmd_table_lookup(graph->incoming_neighbors, (void*)destination, &neighbors);
+    fmd_vector_append(neighbors, (void*)source);
 }
 
 uint_t fmd_graph_hash(fmd_graph_t *graph) {

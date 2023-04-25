@@ -15,6 +15,11 @@ void fmd_vector_init(fmd_vector_t **vec, int_t initial_capacity, fmd_fstruct_t *
 
 void fmd_vector_free(fmd_vector_t *vec) {
     if(vec) {
+        if(vec->f && vec->f->free_f && vec->f->free_f != prm_free) {
+            for (int_t i = 0; i < vec->size; i++) {
+                vec->f->free_f(vec->data[i]);
+            }
+        }
         free(vec->data);
         free(vec);
     }

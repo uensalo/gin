@@ -8,7 +8,7 @@ set(DEBUG ON)
 
 if(DEBUG)
     add_link_options(-fsanitize=address)
-    #set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
+    set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -fsanitize=address")
     set(BUILD_OPENMP OFF)
 else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIC")
