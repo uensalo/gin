@@ -131,6 +131,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     // if(!fmi...)
     f->graph_fmi = fmi;
     // DEBUG PURPOSES
+    /*
     printf("S: %s%c\n", graph_encoding->seq,'\0');
     printf("F: ");
     for(int_t i = 0; i < graph_encoding->size+1; i++) {
@@ -154,6 +155,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         printf("%d ", sa[i]);
     }
     printf("\n");
+    */
 
     /**************************************************************************
     * Step 3 - Compute the query range translation index
@@ -204,6 +206,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_vector_append(c_1_text_to_bwt, (void*)val);
     }
     // DEBUG PURPOSES
+    /*
     printf("C_0 BWT to text:\n");
     for(int_t i = 0; i < c_0_bwt_to_text->size; i++) {
         printf("%d:%d\n",i,c_0_bwt_to_text->data[i]);
@@ -212,6 +215,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     for(int_t i = 0; i < c_1_bwt_to_text->size; i++) {
         printf("%d:%d\n",i,c_1_text_to_bwt->data[i]);
     }
+    */
     // free intermediate structures
     fmd_vector_free(c_0_bucket);
     fmd_vector_free(c_1_bucket);
@@ -238,11 +242,13 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_vector_init(&bwt_neighbor_intervals, neighbors->size, &fmd_fstruct_imt_interval);
         if(neighbors_bwt_idx->size) {
             // DEBUG PURPOSES
+            /*
             printf("bwt-range of %d: ", vid);
             for(int_t k = 0; k < neighbors_bwt_idx->size; k++) {
                 printf("%d ", neighbors_bwt_idx->data[k]);
             }
             printf("\n");
+             */
             // sort and compact neighbors_bwt_idx into intervals
             fmd_vector_sort(neighbors_bwt_idx);
             // compaction start
