@@ -60,7 +60,7 @@ void fmd_table_rehash(fmd_table_t **table, int_t new_capacity) {
     fmd_table_t *new_ht;
     fmd_table_init(&new_ht, new_capacity, ht->key_f, ht->val_f);
     for (int i = 0; i < ht->capacity; i++) {
-        fmd_tree_node_preorder(ht->roots[i], new_ht, fmd_table_rehash_helper_);
+        fmd_tree_node_preorder(ht->roots[i], new_ht, (ftrav_kv) fmd_table_rehash_helper_);
     }
     ht->key_f = NULL;
     ht->val_f = NULL;

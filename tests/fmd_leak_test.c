@@ -33,13 +33,15 @@ int main() {
     fmd_fmd_t *fmd;
     fmd_fmd_init(&fmd, g, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, 1, 1);
 
-    fmd_string_t *query1;
-    char *query1cstr = "TAC";
-    fmd_string_init_cstr(&query1, query1cstr);
-    count_t count = fmd_fmd_query_count(fmd, query1);
+    fmd_string_t *query;
+    char *querycstr = "TAC";
+    fmd_string_init_cstr(&query, querycstr);
+    fmd_vector_t *paths, *dead_ends;
+    fmd_fmd_query_locate_paths(fmd, query, &paths, &dead_ends);
 
+    fmd_fmd_locate_paths_result_free(paths,dead_ends);
     fmd_fmd_free(fmd);
-    fmd_string_free(query1);
+    fmd_string_free(query);
     fmd_graph_free(g);
 
     return 0;

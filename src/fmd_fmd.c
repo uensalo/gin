@@ -1,4 +1,5 @@
 #include "fmd_fmd.h"
+#include "fmd_tree.h"
 
 fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_cadet) {
     fmd_fork_node_t *fn = calloc(1, sizeof(fmd_fork_node_t));
@@ -392,9 +393,9 @@ fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string) {
 void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
     // walk root count
     fmd_vector_t *leaves;
-    fmd_vector_init(&leaves, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    fmd_vector_init(&leaves, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
     fmd_vector_t *graveyard;
-    fmd_vector_init(&graveyard, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    fmd_vector_init(&graveyard, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
     // push initial query
     fmd_vector_t *stack;
     fmd_vector_init(&stack, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
@@ -457,8 +458,35 @@ void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector
         }
         fmd_fmd_qr_free(query);
     }
+    fmd_vector_free(stack);
     *paths = leaves;
     *dead_ends = graveyard;
+}
+
+void fmd_fmd_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends) {
+    // keys are pointers, values are actual pointers
+    fmd_tree_t *visited;
+    fmd_tree_init(&visited, &prm_fstruct, &fmd_fstruct_fork_node);
+
+    for(int_t i = 0; i < paths->size; i++) {
+        fmd_fork_node_t *cur = paths->data[i];
+        while(cur) {
+            bool inserted = fmd_tree_insert(visited, cur, cur);
+            cur = (fmd_fork_node_t*)cur->parent;
+        }
+    }
+    for(int_t i = 0; i < dead_ends->size; i++) {
+        fmd_fork_node_t *cur = dead_ends->data[i];
+        while(cur) {
+            bool inserted = fmd_tree_insert(visited, cur, cur);
+            cur = (fmd_fork_node_t*)cur->parent;
+        }
+    }
+    fmd_tree_free(visited);
+    paths->f = &prm_fstruct;
+    fmd_vector_free(paths);
+    dead_ends->f = &prm_fstruct;
+    fmd_vector_free(dead_ends);
 }
 
 bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr) {
