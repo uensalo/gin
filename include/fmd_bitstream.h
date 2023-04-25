@@ -160,10 +160,10 @@ int fmd_bs_comp(fmd_bs_t *bs1, fmd_bs_t *bs2);
 uint_t fmd_bs_hash(fmd_bs_t *bs1);
 
 static fmd_fstruct_t fmd_fstruct_bs = {
-    fmd_bs_comp,
-    fmd_bs_hash,
-    fmd_bs_free,
-    fmd_bs_copy,
+        (fcomp) fmd_bs_comp,
+        (fhash) fmd_bs_hash,
+        (ffree) fmd_bs_free,
+        (fcopy) fmd_bs_copy,
 };
 
 

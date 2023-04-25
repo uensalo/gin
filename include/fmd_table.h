@@ -30,10 +30,10 @@ uint_t fmd_table_hash(fmd_table_t *table);
 void fmd_table_traverse(fmd_table_t *table, void *p, ftrav_kv f);
 
 static fmd_fstruct_t fmd_fstruct_table = {
-    fmd_table_comp,
-    fmd_table_hash,
-    fmd_table_free,
-    fmd_table_copy
+        (fcomp) fmd_table_comp,
+        (fhash) fmd_table_hash,
+        (ffree) fmd_table_free,
+        (fcopy) fmd_table_copy
 };
 
 #endif //FMD_FMD_TABLE_H

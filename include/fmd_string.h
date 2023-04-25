@@ -40,10 +40,10 @@ void fmd_string_concat(fmd_string_t **concat, fmd_string_t *s1, fmd_string_t *s2
 void fmd_string_concat_mut(fmd_string_t *s1, fmd_string_t *s2);
 
 static fmd_fstruct_t fmd_fstruct_string = {
-    fmd_string_comp,
-    fmd_string_hash,
-    fmd_string_free,
-    fmd_string_copy
+        (fcomp) fmd_string_comp,
+        (fhash) fmd_string_hash,
+        (ffree) fmd_string_free,
+        (fcopy) fmd_string_copy
 };
 
 

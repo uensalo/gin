@@ -18,10 +18,10 @@ int fmd_vertex_comp(fmd_vertex_t *v1, fmd_vertex_t *v2);
 fmd_vertex_t *fmd_vertex_copy(fmd_vertex_t *vertex);
 
 static fmd_fstruct_t fmd_fstruct_vertex = {
-    fmd_vertex_comp,
-    fmd_vertex_hash,
-    fmd_vertex_free,
-    fmd_vertex_copy
+        (fcomp) fmd_vertex_comp,
+        (fhash) fmd_vertex_hash,
+        (ffree) fmd_vertex_free,
+        (fcopy) fmd_vertex_copy
 };
 
 typedef struct {
@@ -40,10 +40,10 @@ int fmd_graph_comp(fmd_graph_t *g1, fmd_graph_t *g2);
 fmd_graph_t *fmd_graph_copy(fmd_graph_t *graph);
 
 static fmd_fstruct_t fmd_fstruct_graph = {
-    fmd_graph_comp,
-    fmd_graph_hash,
-    fmd_graph_free,
-    fmd_graph_copy
+        (fcomp) fmd_graph_comp,
+        (fhash) fmd_graph_hash,
+        (ffree) fmd_graph_free,
+        (fcopy) fmd_graph_copy
 };
 
 #endif //FMD_FMD_GRAPH_H

@@ -29,10 +29,10 @@ uint_t fmd_vector_hash(fmd_vector_t *v);
 fmd_vector_t *fmd_vector_copy(fmd_vector_t *v);
 
 static fmd_fstruct_t fmd_fstruct_vector = {
-    fmd_vector_comp,
-    fmd_vector_hash,
-    fmd_vector_free,
-    fmd_vector_copy
+        (fcomp) fmd_vector_comp,
+        (fhash) fmd_vector_hash,
+        (ffree) fmd_vector_free,
+        (fcopy) fmd_vector_copy
 };
 
 #endif //FMD_FMD_VECTOR_H

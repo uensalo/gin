@@ -270,7 +270,7 @@ bool fmd_fmi_query_precedence_range(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr, char_t c, 
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
     word_t encoding;
-    bool found = fmd_table_lookup(fmi->c2e, c, &encoding);
+    bool found = fmd_table_lookup(fmi->c2e, (void*)c, &encoding);
     if(!found) {
         qr->lo = 0;
         qr->hi = 0;

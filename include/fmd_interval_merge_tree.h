@@ -14,10 +14,10 @@ uint_t fmd_imt_interval_hash(fmd_imt_interval_t *i);
 int fmd_imt_interval_comp(fmd_imt_interval_t *i1, fmd_imt_interval_t *i2);
 
 static fmd_fstruct_t fmd_fstruct_imt_interval = {
-    fmd_imt_interval_comp,
-    fmd_imt_interval_hash,
-    fmd_imt_interval_free,
-    fmd_imt_interval_copy
+        (fcomp) fmd_imt_interval_comp,
+        (fhash) fmd_imt_interval_hash,
+        (ffree) fmd_imt_interval_free,
+        (fcopy) fmd_imt_interval_copy
 };
 
 typedef struct fmd_imt_node_ {
@@ -35,10 +35,10 @@ uint_t fmd_imt_node_hash(fmd_imt_node_t *i);
 int fmd_imt_node_comp(fmd_imt_node_t *i1, fmd_imt_node_t *i2);
 
 static fmd_fstruct_t fmd_fstruct_imt_node = {
-    fmd_imt_node_comp,
-    fmd_imt_node_hash,
-    fmd_imt_node_free,
-    fmd_imt_node_copy
+        (fcomp) fmd_imt_node_comp,
+        (fhash) fmd_imt_node_hash,
+        (ffree) fmd_imt_node_free,
+        (fcopy) fmd_imt_node_copy
 };
 
 typedef struct fmd_imt_ {
@@ -63,10 +63,10 @@ uint_t fmd_imt_hash_helper(fmd_imt_node_t *i);
 int fmd_imt_comp_helper(fmd_imt_node_t *i1, fmd_imt_node_t *i2);
 
 static fmd_fstruct_t fmd_fstruct_imt = {
-        fmd_imt_comp,
-        fmd_imt_hash,
-        fmd_imt_free,
-        fmd_imt_copy
+        (fcomp) fmd_imt_comp,
+        (fhash) fmd_imt_hash,
+        (ffree) fmd_imt_free,
+        (fcopy) fmd_imt_copy
 };
 
 #endif //FMD_FMD_INTERVAL_MERGE_TREE_H

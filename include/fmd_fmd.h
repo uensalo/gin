@@ -27,6 +27,17 @@ typedef struct fmd_fork_node_{
     bool is_cadet; // used to be called is bastard
 } fmd_fork_node_t;
 fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_cadet);
+void fmd_fork_node_free(fmd_fork_node_t *node);
+fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node);
+uint_t fmd_fork_node_hash(fmd_fork_node_t *node);
+int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2);
+
+static fmd_fstruct_t fmd_fstruct_fork_node = {
+        (fcomp) fmd_fork_node_comp,
+        (fhash) fmd_fork_node_hash,
+        (ffree) fmd_fork_node_free,
+        (fcopy) fmd_fork_node_copy,
+};
 
 typedef struct fmd_fmd_qr_{
     fmd_fork_node_t *cur_fork;

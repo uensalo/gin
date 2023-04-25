@@ -12,6 +12,43 @@ fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vh
     return fn;
 }
 
+void fmd_fork_node_free(fmd_fork_node_t *node) {
+    // frees only one node
+    if(node) free(node);
+}
+
+fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node) {
+    if(!node) return NULL;
+    fmd_fork_node_t *copy = calloc(1, sizeof(fmd_fork_node_t));
+    if(!copy) {
+        free(copy);
+        return NULL;
+    }
+    memcpy(copy, node, sizeof(fmd_fork_node_t));
+    return copy;
+}
+uint_t fmd_fork_node_hash(fmd_fork_node_t *node) {
+    const uint_t prime = 1099511628211LLU;
+    uint_t hash = 14695981039346656037LLU;
+    hash ^= prm_hash_f((void*)node->vertex_lo);
+    hash *= prime;
+    hash ^= prm_hash_f((void*)node->vertex_hi);
+    hash *= prime;
+    hash ^= prm_hash_f((void*)node->sa_lo);
+    hash *= prime;
+    hash ^= prm_hash_f((void*)node->sa_hi);
+    hash *= prime;
+    hash ^= prm_hash_f((void*)node->pos);
+    hash *= prime;
+    hash ^= prm_hash_f((void*)node->is_leaf);
+    hash *= prime;
+    return hash;
+}
+
+int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2) {
+    return memcmp(n1, n2, sizeof(fmd_fork_node_t));
+}
+
 fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern) {
     fmd_fmd_qr_t *qr = calloc(1, sizeof(fmd_fmd_qr_t));
     qr->cur_fork = cur_fork;

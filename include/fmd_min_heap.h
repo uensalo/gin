@@ -32,10 +32,10 @@ uint_t fmd_min_heap_hash(fmd_min_heap_t *heap);
 int fmd_min_heap_comp(fmd_min_heap_t *h1, fmd_min_heap_t *h2);
 
 fmd_fstruct_t fmd_fstruct_min_heap = {
-    fmd_min_heap_comp,
-    fmd_min_heap_hash,
-    fmd_min_heap_free,
-    fmd_min_heap_copy
+        (fcomp) fmd_min_heap_comp,
+        (fhash) fmd_min_heap_hash,
+        (ffree) fmd_min_heap_free,
+        (fcopy) fmd_min_heap_copy
 };
 
 #endif //FMD_FMD_MIN_HEAP_H

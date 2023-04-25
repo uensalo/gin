@@ -56,10 +56,10 @@ void fmd_tree_inorder(fmd_tree_t *tree, void *p, ftrav_kv f);
 void fmd_tree_postorder(fmd_tree_t *tree, void *p, ftrav_kv f);
 
 static fmd_fstruct_t fmd_fstruct_tree = {
-    fmd_tree_comp,
-    fmd_tree_hash,
-    fmd_tree_free,
-    fmd_tree_copy
+        (fcomp) fmd_tree_comp,
+        (fhash) fmd_tree_hash,
+        (ffree) fmd_tree_free,
+        (fcopy) fmd_tree_copy
 };
 
 #endif //FMD_FMD_TREE_H
