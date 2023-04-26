@@ -19,6 +19,7 @@ set(PROJECT_SOURCE_DIR ${PROJECT_ROOT_DIR}/src)
 set(PROJECT_HEADER_DIR ${PROJECT_ROOT_DIR}/include)
 set(PROJECT_EXTERN_DIR ${PROJECT_ROOT_DIR}/extern)
 set(PROJECT_TESTS_DIR  ${PROJECT_ROOT_DIR}/tests)
+set(PROJECT_PARSER_DIR ${PROJECT_ROOT_DIR}/parsers)
 ################################################################################
 # library file definitions
 ################################################################################
@@ -46,7 +47,9 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
     ${PROJECT_HEADER_DIR}/fmd_fmd.h
+    ${PROJECT_HEADER_DIR}/rgfa_parser.h
 )
+
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
 add_library(fmd_lib_static STATIC ${C_FILES} ${H_FILES})
 target_include_directories(
