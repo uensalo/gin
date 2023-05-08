@@ -69,6 +69,7 @@ void fmd_graph_insert_edge(fmd_graph_t *graph, vid_t source, vid_t destination) 
     fmd_vector_t *neighbors;
     fmd_table_lookup(graph->incoming_neighbors, (void*)destination, &neighbors);
     fmd_vector_append(neighbors, (void*)source);
+    ++graph->no_edges;
 }
 
 uint_t fmd_graph_hash(fmd_graph_t *graph) {

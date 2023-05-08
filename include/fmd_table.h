@@ -17,7 +17,7 @@ typedef struct fmd_table_ {
 } fmd_table_t;
 
 // internal functions
-void fmd_table_rehash_helper_(fmd_tree_node_t *n, void *ht);
+void fmd_table_rehash_helper_(void* key, void* value, void *ht);
 // exposed API
 void fmd_table_init(fmd_table_t **table, int_t capacity, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f);
 void fmd_table_free(fmd_table_t *table);

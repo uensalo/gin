@@ -28,6 +28,7 @@ typedef struct {
     fmd_vector_t *vertex_list;
     fmd_table_t *vertices;
     fmd_table_t *incoming_neighbors;
+    int_t no_edges;
 } fmd_graph_t;
 
 // Graph functions

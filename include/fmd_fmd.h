@@ -71,6 +71,9 @@ bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, 
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 
+void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd, unsigned char *buf, uint64_t buf_size);
+void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf, uint64_t *buf_size);
+
 fmd_vector_t *fmd_fmd_extract_constraint_sets(fmd_graph_t *graph); // big todo :-)
                                                                    // constraint sets lead to an NP-Complete problem
 

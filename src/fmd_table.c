@@ -49,23 +49,50 @@ bool fmd_table_lookup(fmd_table_t *table, void *key, void **value) {
     return false;
 }
 
-void fmd_table_rehash_helper_(fmd_tree_node_t *node, void *nt) {
-    fmd_table_t *new_table = (fmd_table_t*)nt;
-    fmd_table_insert(new_table, node->key, node->value);
+void fmd_table_rehash_helper_(void* key, void* value, void *nt) {
+    typedef struct rehash_params_ {
+        fmd_tree_node_t **buckets;
+        int_t *items_per_bucket;
+        fmd_fstruct_t *key_f;
+        fmd_fstruct_t *val_f;
+        int_t new_cap;
+    } rehash_params_t;
+
+    rehash_params_t *p = (rehash_params_t*)nt;
+    uint_t index = p->key_f->hash_f(key) % p->new_cap;
+    bool inserted = fmd_tree_node_insert(&p->buckets[index], key, value, p->key_f);
+    ++p->items_per_bucket[index];
 }
 
 void fmd_table_rehash(fmd_table_t **table, int_t new_capacity) {
     if(!table || !(*table)) return;
     fmd_table_t *ht = *table;
-    fmd_table_t *new_ht;
-    fmd_table_init(&new_ht, new_capacity, ht->key_f, ht->val_f);
+    fmd_tree_node_t **buckets = calloc(new_capacity, sizeof(fmd_tree_node_t*));
+    int_t *items_per_bucket = calloc(new_capacity, sizeof(int_t));
+    typedef struct rehash_params_ {
+        fmd_tree_node_t **buckets;
+        int_t *items_per_bucket;
+        fmd_fstruct_t *key_f;
+        fmd_fstruct_t *val_f;
+        int_t new_cap;
+    } rehash_params_t;
+    rehash_params_t p;
+    p.buckets = buckets;
+    p.items_per_bucket = items_per_bucket;
+    p.key_f = ht->key_f;
+    p.val_f = ht->val_f;
+    p.new_cap = new_capacity;
+
     for (int i = 0; i < ht->capacity; i++) {
-        fmd_tree_node_preorder(ht->roots[i], new_ht, (ftrav_kv) fmd_table_rehash_helper_);
+        fmd_tree_node_preorder(ht->roots[i], &p, (ftrav_kv) fmd_table_rehash_helper_);
+        fmd_tree_node_free(ht->roots[i], NULL, NULL);
     }
-    ht->key_f = NULL;
-    ht->val_f = NULL;
-    fmd_table_free(ht);
-    *table = new_ht;
+    free(ht->roots);
+    free(ht->items_per_bucket);
+
+    ht->items_per_bucket = items_per_bucket;
+    ht->roots = buckets;
+    ht->capacity = new_capacity;
 }
 
 // todo: traverse one table and call lookup on the other

@@ -120,4 +120,25 @@ void rgfa_free(rgfa_t * rgfa) {
     free(rgfa);
 }
 
+fmd_graph_t *rgfa_to_fmd_graph(rgfa_t *rgfa) {
+    fmd_graph_t* graph;
+    fmd_graph_init(&graph);
+
+    for (int_t i = 0; i < rgfa->num_slines; i++) {
+        rgfa_sline_t sline = rgfa->slines[i];
+        fmd_string_t* label;
+        fmd_string_init_cstr(&label, sline.seq);
+        fmd_graph_insert_vertex(graph, (vid_t)(atoi(sline.segId+1)-1), label);
+    }
+
+    for (int_t i = 0; i < rgfa->num_llines; i++) {
+        rgfa_lline_t lline = rgfa->llines[i];
+        int_t source_id = (vid_t)(atoi(lline.segId1+1)-1);
+        int_t destination_id = (vid_t)(atoi(lline.segId2+1)-1);
+        fmd_graph_insert_edge(graph, source_id, destination_id);
+    }
+
+    return graph;
+}
+
 #endif //FMD_RGFA_PARSER_H
