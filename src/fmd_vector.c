@@ -33,6 +33,10 @@ void fmd_vector_shrink(fmd_vector_t *vec) {
     vec->data = realloc(vec->data, (vec->capacity /= 2) * sizeof(void *));
 }
 
+void fmd_vector_fit(fmd_vector_t *vec) {
+    vec->data = realloc(vec->data, (vec->capacity = vec->size) * sizeof(void *));
+}
+
 void fmd_vector_append(fmd_vector_t *vec, void *value) {
     if (vec->size == vec->capacity) {
         fmd_vector_grow(vec);

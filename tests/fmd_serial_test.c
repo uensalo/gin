@@ -4,10 +4,10 @@
 #include "fmd_fmd.h"
 
 fmd_graph_t *test_graph1() {
-    char *l0 = "ACCGTA";
-    char *l1 = "ACGTTA";
-    char *l2 = "GTTATA";
-    char *l3 = "CCGTTA";
+    char *l0 = "ACCGTATAGACTGATCGACTGCTAGTCGGTCACTGCATGCTGCGT";
+    char *l1 = "ACGTTAATCGTAACTCATGCTAAACTACCGT";
+    char *l2 = "GTTATACTAACGTACGT";
+    char *l3 = "CCGTTATGACTCACACTCATCGTTGCAT";
     fmd_string_t *l0s, *l1s, *l2s, *l3s;
     fmd_string_init_cstr(&l0s, l0);
     fmd_string_init_cstr(&l1s, l1);
@@ -124,7 +124,7 @@ int main() {
     printf("= No permutations, fixed binary permutation encoding, serial                   =\n");
     printf("================================================================================\n");
     fmd_string_t *query1;
-    char *query1cstr = "TAC";
+    char *query1cstr = "CGTA";
     fmd_string_init_cstr(&query1, query1cstr);
     //count_t count = fmd_fmd_query_count(fmd, query1);
     //fmd_vector_t *locs = fmd_fmd_query_locate_basic(fmd, query1);
@@ -242,6 +242,13 @@ int main() {
         }
     }
     printf("Actual count: %d\n", total_count_cycle3);
+
+    unsigned char *buf;
+    size_t bsize;
+    fmd_fmd_serialize_to_buffer(fmd, &buf, &bsize);
+
+    fmd_fmd_t *fmd_reconstructed;
+    fmd_fmd_serialize_from_buffer(&fmd_reconstructed, buf, bsize);
 
     printf("================================================================================\n");
     printf("= FM-DIRECTORY COUNT-LOCATE TEST END                                           =\n");

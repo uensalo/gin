@@ -30,6 +30,7 @@ typedef struct fmd_fmi_ {
     fmd_table_t *isa;          // inverse suffix array sample
     int_t bv_start_offset;     // start of [counts]-[block_payload] chain in the bitvector
     fmd_bs_t *bits;            // buffer storing everything, including the members of this struct for serializability
+    int_t no_bits;             // number of bits written to the bitstream, possibly used for serialization
 } fmd_fmi_t;
 
 typedef struct {

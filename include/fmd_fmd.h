@@ -14,6 +14,16 @@
 // permutation encoding characters
 #define FMD_FMD_DEFAULT_a_0 ','
 #define FMD_FMD_DEFAULT_a_1 '.'
+// bit field lengths for serialization
+#define FMD_FMD_NO_BITS_BIT_LENGTH 64
+#define FMD_FMD_SPECIAL_CHAR_BIT_LENGTH 40
+#define FMD_FMD_NO_VERTICES_BIT_LENGTH 40
+#define FMD_FMD_PERMUTATION_BIT_LENGTH 40
+#define FMD_FMD_BWT_TO_VID_BIT_LENGTH 40
+#define FMD_FMD_FMI_NO_BITS_BIT_LENGTH 64
+#define FMD_FMD_IMT_NO_BITS_BIT_LENGTH 64
+#define FMD_FMD_IMT_INTERVAL_LIST_LENGTH_BIT_LENGTH 32
+#define FMD_FMD_IMT_INTERVAL_BOUNDARY_BIT_LENGTH 40
 
 typedef struct fmd_fork_node_{
     struct fmd_fork_node_t *parent;
@@ -52,10 +62,10 @@ void fmd_fmd_qr_free(fmd_fmd_qr_t *q);
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
     char_t c_1; // character marking the end of a vertex
-    fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
-    fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
     fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
     fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
+    fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
+    fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
 } fmd_fmd_t;
 
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
@@ -71,8 +81,27 @@ bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, 
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 
-void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd, unsigned char *buf, uint64_t buf_size);
-void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf, uint64_t *buf_size);
+void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint64_t buf_size);
+/**
+ * Write order to buffer:
+ *  - FMD_FMD_FMI_NO_BITS_BIT_LENGTH : fmd_bit_length // Number of bits for the entire data structure
+ *  - FMD_FMD_SPECIAL_CHAR_BIT_LENGTH : c_0 // Special character char c_0
+ *  - FMD_FMD_SPECIAL_CHAR_BIT_LENGTH : c_1 // Special character char c_1
+ *  - FMD_FMD_NO_VERTICES_BIT_LENGTH : no_vertices // number of vertices in the graph of the fmd
+ *  - for i = 0 to the number of vertices:
+ *      - FMD_FMD_PERMUTATION_BIT_LENGTH permutation[i] // Permutation entry
+ *  - for i = 0 to the number of vertices:
+ *      - FMD_FMD_BWT_TO_VID_BIT_LENGTH bwt_to_vid[i] // Rank translation entry
+ *  - FMD_FMD_FMI_NO_BITS_BIT_LENGTH : fmi_bit_length // bit-length of the FMI bitstream
+ *  - fmi_bit_length : fmi // the buffer for the fm-index, word aligned
+ *  - FMD_FMD_IMT_NO_BITS_BIT_LENGTH : imt_bit_length // bit_length of the IMT buffer
+ *  - imt_bit_length: imt // imt buffer
+ * @param fmd
+ * @param buf
+ * @param buf_size
+ */
+void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64_t *buf_size_re);
+void fmd_fmd_serialize_to_buffer_imt_helper(fmd_imt_node_t *node, fmd_bs_t *bs, uint_t *widx);
 
 fmd_vector_t *fmd_fmd_extract_constraint_sets(fmd_graph_t *graph); // big todo :-)
                                                                    // constraint sets lead to an NP-Complete problem

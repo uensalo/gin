@@ -15,6 +15,7 @@ void fmd_vector_init(fmd_vector_t **vec, int_t initial_capacity, fmd_fstruct_t *
 void fmd_vector_free(fmd_vector_t *vec);
 void fmd_vector_grow(fmd_vector_t *vec);
 void fmd_vector_shrink(fmd_vector_t *vec);
+void fmd_vector_fit(fmd_vector_t *vec);
 void fmd_vector_append(fmd_vector_t *vec, void *value);
 void fmd_vector_pop(fmd_vector_t *vec, void **item);
 void fmd_vector_insert(fmd_vector_t *vec, int_t index, void *value);

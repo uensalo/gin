@@ -199,7 +199,9 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
         cum += block_count[i];
     }
     free(block_count);
+    fmd_bs_fit(bits, widx);
     f->bits = bits;
+    f->no_bits = widx;
     fmd_string_free(bwt);
     *fmi = f;
 }
@@ -357,6 +359,7 @@ fmd_fmi_t* fmd_fmi_copy(fmd_fmi_t* fmi) {
     f->isa = fmd_table_copy(fmi->isa);
     f->bv_start_offset = fmi->bv_start_offset;
     f->bits = fmd_bs_copy(fmi->bits);
+    f->no_bits = fmi->no_bits;
     return f;
 }
 
