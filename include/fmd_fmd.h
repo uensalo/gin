@@ -71,6 +71,8 @@ typedef struct fmd_fmd_ {
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
 void fmd_fmd_free(fmd_fmd_t *fmd);
 
+int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
+
 count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string);
 fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string);
 void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **paths, fmd_vector_t **dead_ends);

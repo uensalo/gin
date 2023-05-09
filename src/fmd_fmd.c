@@ -305,6 +305,16 @@ void fmd_fmd_free(fmd_fmd_t *fmd) {
     }
 }
 
+int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2) {
+    int c1 = fmd_fmi_comp(f1->graph_fmi, f2->graph_fmi);
+    int c2 = fmd_imt_comp(f1->r2r_tree, f2->r2r_tree);
+    int c3 = fmd_vector_comp(f1->permutation, f2->permutation);
+    int c4 = fmd_vector_comp(f1->bwt_to_vid, f2->bwt_to_vid);
+    int c5 = f1->c_0 == f2->c_0;
+    int c6 = f1->c_1 == f2->c_1;
+    return c1 == 0 && c2 == 0 && c3 == 0 && c4 == 0 && c5 && c6 ? 0 : -1;
+}
+
 count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string) {
     // walk root count
     int_t count = 0;

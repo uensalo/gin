@@ -243,13 +243,6 @@ int main() {
     }
     printf("Actual count: %d\n", total_count_cycle3);
 
-    unsigned char *buf;
-    size_t bsize;
-    fmd_fmd_serialize_to_buffer(fmd, &buf, &bsize);
-
-    fmd_fmd_t *fmd_reconstructed;
-    fmd_fmd_serialize_from_buffer(&fmd_reconstructed, buf, bsize);
-
     printf("================================================================================\n");
     printf("= FM-DIRECTORY COUNT-LOCATE TEST END                                           =\n");
     printf("================================================================================\n");
