@@ -105,8 +105,5 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
 void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64_t *buf_size_re);
 void fmd_fmd_serialize_to_buffer_imt_helper(fmd_imt_node_t *node, fmd_bs_t *bs, uint_t *widx);
 
-fmd_vector_t *fmd_fmd_extract_constraint_sets(fmd_graph_t *graph); // big todo :-)
-                                                                   // constraint sets lead to an NP-Complete problem
-
 
 #endif //FMD_FMD_FMD_H

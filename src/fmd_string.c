@@ -234,7 +234,7 @@ void fmd_string_free(fmd_string_t *str) {
 fmd_string_t *fmd_string_copy(fmd_string_t *str) {
     fmd_string_t *copy = calloc(1, sizeof(fmd_string_t));
     if(!copy) return NULL;
-    copy->seq = calloc(str->capacity, sizeof(char_t));
+    copy->seq = calloc(str->capacity+1, sizeof(char_t));
     if(!copy->seq) {
         free(copy);
         return NULL;
@@ -267,7 +267,7 @@ uint_t fmd_string_hash(fmd_string_t *s) {
         hash ^= seq64[i];
         hash *= prime;
     }
-    for(int_t i = (s->size/block_size)*block_size; s->size; i++) {
+    for(int_t i = (s->size/block_size)*block_size; i < s->size; i++) {
         hash ^= s->seq[i];
         hash *= prime;
     }
