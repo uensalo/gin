@@ -34,6 +34,8 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
     ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
     ${PROJECT_SOURCE_DIR}/fmd_fmd.c
+    ${PROJECT_SOURCE_DIR}/fmd_constraint_set.c
+    ${PROJECT_SOURCE_DIR}/fmd_annealing.c
 )
 set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_common.h
@@ -47,6 +49,8 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
     ${PROJECT_HEADER_DIR}/fmd_fmd.h
+    ${PROJECT_HEADER_DIR}/fmd_constraint_set.h
+    ${PROJECT_HEADER_DIR}/fmd_annealing.h
     ${PROJECT_HEADER_DIR}/rgfa_parser.h
 )
 

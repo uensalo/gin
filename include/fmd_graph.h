@@ -48,27 +48,4 @@ static fmd_fstruct_t fmd_fstruct_graph = {
         (fcopy) fmd_graph_copy
 };
 
-typedef struct fmd_graph_flatten_alphabet_ {
-    fmd_vector_t *alphabet;
-    fmd_table_t *idx2char;
-    fmd_table_t *char2idx;
-} fmd_graph_flatten_alphabet_t;
-void fmd_graph_flatten_alphabet(void *key, void *value, void *params);
-typedef struct fmd_graph_ecs_ {
-    int_t pos;
-    vid_t head_vid;
-    vid_t end_vid;
-} fmd_graph_ecs_t;
-fmd_table_t *fmd_graph_extract_constraint_sets(fmd_graph_t *graph, int_t max_depth);
-void fmd_graph_extract_constraint_sets_helper(fmd_vector_t *paths,
-                                              fmd_string_t *prefix,
-                                              fmd_table_t *constraint_sets,
-                                              fmd_vector_t *alphabet,
-                                              fmd_table_t *char2idx,
-                                              fmd_table_t *idx2char,
-                                              fmd_graph_t *graph,
-                                              int_t max_depth);
-
-void fmd_graph_flatten_constraints(void *key, void *value, void *p);
-
 #endif //FMD_FMD_GRAPH_H

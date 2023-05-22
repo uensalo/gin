@@ -1,4 +1,4 @@
-#include "fmd_graph.h"
+#include "fmd_constraint_set.h"
 #include <time.h>
 
 void timestamp() {
@@ -57,70 +57,12 @@ fmd_graph_t *generate_random_graph(int no_vertices,
     return graph;
 }
 
-typedef struct cs_ {
-    fmd_string_t *str;
-    fmd_vector_t *vertices;
-} cs_t;
-
-void cs_free(cs_t *cs) {
-    free(cs);
-}
-uint_t cs_hash(cs_t *c1) {
-    return fmd_string_hash(c1->str);
-}
-int cs_comp(cs_t *c1, cs_t *c2) {
-    if (c1->str->size < c2->str->size) {
-        return -1;
-    } else if (c1->str->size > c2->str->size){
-        return 1;
-    }
-    return fmd_string_comp(c1->str, c2->str);
-}
-void *cs_copy(cs_t *c1) {
-    cs_t *copy = calloc(1, sizeof(cs_t));
-    copy->str = fmd_string_copy(c1->str);
-    copy->vertices = fmd_vector_copy(c1->vertices);
-    return copy;
-}
-
-static fmd_fstruct_t fstruct_cs = {
-        (fcomp) cs_comp,
-        (fhash) cs_hash,
-        (ffree) cs_free,
-        (fcopy) cs_copy
-};
-
-void flatten_constraints_helper(void *key, void* value, void *p) {
-    fmd_vector_t *constraints = (fmd_vector_t*)p;
-    cs_t *constraint = calloc(1, sizeof(cs_t));
-    constraint->str = key;
-    constraint->vertices = value;
-    fmd_vector_append(constraints, constraint);
-}
-
-fmd_vector_t *flatten_constraints(fmd_table_t *constraint_sets) {
-    fmd_vector_t *constraints;
-    fmd_vector_init(&constraints, FMD_VECTOR_INIT_SIZE, &fstruct_cs);
-    fmd_table_traverse(constraint_sets, constraints, flatten_constraints_helper);
-    fmd_vector_sort(constraints);
-    return constraints;
-}
-
 int main() {
     srand(1234567);
-    int_t depth = 41;
-    fmd_graph_t *graph = generate_random_graph(100, 150, 5, 6);
-    fmd_table_t *c_table = fmd_graph_extract_constraint_sets(graph, depth);
-    fmd_vector_t *constraints = flatten_constraints(c_table);
-
-    //for(int_t i = 0; i < constraints->size; i++) {
-    //    cs_t *constraint = constraints->data[i];
-    //    printf("%s: [ ", constraint->str->seq);
-    //    for(int j = 0; j < constraint->vertices->size; j++) {
-    //        printf("%ld ", (int_t)constraint->vertices->data[j]);
-    //    }
-    //    printf("]\n");
-    //}
+    int_t depth = 500;
+    fmd_graph_t *graph = generate_random_graph(10, 20, 5, 6);
+    fmd_vector_t *constraints;
+    fmd_constraint_set_enumerate(&constraints, graph, depth);
 
     int_t cardinality[depth];
     int_t count[depth];
@@ -128,7 +70,12 @@ int main() {
         cardinality[i] = count[i] = 0;
     }
     for(int_t i = 0; i < constraints->size; i++) {
-        cs_t *constraint = constraints->data[i];
+        fmd_constraint_set_t *constraint = constraints->data[i];
+        printf("%s: [ ", constraint->str->seq);
+        for(int j = 0; j < constraint->vertices->size; j++) {
+            printf("%ld ", (int_t)constraint->vertices->data[j]);
+        }
+        printf("]\n");
         cardinality[constraint->str->size-1] += constraint->vertices->size;
         ++count[constraint->str->size-1];
     }
