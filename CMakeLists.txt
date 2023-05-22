@@ -4,7 +4,7 @@ project(fmd C)
 set(CMAKE_C_STANDARD 99)
 
 set(BUILD_OPENMP OFF)
-set(DEBUG OFF)
+set(DEBUG ON)
 
 if(DEBUG)
     add_link_options(-fsanitize=address)

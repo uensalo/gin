@@ -59,7 +59,7 @@ fmd_graph_t *generate_random_graph(int no_vertices,
 
 int main() {
     srand(1234567);
-    int_t depth = 500;
+    int_t depth = 41;
     fmd_graph_t *graph = generate_random_graph(10, 20, 5, 6);
     fmd_vector_t *constraints;
     fmd_constraint_set_enumerate(&constraints, graph, depth);
@@ -82,8 +82,6 @@ int main() {
     for(int_t i = 0; i < depth; i++) {
         printf("%d\t%d\t%d\t%4.4lf\n", i+1, cardinality[i], count[i], cardinality[i] / (double)count[i]);
     }
-
-
 
     return 0;
 }

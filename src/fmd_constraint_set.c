@@ -1,6 +1,6 @@
 #include "fmd_constraint_set.h"
 
-void fmd_constraint_set_enumerate(fmd_graph_t *graph, int_t depth, fmd_vector_t **constraint_sets) {
+void fmd_constraint_set_enumerate(fmd_vector_t **constraint_sets, fmd_graph_t *graph, int_t depth) {
     fmd_table_t *c_table = fmd_constraint_set_extract(graph, depth);
     fmd_vector_t *constraints = fmd_constraint_set_to_vector(c_table);
     // soft-free the table
