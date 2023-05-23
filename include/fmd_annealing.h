@@ -26,6 +26,7 @@ typedef struct fmd_annealing_ {
     double best_cost_so_far;
 } fmd_annealing_t;
 
+void fmd_annealing_step_naive(fmd_annealing_t *ann, int_t v1, int_t v2);
 void fmd_annealing_step(fmd_annealing_t *ann, int_t v1, int_t v2);
 void fmd_annealing_accept(fmd_annealing_t *ann);
 void fmd_annealing_reject(fmd_annealing_t *ann, int_t v1, int_t v2);

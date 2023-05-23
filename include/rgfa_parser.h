@@ -38,21 +38,27 @@ rgfa_t* rgfa_parse(FILE* file) {
 
     size_t line_size = 4096;
     size_t buffer_size = line_size;
-    char* line = malloc(line_size);
+    char* line = calloc(line_size, sizeof(char));
+
+    char *p, *end;
 
     while (1) {
-        line[0] = '\0';
-        fgets(line, line_size, file);
-        if (feof(file)) {
+        p = fgets(line, (int)line_size, file);
+
+        // Stop if we have reached the end of the file.
+        if (!p || feof(file)) {
             break;
         }
 
+        // Expand the line buffer if needed.
         while (line[strlen(line) - 1] != '\n') {
             buffer_size *= 2;
             line = realloc(line, buffer_size);
-            fgets(line + line_size - 1, line_size + 1, file);
+            fgets(line + line_size - 1, (int)line_size + 1, file);
             line_size = buffer_size;
         }
+
+        p = line + 2;  // Skip the first two characters ('S' or 'L' and '\t')
 
         if (line[0] == 'S') {
             rgfa_sline_t sline;
@@ -60,21 +66,27 @@ rgfa_t* rgfa_parse(FILE* file) {
             sline.seq = NULL;
             sline.sn = NULL;
 
-            char* tags = NULL;
-            sscanf(line, "S\t%ms\t%ms\t%ms", &sline.segId, &sline.seq, &tags);
+            // Parse segId
+            end = strchr(p, '\t');
+            sline.segId = strndup(p, end - p);
+            p = end + 1;
 
-            char* tag = strtok(tags, "\t");
-            while (tag != NULL) {
-                if (tag[0] == 'S' && tag[1] == 'N') {
-                    sscanf(tag, "SN:Z:%ms", &sline.sn);
-                } else if (tag[0] == 'S' && tag[1] == 'O') {
-                    sscanf(tag, "SO:i:%d", &sline.so);
-                } else if (tag[0] == 'S' && tag[1] == 'R') {
-                    sscanf(tag, "SR:i:%d", &sline.sr);
+            // Parse seq
+            end = strchr(p, '\t');
+            sline.seq = strndup(p, end - p);
+            p = end + 1;
+
+            // Parse tags
+            while ((end = strchr(p, '\t')) != NULL) {
+                if (p[0] == 'S' && p[1] == 'N') {
+                    sline.sn = strndup(p + 5, end - p - 5);
+                } else if (p[0] == 'S' && p[1] == 'O') {
+                    sscanf(p, "SO:i:%d", &sline.so);
+                } else if (p[0] == 'S' && p[1] == 'R') {
+                    sscanf(p, "SR:i:%d", &sline.sr);
                 }
-                tag = strtok(NULL, "\t");
+                p = end + 1;
             }
-            free(tags);
             ++rgfa->num_slines;
             if(rgfa->num_slines >= slines_size) {
                 rgfa->slines = (rgfa_sline_t *) realloc(rgfa->slines, (slines_size*=2) * sizeof(rgfa_sline_t));
@@ -86,7 +98,28 @@ rgfa_t* rgfa_parse(FILE* file) {
             lline.segId2 = NULL;
             lline.cigar = NULL;
 
-            sscanf(line, "L\t%ms\t%c\t%ms\t%c\t%ms", &lline.segId1, &lline.strand1, &lline.segId2, &lline.strand2, &lline.cigar);
+            // Parse segId1
+            end = strchr(p, '\t');
+            lline.segId1 = strndup(p, end - p);
+            p = end + 1;
+
+            // Parse strand1
+            lline.strand1 = *p;
+            p += 2;  // Skip the character and the next '\t'
+
+            // Parse segId2
+            end = strchr(p, '\t');
+            lline.segId2 = strndup(p, end - p);
+            p = end + 1;
+
+            // Parse strand2
+            lline.strand2 = *p;
+            p += 2;  // Skip the character and the next '\t'
+
+            // Parse cigar
+            end = strchr(p, '\n');
+            lline.cigar = strndup(p, end - p);
+
             ++rgfa->num_llines;
             if(rgfa->num_llines >= llines_size) {
                 rgfa->llines = (rgfa_lline_t *) realloc(rgfa->llines, (llines_size*=2) * sizeof(rgfa_lline_t));
