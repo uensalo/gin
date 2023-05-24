@@ -38,7 +38,9 @@ void fmd_annealing_configure(fmd_annealing_t **cfg,
     config->best_permutation_so_far = calloc(config->no_vertices, sizeof(vid_t));
 
     // now populate the initial constraints
+#ifdef FMD_OMP
 #pragma omp parallel for default(none) shared(config, constraint_sets)
+#endif
     for(int_t i = 0; i < config->no_constraints; i++) {
         fmd_constraint_set_t *constraint = constraint_sets->data[i];
         fmd_vector_t *constraint_vertices = constraint->vertices;
@@ -51,12 +53,17 @@ void fmd_annealing_configure(fmd_annealing_t **cfg,
     // compute and cache number of runs
     config->cur_cost = 0;
     config->block_counts = calloc(config->no_constraints, sizeof(int_t));
+#ifdef FMD_OMP
+#pragma omp parallel for default(none) shared(config)
+#endif
     for(int_t i = 0; i < config->no_constraints; i++) {
         bool in_block = false;
         for(int_t j = 0; j < config->no_vertices; j++) {
             if (config->bin_matrix[j][i] == 1) {
                 if (!in_block) {
+#ifndef FMD_OMP
                     ++config->cur_cost;
+#endif
                     ++config->block_counts[i];
                     in_block = true;
                 }
@@ -65,6 +72,14 @@ void fmd_annealing_configure(fmd_annealing_t **cfg,
             }
         }
     }
+#ifdef FMD_OMP
+    int_t total_count = 0;
+#pragma omp parallel for default(none) shared(config) reduction(+:total_count)
+    for(int_t i = 0; i < config->no_constraints; i++) {
+        total_count += config->block_counts[i];
+    }
+    config->cur_cost = (double)total_count;
+#endif
     config->best_cost_so_far = config->cur_cost;
     config->next_block_counts = calloc(config->no_constraints, sizeof(int_t));
     *cfg = config;
@@ -99,12 +114,13 @@ void fmd_annealing_step_naive(fmd_annealing_t *ann, int_t v1, int_t v2) {
     }
     ann->next_cost = next_cost;
 }
-
-void fmd_annealing_step(fmd_annealing_t *ann, int_t v1, int_t v2) {
+void fmd_annealing_step_unrolled(fmd_annealing_t *ann, int_t v1, int_t v2) {
     ann->next_cost = ann->cur_cost;
     // the only effected runs are at the indices of the corresponding swaps...
     // no need to iterate the whole blocks
+#ifdef FMD_OMP
 #pragma omp parallel for default(none) shared(ann,v1,v2)
+#endif
     for(int_t i = 0; i < ann->no_constraints; i++) {
         if (ann->bin_matrix[v1][i] == ann->bin_matrix[v2][i]) { // no cost change, ignore
             ann->next_block_counts[i] = ann->block_counts[i];
@@ -271,7 +287,7 @@ void fmd_annealing_step(fmd_annealing_t *ann, int_t v1, int_t v2) {
             } else {
                 // general case
                 if (ann->bin_matrix[v2][i] == 0) { // implied ann->bin_matrix[v1][i] == 1
-                    if (ann->bin_matrix[v2-1][i] == 1 && ann->bin_matrix[v2 + 1][i] == 1) {
+                    if (ann->bin_matrix[v2-1][i] == 1 && ann->bin_matrix[v2+1][i] == 1) {
                         ann->next_block_counts[i] = ann->block_counts[i] - 1;
                         --ann->next_cost;
                     } else if (ann->bin_matrix[v2-1][i] == 0 && ann->bin_matrix[v2+1][i] == 0) {
@@ -295,6 +311,54 @@ void fmd_annealing_step(fmd_annealing_t *ann, int_t v1, int_t v2) {
         }
     }
 
+    // swap in the matrix
+    byte_t *tmp = ann->bin_matrix[v1];
+    ann->bin_matrix[v1] = ann->bin_matrix[v2];
+    ann->bin_matrix[v2] = tmp;
+
+    // swap in the permutation
+    vid_t tmp_vid = ann->permutation[v1];
+    ann->permutation[v1] = ann->permutation[v2];
+    ann->permutation[v2] = tmp_vid;
+}
+
+void fmd_annealing_step(fmd_annealing_t *ann, int_t v1, int_t v2) {
+    byte_t **M = ann->bin_matrix;
+    int_t V = ann->no_vertices;
+    int_t C = ann->no_constraints;
+#ifdef FMD_OMP
+#pragma omp parallel for default(none) shared(M,V,C,v1,v2,ann)
+#else
+    double next_cost = ann->cur_cost;
+#endif
+    for(int_t i = 0; i < C; i++) {
+        if(M[v1][i] == M[v2][i]) { // swap doesn't change anything, move on
+            ann->next_block_counts[i] = ann->block_counts[i];
+            continue;
+        }
+        int_t s = v1 < v2 ? v1 : v2;
+        int_t b = v1 < v2 ? v2 : v1;
+        bool ap = b != s+1;
+        byte_t vs = M[s][i]; // vs == 0 implies vb == 1, no need to look the other one up
+        int_t a0 = s > 0 ? M[s-1][i] : 0;
+        int_t a1 = ap ? M[s+1][i] : 0;
+        int_t a2 = ap ? M[b-1][i] : 0;
+        int_t a3 = b < V-1 ? M[b+1][i] : 0;
+        int_t del = (vs?-1:1)*((a3+a2)-(a1+a0)); // black magic super concise encoding
+        ann->next_block_counts[i] = ann->block_counts[i] + del;
+#ifndef FMD_OMP
+        next_cost += (double)del;
+#endif
+    }
+#ifdef FMD_OMP
+    int_t next_count = 0;
+#pragma omp parallel for default(none) reduction(+:next_count) shared(ann,C)
+    for(int_t i = 0; i < C; i++) {
+        next_count += ann->next_block_counts[i];
+    }
+    double next_cost = (double)next_count;
+#endif
+    ann->next_cost = next_cost;
     // swap in the matrix
     byte_t *tmp = ann->bin_matrix[v1];
     ann->bin_matrix[v1] = ann->bin_matrix[v2];
@@ -335,18 +399,6 @@ void fmd_annealing_iterate(fmd_annealing_t *ann) {
     } while (v1 == v2);
 
     fmd_annealing_step(ann, v1, v2);
-    // DEBUG
-    /*
-    double opt_cost = ann->next_cost;
-    fmd_annealing_step_naive(ann,v1,v2);
-    double naive_cost = ann->next_cost;
-    if(opt_cost != naive_cost) {
-        fprintf(stderr, "costs are not the same with diff opt-naive=%lf\n", opt_cost - naive_cost);
-        //exit(-1);
-    }
-     */
-    // DEBUG
-
     double acceptance_prob = ann->next_cost < ann->cur_cost ? 1.0 :
                              exp((ann->cur_cost - ann->next_cost) / (ann->temperature * ann->scaling_factor));
 
@@ -386,6 +438,6 @@ void fmd_annealing_iterate_until_end(fmd_annealing_t *ann) {
             fmd_annealing_accept(ann);
         }
         ann->temperature *= ann->cooling_factor;
-        ann->cur_iter += 1;
+        ++ann->cur_iter;
     }
 }

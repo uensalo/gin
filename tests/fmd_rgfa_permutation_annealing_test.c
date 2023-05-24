@@ -61,7 +61,7 @@ int main() {
 
     timestamp(); printf("Enumerating constraint sets for depth=%ld\n", depth);
     fmd_vector_t *constraint_sets;
-    fmd_constraint_set_enumerate(&constraint_sets, graph, 8);
+    fmd_constraint_set_enumerate(&constraint_sets, graph, 4);
     timestamp(); printf("Number of constraint sets enumerated: %ld\n", constraint_sets->size);
 
     timestamp(); printf("Configuring annealing...\n");

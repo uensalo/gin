@@ -3,7 +3,7 @@ project(fmd C)
 
 set(CMAKE_C_STANDARD 99)
 
-set(BUILD_OPENMP ON)
+set(BUILD_OPENMP OFF)
 set(DEBUG OFF)
 
 if(DEBUG)
