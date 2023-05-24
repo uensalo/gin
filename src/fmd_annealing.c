@@ -1,5 +1,6 @@
 #include "fmd_annealing.h"
 #include "math.h"
+#include "time.h"
 
 void fmd_annealing_configure(fmd_annealing_t **cfg,
                              fmd_graph_t *graph,
@@ -372,7 +373,9 @@ void fmd_annealing_step(fmd_annealing_t *ann, int_t v1, int_t v2) {
 
 void fmd_annealing_accept(fmd_annealing_t *ann) {
     ann->cur_cost = ann->next_cost;
+    int_t *tmp = ann->block_counts;
     ann->block_counts = ann->next_block_counts;
+    ann->next_block_counts = tmp;
 }
 
 void fmd_annealing_reject(fmd_annealing_t *ann, int_t v1, int_t v2) {
@@ -439,5 +442,32 @@ void fmd_annealing_iterate_until_end(fmd_annealing_t *ann) {
         }
         ann->temperature *= ann->cooling_factor;
         ++ann->cur_iter;
+    }
+}
+
+void fmd_annealing_iterate_seconds(fmd_annealing_t *ann, int_t seconds) {
+    struct timespec t1,t2;
+    double time_elapsed = 0;
+    double max_time = (double)seconds;
+    while(time_elapsed < max_time) {
+        clock_gettime(CLOCK_REALTIME, &t1);
+        fmd_annealing_iterate(ann);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        time_elapsed += (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9;
+    }
+}
+
+void fmd_annealing_iterate_seconds_verbose(fmd_annealing_t *ann, int_t seconds) {
+    struct timespec t1,t2;
+    double time_elapsed = 0;
+    double max_time = (double)seconds;
+    while(time_elapsed < max_time) {
+        clock_gettime(CLOCK_REALTIME, &t1);
+        fmd_annealing_iterate(ann);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        if((ann->cur_iter + 1) % 10000000 == 0) {
+            printf("Iteration %d, best_cost = %lf, cur_cost = %lf, temperature = %lf\n", ann->cur_iter + 1, ann->best_cost_so_far, ann->cur_cost, ann->temperature);
+        }
+        time_elapsed += (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9;
     }
 }

@@ -44,6 +44,8 @@ void fmd_annealing_configure(fmd_annealing_t **cfg,
 bool fmd_annealing_has_more(fmd_annealing_t *ann);
 void fmd_annealing_iterate(fmd_annealing_t *ann);
 void fmd_annealing_iterate_until_end(fmd_annealing_t *ann);
+void fmd_annealing_iterate_seconds(fmd_annealing_t *ann, int_t seconds);
+void fmd_annealing_iterate_seconds_verbose(fmd_annealing_t *ann, int_t seconds);
 
 
 #endif //FMD_FMD_ANNEALING_H
