@@ -471,3 +471,13 @@ void fmd_annealing_iterate_seconds_verbose(fmd_annealing_t *ann, int_t seconds) 
         time_elapsed += (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9;
     }
 }
+
+void fmd_annealing_get_permutation(fmd_annealing_t *ann, fmd_vector_t **permutation) {
+    fmd_vector_t *perm;
+    fmd_vector_init(&perm, ann->no_vertices, &prm_fstruct);
+    for(int_t i = 0; i < ann->no_vertices; i++) {
+        fmd_vector_append(perm, (void*)ann->best_permutation_so_far[i]);
+    }
+
+    *permutation = perm;
+}

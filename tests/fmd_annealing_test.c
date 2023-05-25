@@ -159,22 +159,8 @@ int test_optim(int no_vertices, int no_edges, int minl, int maxl, int rank_sampl
         timestamp();printf("Constructing FMD\n");
     }
 
-    fmd_graph_t *g;
-    fmd_graph_init(&g);
-    for(int_t i = 0; i < opt_perm->size; i++) {
-        fmd_vertex_t *v = random_graph->vertex_list->data[(int_t)opt_perm->data[i]];
-        fmd_graph_insert_vertex(g,i,v->label);
-    }
-    for(int_t i = 0; i < opt_perm->size; i++) {
-        fmd_vector_t *out;
-        fmd_table_lookup(random_graph->outgoing_neighbors, i, &out);
-        for(int_t j = 0; j < out->size; j++) {
-            fmd_graph_insert_edge(g, opt_perm->data[i], opt_perm->data[(int_t)out->data[j]]);
-        }
-    }
-
     fmd_fmd_t *fmd;
-    fmd_fmd_init(&fmd, g, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, rank_sample_rate, isa_sample_rate);
+    fmd_fmd_init(&fmd, random_graph, opt_perm, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, rank_sample_rate, isa_sample_rate);
 
     if(!sup_print) {
         timestamp();printf("FMD constructed, generating random queries\n");
@@ -220,15 +206,15 @@ int test_optim(int no_vertices, int no_edges, int minl, int maxl, int rank_sampl
 int main() {
     int no_random_tests = 1;
 
-    int minV = 10000;
-    int maxV = 20000;
+    int minV = 1000;
+    int maxV = 2000;
 
-    int noQ  = 1000;
-    int minq = 8;
-    int maxq = 300;
+    int noQ  = 10000;
+    int minq = 9;
+    int maxq = 10;
 
-    int minE = 15000;
-    int maxE = 40000;
+    int minE = 1500;
+    int maxE = 4000;
 
     int min_minl = 1;
     int max_minl = 2;
@@ -242,8 +228,8 @@ int main() {
     int min_isa = 63;
     int max_isa = 64;
 
-    int optim_depth = 1;
-    int optim_seconds = 100;
+    int optim_depth = 10;
+    int optim_seconds = 600;
 
     timestamp(); printf("Unoptimized Tests begin.\n");
     srand(143514355);

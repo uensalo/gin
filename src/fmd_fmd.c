@@ -94,11 +94,14 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /******************************************************
     * Step 1b - Map the inverse of perm. to codewords
     ******************************************************/
-    fmd_table_t *cword_map;
-    fmd_table_init(&cword_map, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    fmd_vector_t *inverse_permutation;
+    fmd_vector_init(&inverse_permutation, permutation->size, &prm_fstruct);
+    //fmd_table_t *cword_map;
+    //fmd_table_init(&cword_map, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
     // if(!cword_map...)
     for(int_t i = 0; i < permutation->size; i++) {
-        fmd_table_insert(cword_map, permutation->data[i], (void*)i);
+        inverse_permutation->data[(int_t)permutation->data[i]] = (void*)i;
+        //fmd_table_insert(cword_map, permutation->data[i], (void*)i);
     }
     /******************************************************
     * Step 1c - Finally, create the graph encoding
@@ -116,13 +119,13 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_string_append(graph_encoding, c_0);
         fmd_string_concat_mut(graph_encoding, ((fmd_vertex_t*)graph->vertex_list->data[i])->label);
         fmd_string_append(graph_encoding, c_1);
-        int_t pcode_idx = -1;
-        fmd_table_lookup(cword_map, (void*)i, (void*)&pcode_idx);
+        int_t pcode_idx = (int_t)inverse_permutation->data[i];
+        //fmd_table_lookup(cword_map, (void*)i, (void*)&pcode_idx);
         fmd_string_concat_mut(graph_encoding, (fmd_string_t*)(cwords->data[pcode_idx]));
     }
     // free obsolete stuff
     fmd_vector_free(cwords);
-    fmd_table_free(cword_map);
+    //fmd_table_free(cword_map);
     /**************************************************************************
     * Step 2 - Compute the suffix array of the encoding and build an FMI
     **************************************************************************/
@@ -158,7 +161,8 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         printf("%d ", sa[i]);
     }
     printf("\n");
-    */
+     */
+    // END DEBUG PURPOSES
 
     /**************************************************************************
     * Step 3 - Compute the query range translation index
@@ -191,9 +195,16 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     * Step 3b - Compute rank translation tables
     ******************************************************/
     // get bwt ranks to text ranks mappings
-    fmd_vector_t *c_0_bwt_to_text, *c_1_bwt_to_text, *c_1_text_to_bwt;
-    fmd_vector_argsort(&c_0_bwt_to_text, c_0_bucket);
+    fmd_vector_t *c_0_bwt_to_text_tmp, *c_1_bwt_to_text, *c_1_text_to_bwt;
+    fmd_vector_argsort(&c_0_bwt_to_text_tmp, c_0_bucket);
     fmd_vector_argsort(&c_1_bwt_to_text, c_1_bucket);
+
+
+    // DEBUG PURPOSES
+    fmd_vector_t *c_0_bwt_to_text;
+    fmd_vector_argsort(&c_0_bwt_to_text, c_0_bwt_to_text_tmp);
+    fmd_vector_free(c_0_bwt_to_text_tmp);
+    // END OF DEBUG PURPOSES
 
     // now, invert the mapping of c_1 to get a mapping from text to bwt for c_1 ranks
     fmd_vector_init(&c_1_text_to_bwt, V, &prm_fstruct);
@@ -212,16 +223,17 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     //for(int_t i = 0; i < c_1_text_to_bwt->size; i++) {
     //    assert(c_1_text_to_bwt->data[i] == permutation->data[i]);
     //}
-    /*
-    printf("C_0 BWT to text:\n");
-    for(int_t i = 0; i < c_0_bwt_to_text->size; i++) {
-        printf("%d:%d\n",i,c_0_bwt_to_text->data[i]);
-    }
-    printf("C_1 text to BWT:\n");
-    for(int_t i = 0; i < c_1_bwt_to_text->size; i++) {
-        printf("%d:%d\n",i,c_1_text_to_bwt->data[i]);
-    }
-    */
+
+    //printf("C_0 BWT to text:\n");
+    //for(int_t i = 0; i < c_0_bwt_to_text->size; i++) {
+    //    printf("%d:%d\n",i,c_0_bwt_to_text->data[i]);
+    //}
+    //printf("C_1 text to BWT:\n");
+    //for(int_t i = 0; i < c_1_bwt_to_text->size; i++) {
+    //    printf("%d:%d\n",i,c_1_text_to_bwt->data[i]);
+    //}
+    // END DEBUG PURPOSES
+
     // free intermediate structures
     fmd_vector_free(c_0_bucket);
     fmd_vector_free(c_1_bucket);
@@ -242,7 +254,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_vector_t *neighbors_bwt_idx;
         fmd_vector_init(&neighbors_bwt_idx, neighbors->size, &prm_fstruct);
         for(int_t j = 0; j < neighbors->size; j++) {
-            fmd_vector_append(neighbors_bwt_idx, (void*)c_1_text_to_bwt->data[(vid_t)neighbors->data[j]]);
+            fmd_vector_append(neighbors_bwt_idx, (void*)inverse_permutation->data[(vid_t)neighbors->data[j]]);
         }
         fmd_vector_t *bwt_neighbor_intervals;
         fmd_vector_init(&bwt_neighbor_intervals, neighbors->size, &fmd_fstruct_imt_interval);
@@ -255,6 +267,8 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
             }
             printf("\n");
              */
+             // END OF DEBUG PURPOSES
+
             // sort and compact neighbors_bwt_idx into intervals
             fmd_vector_sort(neighbors_bwt_idx);
             // compaction start
@@ -285,6 +299,19 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /******************************************************
     * Step 3d - Now, actually construct the tree
     ******************************************************/
+    // DEBUG PURPOSES
+    /*
+    for(int_t i = 0; i < kv_pairs->size; i++) {
+        printf("%d : [ ", i);
+        fmd_vector_t *intervals = kv_pairs->data[i];
+        for(int_t j = 0; j < intervals->size; j++) {
+            fmd_imt_interval_t *interval = intervals->data[j];
+            printf("[%d,%d]  ",interval->lo, interval->hi);
+        }
+        printf("]\n");
+    }
+     */
+    // END OF DEBUG PURPOSES
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, V, kv_pairs);
     f->r2r_tree = inverval_merge_tree;

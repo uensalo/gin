@@ -47,5 +47,8 @@ void fmd_annealing_iterate_until_end(fmd_annealing_t *ann);
 void fmd_annealing_iterate_seconds(fmd_annealing_t *ann, int_t seconds);
 void fmd_annealing_iterate_seconds_verbose(fmd_annealing_t *ann, int_t seconds);
 
+void fmd_annealing_get_permutation(fmd_annealing_t *ann, fmd_vector_t **permutation);
+
+
 
 #endif //FMD_FMD_ANNEALING_H
