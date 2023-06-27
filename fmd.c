@@ -3,6 +3,7 @@
 #include <time.h>
 #include "rgfa_parser.h"
 #include "permutation_parser.h"
+#include "fmdg_parser.h"
 
 #define FMD_MAIN_ISA_SAMPLE_RATE_DEFAULT 256
 #define FMD_MAIN_RANK_SAMPLE_RATE_DEFAULT 256
@@ -171,8 +172,8 @@ int fmd_main_index(int argc, char **argv) {
         if(finput != stdin) fclose(finput);
         if (!rgfa) {
             fprintf(stderr, "[fmd:index] Failed to parse rGFA file under %s, quitting.\n", finput_path);
-            if(finput != stdin) fclose(finput);
-            if(foutput != stdout) fclose(foutput);
+            if(finput_path) fclose(finput);
+            if(foutput_path) fclose(foutput);
             if(fperm) fclose(fperm);
             return_code = -1;
             return return_code;
@@ -181,12 +182,15 @@ int fmd_main_index(int argc, char **argv) {
         rgfa_free(rgfa);
 
     } else {
-        if(finput != stdin) fclose(finput);
-        if(foutput != stdout) fclose(foutput);
-        if(fperm) fclose(fperm);
-        fprintf(stderr, "[fmd:index] fmdg parsing mode not yet implemented, quitting\n");
-        return_code = -1;
-        return return_code;
+        graph = fmdg_parse(finput);
+        if(!graph) {
+            if (finput_path) fclose(finput);
+            if (foutput_path) fclose(foutput);
+            if (fperm) fclose(fperm);
+            fprintf(stderr, "[fmd:index] Malformed fmdg file, quitting.\n");
+            return_code = -1;
+            return return_code;
+        }
     }
     /**************************************************************************
      * 2 - Parse the permutation. By the end of this block, the permutation
@@ -208,7 +212,7 @@ int fmd_main_index(int argc, char **argv) {
         if(permutation->size != graph->vertices->size) {
             fprintf(stderr, "[fmd:index] Permutation cardinality does not match graph vertex size. Quitting.\n");
             return_code = -1;
-            if(foutput != stdout) fclose(foutput);
+            if(foutput_path) fclose(foutput);
             fmd_vector_free(permutation);
             fmd_graph_free(graph);
             return return_code;
@@ -225,7 +229,6 @@ int fmd_main_index(int argc, char **argv) {
         fprintf(stderr, "\tNumber of vertices: %lld\n", no_vertices);
         fprintf(stderr, "\tNumber of edges: %lld\n", graph->no_edges);
         int_t no_chars = 0;
-        int_t in_degree = 0;
         for(int_t i = 0; i < graph->vertex_list->size; i++) {
             void* _;
             fmd_table_lookup(graph->vertices, (void*)i, &_);
@@ -267,7 +270,7 @@ int fmd_main_index(int argc, char **argv) {
         return return_code;
     }
 
-    if(foutput != stdout) {
+    if(foutput_path) {
         foutput = fopen(foutput_path, "w");
         if(!foutput) {
             fprintf(stderr, "[fmd:index] Output path %s could not be opened, quitting.\n", foutput_path);
@@ -278,20 +281,19 @@ int fmd_main_index(int argc, char **argv) {
     }
 
     fwrite(fmd_buf,sizeof(unsigned char),fmd_buf_size,foutput);
-    if(foutput != stdout) fclose(foutput);
+    if(foutput_path) fclose(foutput);
     clock_gettime(CLOCK_REALTIME, &t2);
     write_time = to_sec(t1,t2);
     if(verbose) {
         fprintf(stderr, "[fmd:index] Resulting index size: %lld bytes (%.3lf GB).\n", fmd_buf_size, (double) fmd_buf_size * 1e-9);
         fprintf(stderr, "[fmd:index] Timings in seconds: \n");
-        fprintf(stderr, "\t Parsing:  %lf", parse_time);
-        fprintf(stderr, "\t Indexing: %lf", index_time);
-        fprintf(stderr, "\t Writing:  %lf", write_time);
+        fprintf(stderr, "\t Parsing:  %lf\n", parse_time);
+        fprintf(stderr, "\t Indexing: %lf\n", index_time);
+        fprintf(stderr, "\t Writing:  %lf\n", write_time);
         fprintf(stderr, "[fmd:index] Total relevant runtime: %lf seconds.\n", parse_time + index_time + write_time);
     }
 
     free(fmd_buf);
-
     return return_code;
 }
 

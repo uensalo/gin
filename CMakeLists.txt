@@ -53,6 +53,7 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_annealing.h
     ${PROJECT_HEADER_DIR}/rgfa_parser.h
     ${PROJECT_HEADER_DIR}/permutation_parser.h
+    ${PROJECT_HEADER_DIR}/fmdg_parser.h
 )
 
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})

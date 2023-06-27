@@ -10,7 +10,7 @@ static fmd_vector_t *permutation_parse(FILE* file) {
     while (fgets(line, sizeof(line), file)) {
         int_t val;
         val = strtoll(line, NULL, 10);
-        fmd_vector_append(vec, val);
+        fmd_vector_append(vec, (void*)val);
     }
     fmd_vector_fit(vec);
     return vec;
