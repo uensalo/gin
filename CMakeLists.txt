@@ -85,7 +85,7 @@ target_link_libraries(fmd_lib_static PUBLIC divsufsort_static)
 ################################################################################
 # executables
 ################################################################################
-add_executable(fmd main.c)
+add_executable(fmd fmd.c)
 target_link_libraries(fmd fmd_lib_static)
 
 file(GLOB unit_tests "${PROJECT_TESTS_DIR}/*.c")
