@@ -29,7 +29,7 @@ typedef struct {
     size_t num_llines;
 } rgfa_t;
 
-rgfa_t* rgfa_parse(FILE* file) {
+static rgfa_t* rgfa_parse(FILE* file) {
     rgfa_t* rgfa = (rgfa_t*)calloc(1, sizeof(rgfa_t));
     long unsigned int slines_size = 8;
     long unsigned int llines_size = 8;
@@ -133,7 +133,7 @@ rgfa_t* rgfa_parse(FILE* file) {
     return rgfa;
 }
 
-void rgfa_free(rgfa_t * rgfa) {
+static void rgfa_free(rgfa_t * rgfa) {
     if (rgfa->slines) {
         for (size_t i = 0; i < rgfa->num_slines; ++i) {
             free(rgfa->slines[i].segId);
@@ -153,7 +153,7 @@ void rgfa_free(rgfa_t * rgfa) {
     free(rgfa);
 }
 
-fmd_graph_t *rgfa_to_fmd_graph(rgfa_t *rgfa) {
+static fmd_graph_t *rgfa_to_fmd_graph(rgfa_t *rgfa) {
     fmd_graph_t* graph;
     fmd_graph_init(&graph);
 
