@@ -442,8 +442,15 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/
-    fmd_graph_t *g = fmdg_parse(fopen("fmdgtest.txt", "r"));
-    fmd_fmd_init(&fmd, g, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, 3, 3);
+    //fmd_fmd_t *fmd2;
+    //fmd_graph_t *g = fmdg_parse(fopen("fmdgtest.txt", "r"));
+    //fmd_fmd_init(&fmd2, g, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, 256, 256);
+
+    //for(int i = 0; i < fmd2->graph_fmi->alphabet_size; i++) {
+    //    printf("fmd:%d fmd2:%d\n", fmd->graph_fmi->char_counts[i], fmd2->graph_fmi->char_counts[i]);
+    //}
+
+
     if(finput_path) {
         finput = fopen(finput_path, "r");
         if(!finput) {

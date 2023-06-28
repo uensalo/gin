@@ -161,7 +161,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         printf("%d ", sa[i]);
     }
     printf("\n");
-     */
+    */
     // END DEBUG PURPOSES
 
     /**************************************************************************
@@ -729,7 +729,6 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     fmd->bwt_to_vid = bwt_to_vid;
     /**************************************************************************
     * Step 3 - Reconstruct the FMI from the bitstream
-    * please kill me
     **************************************************************************/
     word_t fmi_no_bits;
     fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
@@ -756,6 +755,7 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     graph_fmi->no_chars_per_block = (int_t)no_chars_per_block;
     graph_fmi->isa_sample_rate = (int_t)isa_sample_rate;
     graph_fmi->alphabet_size = (int_t)alphabet_size;
+    graph_fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
     /******************************************************
     * Step 3b - Read the alphabet
     ******************************************************/
@@ -772,7 +772,7 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
         ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
 
         fmd_table_insert(graph_fmi->c2e, (void*)alphabet_char, (void*)encoding);
-        fmd_table_insert(graph_fmi->c2e, (void*)encoding, (void*)alphabet_char);
+        fmd_table_insert(graph_fmi->e2c, (void*)encoding, (void*)alphabet_char);
     }
     /******************************************************
     * Step 3c - Read the suffix array samples
@@ -806,9 +806,9 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     ******************************************************/
     graph_fmi->char_counts = calloc(graph_fmi->alphabet_size, sizeof(count_t));
     count_t cum = 0;
-    uint_t block_idx = graph_fmi->no_chars / graph_fmi->no_chars_per_block;
-    uint_t block_size = (graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + graph_fmi->no_bits_per_char * graph_fmi->no_chars_per_block);
-    uint_t rank_cache_idx = graph_fmi->bv_start_offset + block_idx * block_size;
+    //uint_t block_idx = graph_fmi->no_chars / graph_fmi->no_chars_per_block;
+    //uint_t block_size = (graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + graph_fmi->no_bits_per_char * graph_fmi->no_chars_per_block);
+    uint_t rank_cache_idx = graph_fmi->no_bits - graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
     for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
         word_t count;
         graph_fmi->char_counts[i] = cum;
@@ -846,6 +846,7 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
             fmd_imt_interval_init(&interval, (int_t)lo, (int_t)hi);
             fmd_vector_append(bwt_neighbor_intervals, interval);
         }
+        fmd_vector_append(kv_pairs, bwt_neighbor_intervals);
     }
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, (int_t)no_vertices, kv_pairs);

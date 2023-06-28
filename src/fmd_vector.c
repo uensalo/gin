@@ -181,6 +181,8 @@ void fmd_vector_argsort(fmd_vector_t **args_sorted, fmd_vector_t *vec) {
 }
 
 int fmd_vector_comp(fmd_vector_t *v1, fmd_vector_t *v2) {
+    if(v1 == v2) return 0;
+    if(!v1 && v2 || v1 && !v2) return -1;
     if(v1->size!=v2->size) return -1;
     for(int_t i = 0; i < v1->size; i++) {
         int cmp = v1->f->comp_f(v1->data[i],v2->data[i]);

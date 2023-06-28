@@ -12,7 +12,7 @@ void fmd_imt_interval_init(fmd_imt_interval_t **i, int_t lo, int_t hi) {
 }
 
 void fmd_imt_interval_free(fmd_imt_interval_t *i) {
-    if(i){
+    if(i) {
         free(i);
     }
 }
@@ -78,7 +78,7 @@ uint_t fmd_imt_node_hash(fmd_imt_node_t *i) {
 }
 
 int fmd_imt_node_comp(fmd_imt_node_t *i1, fmd_imt_node_t *i2) {
-    return (int)(i1->lo - i2->lo);
+    return (int)(i1->lo - i2->lo) == 0 ? fmd_vector_comp(i1->intervals, i2->intervals) : -1;
 }
 
 void fmd_imt_init(fmd_imt_t **i, int_t no_keys, fmd_vector_t *kv_interval_pairs) {
