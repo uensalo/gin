@@ -8,6 +8,10 @@
 #define FMD_MAIN_ISA_SAMPLE_RATE_DEFAULT 256
 #define FMD_MAIN_RANK_SAMPLE_RATE_DEFAULT 256
 #define to_sec(t1,t2) (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9
+#define FMD_MAIN_BUF_READ_SIZE 1024
+#define FMD_MAIN_QUERY_BUF_LEN 65536
+#define FMD_MAIN_QUERY_EXIT_PROMPT "exit();"
+
 char *fmd_version = "1.0";
 char* fmd_mode_names[] = {"index","query","permutation","validate","help"};
 
@@ -20,8 +24,17 @@ typedef enum fmd_mode_ {
     fmd_mode_no_modes=5
 } fmd_mode_t;
 
+char* fmd_query_mode_names[] = {"count", "locate", "enumerate"};
+
+typedef enum fmd_query_mode_ {
+    fmd_query_mode_count=0,
+    fmd_query_mode_locate=1,
+    fmd_query_mode_enumerate=2,
+    fmd_query_mode_no_modes=3,
+} fmd_query_mode_t;
+
 int fmd_main_index(int argc, char **argv);
-int fmd_main_query(int argc, char **argv);
+int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode);
 int fmd_main_permutation(int argc, char **argv);
 int fmd_main_validate(int argc, char **argv);
 int fmd_main_help(fmd_mode_t progmode, char *progname);
@@ -32,6 +45,18 @@ fmd_mode_t fmd_string_to_mode(char *str) {
     for(int i = 0; i < fmd_mode_no_modes; i++) {
         if(strcmp(str,fmd_mode_names[i]) == 0) {
             progmode = (fmd_mode_t)i;
+            break;
+        }
+    }
+    return progmode;
+}
+
+fmd_query_mode_t fmd_string_to_qmode(char *str) {
+    if(!str) return fmd_query_mode_no_modes;
+    fmd_query_mode_t progmode = fmd_query_mode_no_modes;
+    for(int i = 0; i < fmd_query_mode_no_modes; i++) {
+        if(strcmp(str,fmd_query_mode_names[i]) == 0) {
+            progmode = (fmd_query_mode_t)i;
             break;
         }
     }
@@ -51,7 +76,9 @@ int main(int argc, char *argv[]) {
             break;
         }
         case fmd_mode_query : {
-            return_code = fmd_main_query(argcp, argvp);
+            char *query_mode_name = argcp > 1 ? argvp[1] : NULL;
+            fmd_query_mode_t query_mode = fmd_string_to_qmode(query_mode_name);
+            return_code = fmd_main_query(argcp, argvp, query_mode);
             break;
         }
         case fmd_mode_permutation : {
@@ -297,9 +324,187 @@ int fmd_main_index(int argc, char **argv) {
     return return_code;
 }
 
-int fmd_main_query(int argc, char **argv) {
+int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
+    int return_code = 0;
+    if(mode == fmd_query_mode_no_modes) {
+        fprintf(stderr, "[fmd:query] Invalid query mode %s supplied. Please run fmd help query for more information. Quitting...\n", argv[0]);
+        return_code = -1;
+        return return_code;
+    }
 
-    return 1;
+    char *fref_path = NULL;
+    char *finput_path = NULL;
+    char *foutput_path = NULL;
+
+    FILE *finput = stdin;
+    FILE *foutput = stdout;
+    FILE *fref = NULL;
+
+    int_t num_threads = 1;
+    bool parse_fastq = false;
+    bool verbose = false;
+
+    struct timespec t1;
+    struct timespec t2;
+    double index_time = .0;
+    double parse_time = .0;
+    double write_time = .0;
+
+    static struct option options[] = {
+            {"reference", required_argument, NULL, 'r'},
+            {"input",     required_argument, NULL, 'i'},
+            {"fastq",     no_argument,       NULL, 'f'},
+            {"output",    required_argument, NULL, 'o'},
+            {"threads",   required_argument, NULL, 'j'},
+            {"verbose",   no_argument,       NULL, 'v'},
+    };
+    opterr = 0;
+    int optindex,c;
+    while((c = getopt_long(argc, argv, "r:i:fo:j:v", options, &optindex)) != -1) {
+        switch(c) {
+            case 'r': {
+                fref_path = optarg;
+                break;
+            }
+            case 'i': {
+                finput_path = optarg;
+                finput = fopen(finput_path, "r");
+                if(!finput) {
+                    fprintf(stderr, "[fmd:query] Input query path %s could not be opened, quitting.\n", finput_path);
+                    return_code = -1;
+                }
+                break;
+            }
+            case 'f': {
+                parse_fastq = true;
+                break;
+            }
+            case 'o': {
+                foutput_path = optarg;
+                break;
+            }
+            case 'j': {
+                num_threads = (int_t)strtoull(optarg, NULL, 10);
+                break;
+            }
+            case 'v': {
+                verbose = true;
+                break;
+            }
+            default: {
+                fprintf(stderr, "[fmd:query] Option %s not recognized, please see fmd help query for more.\n",optarg);
+                return_code = -1;
+                break;
+            }
+        }
+    }
+    /**************************************************************************
+    * 1 - Read the graph index from disk, fmd_buf and fmd_buf_size should be
+    * populated and fref be closed by the end of this block
+    **************************************************************************/
+
+    fref = fopen(fref_path, "r");
+    if(!fref) {
+        fprintf(stderr, "[fmd:query] Could not open index reference file %s, quitting.\n", fref_path);
+        return_code = -1;
+        return return_code;
+    }
+
+    uint64_t fmd_buf_capacity = 65536;
+    uint64_t fmd_buf_size = 0;
+    uint8_t *fmd_buf = calloc(fmd_buf_capacity, sizeof(uint8_t));
+
+    uint64_t read_size;
+    uint8_t *read_buf = calloc(FMD_MAIN_BUF_READ_SIZE, sizeof(uint8_t));
+    while((read_size = fread(read_buf,sizeof(uint8_t), FMD_MAIN_BUF_READ_SIZE, fref))) {
+        if(read_size + fmd_buf_size > fmd_buf_capacity) {
+            fmd_buf = realloc(fmd_buf, (fmd_buf_capacity *= 2)*sizeof(uint8_t));
+            memset(fmd_buf + (fmd_buf_capacity/2), 0, sizeof(uint8_t)*(fmd_buf_capacity/2));
+        }
+        memcpy(fmd_buf+fmd_buf_size,read_buf,read_size);
+        fmd_buf_size+=read_size;
+    }
+    fmd_buf = realloc(fmd_buf, fmd_buf_size*sizeof(uint8_t));
+    free(read_buf);
+    fclose(fref);
+
+    /**************************************************************************
+    * 2 - Parse the bitstream into data structures, by the end of this block
+    * fmd should be populated and fmd_buf should be freed
+    **************************************************************************/
+    fmd_fmd_t *fmd;
+    fmd_fmd_serialize_from_buffer(&fmd, fmd_buf, fmd_buf_size);
+    if(!fmd) {
+        fprintf(stderr, "[fmd:query] Error encountered while parsing reference index. Quitting.\n");
+        return_code = -1;
+        return return_code;
+    }
+    /**************************************************************************
+    * 3 - Parse queries from the input stream and query depending on the mode
+    **************************************************************************/
+    fmd_graph_t *g = fmdg_parse(fopen("fmdgtest.txt", "r"));
+    fmd_fmd_init(&fmd, g, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, 3, 3);
+    if(finput_path) {
+        finput = fopen(finput_path, "r");
+        if(!finput) {
+            fprintf(stderr,"[fmd:query] Can't open input file %s, quitting.\n", finput_path);
+        }
+    }
+    if(parse_fastq) {
+        // not yet implemented
+        fprintf(stderr, "[fmd:query] Fastq parsing mode not yet implemented. Quitting.\n");
+        return_code = -1;
+        fmd_fmd_free(fmd);
+        return return_code;
+    } else {
+        char *query_cstr = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
+        while(fgets(query_cstr, FMD_MAIN_QUERY_BUF_LEN, finput)) {
+            size_t query_len = strlen(query_cstr);
+            if(!query_len) continue; // skip empty lines
+            query_cstr[query_len-1] = 0; // get rid of the line break
+            if(!strcmp(query_cstr,FMD_MAIN_QUERY_EXIT_PROMPT)) break; // break if exit prompt is given
+
+            fmd_string_t *query;
+            fmd_string_init_cstr(&query, query_cstr);
+
+            switch(mode) {
+                case fmd_query_mode_count: {
+                    uint64_t count = fmd_fmd_query_count(fmd, query);
+                    fprintf(foutput,"%lld\n",count);
+                    break;
+                }
+                case fmd_query_mode_locate: {
+                    fmd_vector_t *locs = fmd_fmd_query_locate_basic(fmd, query);
+                    for(int_t i = 0; i < locs->size-1; i++) {
+                        fprintf(foutput, "%lld, ", (uint64_t)locs->data[i]);
+                    }
+                    if(locs->size) fprintf(foutput, "%lld, ", (uint64_t)locs->data[locs->size-1]);
+                    free(locs);
+                    break;
+                }
+                case fmd_query_mode_enumerate: {
+                    fmd_vector_t *paths, *graveyard;
+                    fmd_fmd_query_locate_paths(fmd, query, &paths, &graveyard);
+                    for(int_t i = 0; i < paths->size; i++) {
+                        fmd_fork_node_t *root = (fmd_fork_node_t*)paths->data[i];
+                        fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                        root = (fmd_fork_node_t*)root->parent;
+                        while(root) {
+                            fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                            root = (fmd_fork_node_t*)root->parent;
+                        }
+                        fprintf(foutput, "\n");
+                    }
+                    fprintf(foutput, "\n");
+                    fmd_fmd_locate_paths_result_free(paths, graveyard);
+                }
+                default: {
+                    break;
+                }
+            }
+        }
+    }
+    return return_code;
 }
 
 int fmd_main_permutation(int argc, char **argv) {
