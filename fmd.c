@@ -4,11 +4,15 @@
 #include "rgfa_parser.h"
 #include "permutation_parser.h"
 #include "fmdg_parser.h"
+#ifdef FMD_OMP
+#include <omp.h>
+#endif
 
 #define FMD_MAIN_ISA_SAMPLE_RATE_DEFAULT 256
 #define FMD_MAIN_RANK_SAMPLE_RATE_DEFAULT 256
 #define to_sec(t1,t2) (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9
 #define FMD_MAIN_BUF_READ_SIZE 1024
+
 #define FMD_MAIN_QUERY_BUF_LEN 65536
 #define FMD_MAIN_QUERY_EXIT_PROMPT "exit();"
 
@@ -442,14 +446,6 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/
-    //fmd_fmd_t *fmd2;
-    //fmd_graph_t *g = fmdg_parse(fopen("fmdgtest.txt", "r"));
-    //fmd_fmd_init(&fmd2, g, NULL, FMD_FMD_DEFAULT_c_0, FMD_FMD_DEFAULT_c_1, 256, 256);
-
-    //for(int i = 0; i < fmd2->graph_fmi->alphabet_size; i++) {
-    //    printf("fmd:%d fmd2:%d\n", fmd->graph_fmi->char_counts[i], fmd2->graph_fmi->char_counts[i]);
-    //}
-
 
     if(finput_path) {
         finput = fopen(finput_path, "r");
@@ -464,6 +460,112 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         fmd_fmd_free(fmd);
         return return_code;
     } else {
+#ifdef FMD_OMP
+        int_t i = 0;
+        char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
+        typedef struct thread_data_ {
+            fmd_string_t *str;
+            uint64_t count;
+            fmd_vector_t *paths_or_locs;
+            fmd_vector_t *partial_matches;
+        } thread_data_t;
+        omp_set_num_threads((int)num_threads);
+        thread_data_t *tdx = calloc(num_threads, sizeof(thread_data_t));
+        bool exit_flag = false;
+
+        #pragma omp parallel default(none) firstprivate(num_threads) shared(exit_flag, i, buf, finput, mode, foutput, fmd, tdx)
+        {
+            int tid = omp_get_thread_num();
+            while(true) {
+                #pragma omp single
+                {
+                    i = 0;
+                    while (i < num_threads && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
+                        int_t len = (int_t)strlen(buf);
+                        buf[len-1] = 0; // get rid of the end line character
+                        if(!strcmp(buf,FMD_MAIN_QUERY_EXIT_PROMPT)) {
+                            exit_flag = true;
+                            break;
+                        }
+                        fmd_string_init_cstr(&tdx[i].str, buf);
+                        i++;
+                    }
+                }
+
+                if(tid < i && tdx[tid].str) {
+                    switch(mode) {
+                        case fmd_query_mode_count: {
+                            tdx[tid].count = fmd_fmd_query_count(fmd, tdx[tid].str);
+                            break;
+                        }
+                        case fmd_query_mode_locate: {
+                            tdx[tid].paths_or_locs = fmd_fmd_query_locate_basic(fmd, tdx[tid].str);
+                            break;
+                        }
+                        case fmd_query_mode_enumerate: {
+                            fmd_fmd_query_locate_paths(fmd, tdx[tid].str, &tdx[tid].paths_or_locs, &tdx[tid].partial_matches);
+                            break;
+                        }
+                        default: {
+                            break;
+                        }
+                    }
+                }
+                #pragma omp barrier
+
+                if(tid == 0) {
+                    for (int_t j = 0; j < i; j++) {
+                        if (!tdx[j].str) continue;
+                        switch (mode) {
+                            case fmd_query_mode_count: {
+                                fprintf(foutput,"%lld\n",tdx[j].count);
+                                fmd_string_free(tdx[j].str);
+                                tdx[j].str = NULL;
+                                break;
+                            }
+                            case fmd_query_mode_locate: {
+                                for(int_t k = 0; k < tdx[j].paths_or_locs->size-1; k++) {
+                                    fprintf(foutput, "%lld, ", (uint64_t)tdx[j].paths_or_locs->data[k]);
+                                }
+                                if(tdx[j].paths_or_locs->size) fprintf(foutput, "%lld, ", (uint64_t)tdx[j].paths_or_locs->data[tdx[j].paths_or_locs->size-1]);
+                                else fprintf(foutput, "-\n");
+                                fmd_string_free(tdx[j].str);
+                                fmd_vector_free(tdx[j].paths_or_locs);
+                                tdx[j].str = NULL;
+                                break;
+                            }
+                            case fmd_query_mode_enumerate: {
+                                for(int_t k = 0; k < tdx[j].paths_or_locs->size; k++) {
+                                    fmd_fork_node_t *root = (fmd_fork_node_t*)tdx[j].paths_or_locs->data[k];
+                                    fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                                    root = (fmd_fork_node_t*)root->parent;
+                                    while(root) {
+                                        fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                                        root = (fmd_fork_node_t*)root->parent;
+                                    }
+                                    fprintf(foutput, "\n");
+                                }
+                                if(!tdx[j].paths_or_locs->size) fprintf(foutput, "-\n");
+                                fprintf(foutput, "\n");
+                                fmd_fmd_locate_paths_result_free(tdx[j].paths_or_locs, tdx[j].partial_matches);
+                                fmd_string_free(tdx[j].str);
+                                tdx[j].str = NULL;
+                                break;
+                            }
+                            default: {
+                                break;
+                            }
+                        }
+                    }
+                }
+                #pragma omp barrier
+                if(exit_flag)
+                    break;
+            }
+        }
+        free(buf);
+        free(tdx);
+#else
         char *query_cstr = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
         while(fgets(query_cstr, FMD_MAIN_QUERY_BUF_LEN, finput)) {
             size_t query_len = strlen(query_cstr);
@@ -509,12 +611,30 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                     break;
                 }
             }
+            fmd_string_free(query);
         }
+        free(query_cstr);
+#endif
     }
+    /**************************************************************************
+    * 4 - Free all data structures and return
+    **************************************************************************/
+    if(finput_path) fclose(finput);
+    if(foutput_path) fclose(foutput);
+
+    fmd_fmd_free(fmd);
     return return_code;
 }
 
 int fmd_main_permutation(int argc, char **argv) {
+
+    fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file in rGFA or fmdg format. Default: stdin\n");
+    fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, one integer as vid per line. Default: stdout\n");
+    fprintf(stderr, "\t--permutation or -p: Optional parameter. Path to initial permutation file to start optimizing from. Default: Identity permutation\n");
+    fprintf(stderr, "\t--time        or -t: Optional parameter. Time after which optimization is terminated in seconds. Default: 15 seconds\n");
+    fprintf(stderr, "\t--update      or -u: Optional parameter. Time interval of informative prints in seconds. Default: 3 seconds\n");
+    fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel cost computation. Default: 1\n");
+    fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
 
     return 1;
 }
