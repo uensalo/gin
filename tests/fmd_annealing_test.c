@@ -138,7 +138,7 @@ int test_optim(int no_vertices, int no_edges, int minl, int maxl, int rank_sampl
     }
 
     fmd_annealing_t *ann;
-    fmd_annealing_configure(&ann, random_graph, constraints, 10000000, 1.5, 0.9999, 10);
+    fmd_annealing_configure(&ann, random_graph, constraints, NULL,10000000, 1.5, 0.9999, 10);
     if(!sup_print) {
         timestamp();printf("Annealing started with cost %lf.\n", ann->cur_cost);
     }
@@ -228,8 +228,8 @@ int main() {
     int min_isa = 63;
     int max_isa = 64;
 
-    int optim_depth = 10;
-    int optim_seconds = 600;
+    int optim_depth = 1;
+    int optim_seconds = 10;
 
     timestamp(); printf("Unoptimized Tests begin.\n");
     srand(143514355);

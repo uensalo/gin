@@ -35,6 +35,7 @@ void fmd_annealing_reject(fmd_annealing_t *ann, int_t v1, int_t v2);
 void fmd_annealing_configure(fmd_annealing_t **cfg,
                              fmd_graph_t *fmd_graph,
                              fmd_vector_t *constraint_sets,
+                             fmd_vector_t *initial_permutation,
                              double temperature,
                              double scaling_factor,
                              double cooling_factor,

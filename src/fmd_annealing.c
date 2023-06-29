@@ -5,6 +5,7 @@
 void fmd_annealing_configure(fmd_annealing_t **cfg,
                              fmd_graph_t *graph,
                              fmd_vector_t *constraint_sets,
+                             fmd_vector_t *initial_permutation,
                              double temperature,
                              double scaling_factor,
                              double cooling_factor,
@@ -33,21 +34,24 @@ void fmd_annealing_configure(fmd_annealing_t **cfg,
     }
 
     config->permutation = calloc(config->no_vertices, sizeof(vid_t));
+    vid_t *inverse_permutation = calloc(config->no_vertices, sizeof(vid_t));
     for(int_t i = 0; i < config->no_vertices; i++) {
-        config->permutation[i] = i; // initial permutation is the identity map
+        config->permutation[i] = initial_permutation ? (vid_t)initial_permutation->data[i] : i;
+        inverse_permutation[initial_permutation ? (vid_t)initial_permutation->data[i] : i] = i;
     }
     config->best_permutation_so_far = calloc(config->no_vertices, sizeof(vid_t));
+    memcpy(config->best_permutation_so_far, config->permutation, sizeof(vid_t) * config->no_vertices);
 
     // now populate the initial constraints
 #ifdef FMD_OMP
-#pragma omp parallel for default(none) shared(config, constraint_sets)
+#pragma omp parallel for default(none) shared(config, constraint_sets, inverse_permutation)
 #endif
     for(int_t i = 0; i < config->no_constraints; i++) {
         fmd_constraint_set_t *constraint = constraint_sets->data[i];
         fmd_vector_t *constraint_vertices = constraint->vertices;
         for(int_t j = 0; j < constraint_vertices->size; j++) {
-            vid_t vertex_no = (vid_t)constraint_vertices->data[j];
-            config->bin_matrix[vertex_no][i] = 1;
+            vid_t permuted_index = inverse_permutation[(vid_t)constraint_vertices->data[j]];
+            config->bin_matrix[permuted_index][i] = 1;
         }
     }
 
@@ -84,6 +88,8 @@ void fmd_annealing_configure(fmd_annealing_t **cfg,
     config->best_cost_so_far = config->cur_cost;
     config->next_block_counts = calloc(config->no_constraints, sizeof(int_t));
     *cfg = config;
+
+    free(inverse_permutation);
 }
 
 void fmd_annealing_step_naive(fmd_annealing_t *ann, int_t v1, int_t v2) {
@@ -478,6 +484,5 @@ void fmd_annealing_get_permutation(fmd_annealing_t *ann, fmd_vector_t **permutat
     for(int_t i = 0; i < ann->no_vertices; i++) {
         fmd_vector_append(perm, (void*)ann->best_permutation_so_far[i]);
     }
-
     *permutation = perm;
 }

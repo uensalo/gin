@@ -1,4 +1,5 @@
 #include "fmd_fmd.h"
+#include "fmd_annealing.h"
 #include <getopt.h>
 #include <time.h>
 #include "rgfa_parser.h"
@@ -158,7 +159,7 @@ int fmd_main_index(int argc, char **argv) {
             }
             case 'p': {
                 fperm_path = optarg;
-                fperm = fopen(foutput_path, "r");
+                fperm = fopen(fperm_path, "r");
                 if(!fperm) {
                     fprintf(stderr, "[fmd:index] Permutation path %s could not be opened, quitting.\n", fperm_path);
                     return_code = -1;
@@ -248,7 +249,7 @@ int fmd_main_index(int argc, char **argv) {
             fmd_graph_free(graph);
             return return_code;
         }
-     }
+    }
     clock_gettime(CLOCK_REALTIME, &t2);
     parse_time = to_sec(t1,t2);
     /**************************************************************************
@@ -627,16 +628,226 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 }
 
 int fmd_main_permutation(int argc, char **argv) {
+    char *finput_path = NULL;
+    char *foutput_path = NULL;
+    char *fperm_path = NULL;
+    FILE *finput = stdin;
+    FILE *foutput = stdout;
+    FILE *fperm = NULL;
 
-    fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file in rGFA or fmdg format. Default: stdin\n");
-    fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, one integer as vid per line. Default: stdout\n");
-    fprintf(stderr, "\t--permutation or -p: Optional parameter. Path to initial permutation file to start optimizing from. Default: Identity permutation\n");
-    fprintf(stderr, "\t--time        or -t: Optional parameter. Time after which optimization is terminated in seconds. Default: 15 seconds\n");
-    fprintf(stderr, "\t--update      or -u: Optional parameter. Time interval of informative prints in seconds. Default: 3 seconds\n");
-    fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel cost computation. Default: 1\n");
-    fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
+    bool parse_rgfa = false;
 
-    return 1;
+    int_t depth = 4;
+    int_t time = 15;
+    int_t update = 3;
+    bool verbose = false;
+    int_t num_threads = 1;
+
+    struct timespec t1;
+    struct timespec t2;
+
+    double temperature = 1e6;
+    double cooling_factor = 0.95;
+
+    int return_code = 0;
+    static struct option options[] = {
+            {"input",       required_argument, NULL, 'i'},
+            {"rgfa",        no_argument,       NULL, 'g'},
+            {"output",      required_argument, NULL, 'o'},
+            {"permutation", required_argument, NULL, 'p'},
+            {"depth",       required_argument, NULL, 'd'},
+            {"temperature", required_argument, NULL, 'e'},
+            {"cooling",     required_argument, NULL, 'c'},
+            {"time",        required_argument, NULL, 't'},
+            {"update",      required_argument, NULL, 'u'},
+            {"threads",     required_argument, NULL, 'j'},
+            {"verbose",     no_argument,       NULL, 'v'},
+    };
+    opterr = 0;
+    int optindex,c;
+    while((c = getopt_long(argc, argv, "i:go:p:d:e:c:t:u:j:v", options, &optindex)) != -1) {
+        switch(c) {
+            case 'i': {
+                finput_path = optarg;
+                finput = fopen(finput_path, "r");
+                if(!finput) {
+                    fprintf(stderr, "[fmd:permutation] Input path %s could not be opened, quitting.\n", finput_path);
+                    return_code = -1;
+                }
+                break;
+            }
+            case 'g': {
+                parse_rgfa = true;
+                break;
+            }
+            case 'o': {
+                foutput_path = optarg;
+                break;
+            }
+            case 'p': {
+                fperm_path = optarg;
+                fperm = fopen(fperm_path, "r");
+                if(!fperm) {
+                    fprintf(stderr, "[fmd:permutation] Permutation path %s could not be opened, quitting.\n", fperm_path);
+                    return_code = -1;
+                }
+                break;
+            }
+            case 'd': {
+                depth = strtoll(optarg, NULL, 10);
+                break;
+            }
+            case 'e': {
+                temperature = strtod(optarg, NULL);
+                break;
+            }
+            case 'c': {
+                cooling_factor = strtod(optarg, NULL);
+                break;
+            }
+            case 't': {
+                time = strtoll(optarg, NULL, 10);
+                break;
+            }
+            case 'u': {
+                update = strtoll(optarg, NULL, 10);
+                break;
+            }
+            case 'j': {
+                num_threads = strtoll(optarg, NULL, 10);
+                break;
+            }
+            case 'v': {
+                verbose = true;
+                break;
+            }
+            default: {
+                fprintf(stderr, "[fmd:permutation] Option %s not recognized, please see fmd help index for more.\n",optarg);
+                return_code = -1;
+                break;
+            }
+        }
+    }
+    fmd_graph_t *graph = NULL;
+    fmd_vector_t *permutation = NULL;
+    fmd_vector_t *constraints = NULL;
+    fmd_annealing_t *ann = NULL;
+    fmd_vector_t *optimized_permutation = NULL;
+
+    /**************************************************************************
+     * 1 - Parse the input graph the variable graph. By the end of this block,
+     * the variable graph should be populated and the files must be closed.
+     *************************************************************************/
+    if(verbose) {
+        fprintf(stderr, "[fmd:permutation] Parsing input file %s\n", finput_path);
+    }
+    clock_gettime(CLOCK_REALTIME, &t1);
+    if(parse_rgfa) {
+        rgfa_t *rgfa = rgfa_parse(finput);
+        if(finput != stdin) fclose(finput);
+        if (!rgfa) {
+            fprintf(stderr, "[fmd:permutation] Failed to parse rGFA file under %s, quitting.\n", finput_path);
+            if(finput_path) fclose(finput);
+            if(foutput_path) fclose(foutput);
+            if(fperm) fclose(fperm);
+            return_code = -1;
+            return return_code;
+        }
+        graph = rgfa_to_fmd_graph(rgfa);
+        rgfa_free(rgfa);
+
+    } else {
+        graph = fmdg_parse(finput);
+        if(!graph) {
+            if (finput_path) fclose(finput);
+            if (foutput_path) fclose(foutput);
+            if (fperm) fclose(fperm);
+            fprintf(stderr, "[fmd:permutation] Malformed fmdg file, quitting.\n");
+            return_code = -1;
+            return return_code;
+        }
+    }
+
+    /**************************************************************************
+     * 2 - Parse the initial input permutation if any
+    **************************************************************************/
+    if(fperm) { // can not be provided through stdin; has to be from some file.
+        permutation = permutation_parse(fperm);
+        if(!permutation) {
+            fprintf(stderr, "[fmd:permutation] Failed to parse permutation file under %s, quitting.\n", fperm_path);
+            return_code = -1;
+            if(foutput != stdout) fclose(foutput);
+            fmd_graph_free(graph);
+            return return_code;
+        }
+        if(permutation->size != graph->vertices->size) {
+            fprintf(stderr, "[fmd:permutation] Permutation cardinality does not match graph vertex size. Quitting.\n");
+            return_code = -1;
+            if(foutput_path) fclose(foutput);
+            fmd_vector_free(permutation);
+            fmd_graph_free(graph);
+            return return_code;
+        }
+    }
+
+    /**************************************************************************
+     * 3 - Enumerate constraint sets, by the end of this block constraints
+     * must be populated with constraint sets.
+     **************************************************************************/
+    if(verbose) {
+        fprintf(stderr, "[fmd:permutation] Extracting constraint sets for each occurring prefix.\n");
+    }
+    fmd_constraint_set_enumerate(&constraints, graph, depth);
+    if(!constraints) {
+        fprintf(stderr, "[fmd:permutation] Something went wrong during constraint set extraction. Quitting.\n");
+        fmd_graph_free(graph);
+        return_code = -1;
+        return return_code;
+    }
+
+    /**************************************************************************
+     * 4 - Configure the annealing optimizer and begin optimizing
+     *************************************************************************/
+#ifdef FMD_OMP
+    omp_set_num_threads((int)num_threads);
+#endif
+    fmd_annealing_configure(&ann, graph, constraints, permutation, temperature, 1, cooling_factor, 0);
+    fmd_graph_free(graph);
+    fmd_vector_free(constraints);
+    if(verbose) {
+        fprintf(stderr, "[fmd:permutation] Optimization begins with initial cost %.3lf.\n", ann->cur_cost);
+    }
+    int_t no_iterations = 1 + (time - 1) / update;
+    for(int_t i = 0; i < no_iterations; i++) {
+        fmd_annealing_iterate_seconds(ann, (int_t)update);
+        if(verbose) {
+            fprintf(stderr, "\tIteration %d, best_cost = %.3lf, cur_cost = %.3lf\n", ann->cur_iter + 1, ann->best_cost_so_far, ann->cur_cost);
+        }
+    }
+
+    /**************************************************************************
+     * 5 - Cleanup and write to the output
+     *************************************************************************/
+    fmd_annealing_get_permutation(ann, &optimized_permutation);
+    //fmd_annealing_free(ann);
+    if(foutput_path) {
+        foutput = fopen(foutput_path, "w");
+        if(!foutput) {
+            fprintf(stderr, "[fmd:index] Output path %s could not be opened, quitting.\n", foutput_path);
+            return_code = -1;
+            return return_code;
+        }
+    }
+
+    for(int_t i = 0; i < optimized_permutation->size; i++) {
+        fprintf(foutput, "%lld\n", (int_t)optimized_permutation->data[i]);
+    }
+
+    if(foutput_path) fclose(foutput);
+    fmd_vector_free(permutation);
+    fmd_vector_free(optimized_permutation);
+
+    return return_code;
 }
 
 int fmd_main_validate(int argc, char **argv) {
@@ -703,8 +914,12 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "[fmd:help] Computing such a permutation is NP-Complete; this program essentially runs simulated annealing and outputs a permutation.\n");
             fprintf(stderr, "[fmd:help] Parameters:\n");
             fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file in rGFA or fmdg format. Default: stdin\n");
+            fprintf(stderr, "\t--rgfa        or -g: Optional flag. Indicates that the input file is an rGFA file. Default: false\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, one integer as vid per line. Default: stdout\n");
             fprintf(stderr, "\t--permutation or -p: Optional parameter. Path to initial permutation file to start optimizing from. Default: Identity permutation\n");
+            fprintf(stderr, "\t--depth       or -d: Optional parameter. Maximum string length to be considered in the construction of constraint sets. Default: 4");
+            fprintf(stderr, "\t--temperature or -e: Optional parameter. Sets the initial temperature of the annealing process. Default: 1e6\n");
+            fprintf(stderr, "\t--cooling     or -c: Optional parameter. Sets the cooling factor of the annealing process. Default: 0.95\n");
             fprintf(stderr, "\t--time        or -t: Optional parameter. Time after which optimization is terminated in seconds. Default: 15 seconds\n");
             fprintf(stderr, "\t--update      or -u: Optional parameter. Time interval of informative prints in seconds. Default: 3 seconds\n");
             fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel cost computation. Default: 1\n");
