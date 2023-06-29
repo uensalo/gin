@@ -146,6 +146,7 @@ int fmd_main_index(int argc, char **argv) {
                 if(!finput) {
                     fprintf(stderr, "[fmd:index] Input path %s could not be opened, quitting.\n", finput_path);
                     return_code = -1;
+                    return return_code;
                 }
                 break;
             }
@@ -163,6 +164,7 @@ int fmd_main_index(int argc, char **argv) {
                 if(!fperm) {
                     fprintf(stderr, "[fmd:index] Permutation path %s could not be opened, quitting.\n", fperm_path);
                     return_code = -1;
+                    return return_code;
                 }
                 break;
             }
@@ -377,6 +379,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 if(!finput) {
                     fprintf(stderr, "[fmd:query] Input query path %s could not be opened, quitting.\n", finput_path);
                     return_code = -1;
+                    return return_code;
                 }
                 break;
             }
@@ -452,6 +455,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         finput = fopen(finput_path, "r");
         if(!finput) {
             fprintf(stderr,"[fmd:query] Can't open input file %s, quitting.\n", finput_path);
+            return_code = -1;
+            return return_code;
         }
     }
     if(parse_fastq) {
@@ -673,6 +678,7 @@ int fmd_main_permutation(int argc, char **argv) {
                 if(!finput) {
                     fprintf(stderr, "[fmd:permutation] Input path %s could not be opened, quitting.\n", finput_path);
                     return_code = -1;
+                    return return_code;
                 }
                 break;
             }
@@ -690,6 +696,7 @@ int fmd_main_permutation(int argc, char **argv) {
                 if(!fperm) {
                     fprintf(stderr, "[fmd:permutation] Permutation path %s could not be opened, quitting.\n", fperm_path);
                     return_code = -1;
+                    return return_code;
                 }
                 break;
             }
