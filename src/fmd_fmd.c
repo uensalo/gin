@@ -319,6 +319,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     // free the list structure storing interval lists, but not the lists themselves
     kv_pairs->f = &prm_fstruct;
     fmd_vector_free(kv_pairs);
+    fmd_vector_free(inverse_permutation);
     /******************************************************
     * Step 4 - Return
     ******************************************************/
@@ -927,6 +928,7 @@ void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64
     word_t *buf;
     uint_t no_words;
     fmd_bs_detach(bs, &buf, &no_words);
+    fmd_bs_free(bs);
     *buf_ret = (unsigned char*)buf;
     *buf_size_ret = no_words * sizeof(word_t);
 }

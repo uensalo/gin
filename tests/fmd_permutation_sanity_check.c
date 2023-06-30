@@ -44,7 +44,7 @@ int main() {
     }
 
     fmd_annealing_t *ann;
-    fmd_annealing_configure(&ann, g, constraints, 1000, 1, 0.99, 1 );
+    fmd_annealing_configure(&ann, g, NULL, constraints, 1000, 1, 0.99, 1 );
 
     fmd_annealing_iterate_seconds(ann,5);
 

@@ -488,7 +488,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                     i = 0;
                     while (i < num_threads && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
                         int_t len = (int_t)strlen(buf);
-                        buf[len-1] = 0; // get rid of the end line character
+                        if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
                         if(!strcmp(buf,FMD_MAIN_QUERY_EXIT_PROMPT)) {
                             exit_flag = true;
                             break;
