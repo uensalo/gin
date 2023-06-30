@@ -84,6 +84,10 @@ target_include_directories(
 )
 target_link_libraries(fmd_lib        PUBLIC divsufsort)
 target_link_libraries(fmd_lib_static PUBLIC divsufsort_static)
+
+# math
+target_link_libraries(fmd_lib PUBLIC m)
+target_link_libraries(fmd_lib_static PUBLIC m)
 ################################################################################
 # executables
 ################################################################################
