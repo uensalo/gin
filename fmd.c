@@ -779,7 +779,7 @@ int fmd_main_permutation(int argc, char **argv) {
                 break;
             }
             default: {
-                fprintf(stderr, "[fmd:permutation] Option %s not recognized, please see fmd help index for more.\n",optarg);
+                fprintf(stderr, "[fmd:permutation] Option %s not recognized, please see fmd help permutation for more.\n",optarg);
                 return_code = -1;
                 break;
             }
@@ -951,7 +951,7 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
                 break;
             }
             default: {
-                fprintf(stderr, "[fmd:convert] Option %s not recognized, please see fmd help index for more.\n",optarg);
+                fprintf(stderr, "[fmd:convert] Option %s not recognized, please see fmd help convert for more.\n",optarg);
                 return_code = -1;
                 break;
             }

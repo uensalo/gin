@@ -83,7 +83,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     }
     assert(permutation->size == graph->vertex_list->size);
     assert(c_0 < c_1);
-    f->permutation = permutation;
+    f->permutation = fmd_vector_copy(permutation);
     /**************************************************************************
     * Step 1 - Compute the graph encoding and the permutation encodings
     **************************************************************************/
