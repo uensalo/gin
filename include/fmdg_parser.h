@@ -48,6 +48,24 @@ static fmd_graph_t *fmdg_parse(FILE* file) {
     return graph;
 }
 
+static void *fmdg_write(FILE* file, fmd_graph_t *graph) {
+    for (int_t i = 0; i < graph->vertices->size; i++) {
+        fmd_vertex_t *vertex; void* _;
+        fmd_table_lookup(graph->vertices, (void*)i, &_);
+        vertex = (fmd_vertex_t*)_;
+        fprintf(file, "V\t%lld\t%s\n", i, vertex->label->seq);
+    }
+    for (int_t i = 0; i < graph->vertices->size; i++) {
+        fmd_vector_t *outgoing; void* _;
+        fmd_table_lookup(graph->outgoing_neighbors, (void*)i, &_);
+        outgoing = (fmd_vector_t*)_;
+        for (int_t j = 0; j < outgoing->size; j++) {
+            vid_t vid = (vid_t)outgoing->data[j];
+            fprintf(file, "E\t%lld\t%lld\n", i, vid);
+        }
+    }
+}
+
 
 
 #endif //FMD_FMDG_PARSER_H
