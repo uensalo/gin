@@ -20,30 +20,33 @@ def sample_strings(input_file, length, num_samples, output_file, seed=None):
 
     with open(output_file, 'w') as f:
         for _ in range(num_samples):
-            vertex = random.choice(list(vertices.keys()))
-            path = [vertex]
-            position = random.randint(0, len(vertices[vertex])-1)
-            first_offset = position
-            string = vertices[vertex][position:position + length]
-            needed = length - len(string)
-
-            while len(string) < length:
-                outgoing = [edge for edge in edges if edge[0] == vertex]
-                if not outgoing:
-                    break
-                _, vertex = random.choice(outgoing)
-                path.append(vertex)
+            while True:
+                vertex = random.choice(list(vertices.keys()))
+                path = [vertex]
+                position = random.randint(0, len(vertices[vertex])-1)
+                first_offset = position
+                string = vertices[vertex][position:position + length]
                 needed = length - len(string)
-                string += vertices[vertex][:needed]
 
-            last_offset = needed - 1 if needed > 0 else len(vertices[path[-1]]) - 1
+                while len(string) < length:
+                    outgoing = [edge for edge in edges if edge[0] == vertex]
+                    if not outgoing:
+                        break
+                    _, vertex = random.choice(outgoing)
+                    path.append(vertex)
+                    needed = length - len(string)
+                    string += vertices[vertex][:needed]
 
-            if len(string) < length:
-                print(f"Failed to generate a string of length {length}.", file=sys.stderr)
-                continue
+                last_offset = needed - 1 if needed > 0 else len(vertices[path[-1]]) - 1
 
-            f.write("{} ,{}\t{}\n".format('\t'.join(map(str, path)), first_offset, last_offset))
-            print(string)
+                if len(string) == length:
+                    f.write("{} ,{}\t{}\n".format('\t'.join(map(str, path)), first_offset, last_offset))
+                    print(string)
+                    break
+                #else:
+                #    print(f"Failed to generate a string of length {length}. Retrying...", file=sys.stderr)
+
+        print("exit();")
 
 def main():
     parser = argparse.ArgumentParser()

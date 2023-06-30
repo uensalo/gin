@@ -872,7 +872,7 @@ int fmd_main_permutation(int argc, char **argv) {
     fmd_graph_free(graph);
     fmd_vector_free(constraints);
     if(verbose) {
-        fprintf(stderr, "[fmd:permutation] Optimization begins with initial cost %.3lf.\n", ann->cur_cost);
+        fprintf(stderr, "[fmd:permutation] Optimization begins with initial cost %.3lf for depth=%lld for %lld seconds.\n", ann->cur_cost, depth, time);
     }
     int_t no_iterations = 1 + (time - 1) / update;
     for(int_t i = 0; i < no_iterations; i++) {
