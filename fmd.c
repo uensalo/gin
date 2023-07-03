@@ -602,7 +602,6 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         }
         clock_gettime(CLOCK_REALTIME, &t2);
         query_time = to_sec(t1,t2);
-        free(exit_flag);
         free(buf);
         free(tdx);
 #else
