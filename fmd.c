@@ -505,7 +505,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         thread_data_t *tdx = calloc(num_threads, sizeof(thread_data_t));
         bool exit_flag = false;
         clock_gettime(CLOCK_REALTIME, &t1);
-        #pragma omp parallel default(none) firstprivate(num_threads) shared(verbose, exit_flag, i, buf, finput, mode, foutput, fmd, tdx, no_matching_forks, no_missing_forks, queries_processed)
+        #pragma omp parallel default(none) firstprivate(num_threads) \
+        shared(verbose, exit_flag, i, buf, finput, mode, foutput, fmd, tdx, no_matching_forks, no_missing_forks, queries_processed)
         {
             int tid = omp_get_thread_num();
             while(true) {
@@ -594,13 +595,14 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         }
                     }
                 }
-                #pragma omp barrier
                 if(exit_flag)
                     break;
+                #pragma omp barrier
             }
         }
         clock_gettime(CLOCK_REALTIME, &t2);
         query_time = to_sec(t1,t2);
+        free(exit_flag);
         free(buf);
         free(tdx);
 #else
