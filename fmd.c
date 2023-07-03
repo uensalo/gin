@@ -505,7 +505,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         thread_data_t *tdx = calloc(num_threads, sizeof(thread_data_t));
         bool exit_flag = false;
         clock_gettime(CLOCK_REALTIME, &t1);
-        #pragma omp parallel default(none) firstprivate(num_threads) shared(exit_flag, i, buf, finput, mode, foutput, fmd, tdx, no_matching_forks, no_missing_forks, queries_processed)
+        #pragma omp parallel default(none) firstprivate(num_threads) shared(verbose, exit_flag, i, buf, finput, mode, foutput, fmd, tdx, no_matching_forks, no_missing_forks, queries_processed)
         {
             int tid = omp_get_thread_num();
             while(true) {
@@ -578,7 +578,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                         fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                                         root = (fmd_fork_node_t*)root->parent;
                                     }
-                                    fprintf(foutput, "\n");
+                                    if(!verbose) fprintf(foutput, "\n");
+                                    else fprintf(foutput, ": %s\n", tdx[j].str->seq);
                                 }
                                 if(!tdx[j].paths_or_locs->size) fprintf(foutput, "-\n");
                                 fprintf(foutput, "\n");
