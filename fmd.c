@@ -370,6 +370,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     FILE *fref = NULL;
 
     int_t num_threads = 1;
+    int_t batch_size = 8;
     bool parse_fastq = false;
     bool verbose = false;
 
@@ -384,16 +385,17 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     int_t no_missing_forks = 0;
 
     static struct option options[] = {
-            {"reference", required_argument, NULL, 'r'},
-            {"input",     required_argument, NULL, 'i'},
-            {"fastq",     no_argument,       NULL, 'f'},
-            {"output",    required_argument, NULL, 'o'},
-            {"threads",   required_argument, NULL, 'j'},
-            {"verbose",   no_argument,       NULL, 'v'},
+            {"reference",  required_argument, NULL, 'r'},
+            {"input",      required_argument, NULL, 'i'},
+            {"fastq",      no_argument,       NULL, 'f'},
+            {"output",     required_argument, NULL, 'o'},
+            {"batch_size", required_argument, NULL, 'b'},
+            {"threads",    required_argument, NULL, 'j'},
+            {"verbose",    no_argument,       NULL, 'v'},
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "r:i:fo:j:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "r:i:fo:b:j:v", options, &optindex)) != -1) {
         switch(c) {
             case 'r': {
                 fref_path = optarg;
@@ -415,6 +417,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             case 'o': {
                 foutput_path = optarg;
+                break;
+            }
+            case 'b': {
+                batch_size = (int_t)strtoull(optarg, NULL, 10);
                 break;
             }
             case 'j': {
@@ -466,6 +472,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     * 2 - Parse the bitstream into data structures, by the end of this block
     * fmd should be populated and fmd_buf should be freed
     **************************************************************************/
+    if(verbose) {
+        fprintf(stderr, "[fmd:query] Parsing reference index into data structures.\n");
+    }
     fmd_fmd_t *fmd;
     fmd_fmd_serialize_from_buffer(&fmd, fmd_buf, fmd_buf_size);
     if(!fmd) {
@@ -476,7 +485,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/
-
+    if(verbose) {
+        fprintf(stderr, "[fmd:query] Parsing and launching queries with %d threads and %d batch size.\n", (int)num_threads, (int)batch_size);
+    }
     if(finput_path) {
         finput = fopen(finput_path, "r");
         if(!finput) {
@@ -493,117 +504,125 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         return return_code;
     } else {
 #ifdef FMD_OMP
-        int_t i = 0;
-        char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
-        typedef struct thread_data_ {
+        int_t i;
+        char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char*));
+        typedef struct query_task_ {
             fmd_string_t *str;
             uint64_t count;
             fmd_vector_t *paths_or_locs;
             fmd_vector_t *partial_matches;
-        } thread_data_t;
+        } query_task_t;
         omp_set_num_threads((int)num_threads);
-        thread_data_t *tdx = calloc(num_threads, sizeof(thread_data_t));
+        query_task_t *tasks = calloc(batch_size, sizeof(query_task_t));
         bool exit_flag = false;
-        clock_gettime(CLOCK_REALTIME, &t1);
-        #pragma omp parallel default(none) firstprivate(num_threads) \
-        shared(verbose, exit_flag, i, buf, finput, mode, foutput, fmd, tdx, no_matching_forks, no_missing_forks, queries_processed)
-        {
-            int tid = omp_get_thread_num();
-            while(true) {
-                #pragma omp single
-                {
-                    i = 0;
-                    while (i < num_threads && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
-                        int_t len = (int_t)strlen(buf);
-                        if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
-                        if(!strcmp(buf,FMD_MAIN_QUERY_EXIT_PROMPT)) {
-                            exit_flag = true;
-                            break;
-                        }
-                        fmd_string_init_cstr(&tdx[i].str, buf);
-                        queries_processed++;
-                        i++;
-                    }
-                }
 
-                if(tid < i && tdx[tid].str) {
-                    switch(mode) {
-                        case fmd_query_mode_count: {
-                            tdx[tid].count = fmd_fmd_query_count(fmd, tdx[tid].str);
-                            break;
-                        }
-                        case fmd_query_mode_locate: {
-                            tdx[tid].paths_or_locs = fmd_fmd_query_locate_basic(fmd, tdx[tid].str);
-                            break;
-                        }
-                        case fmd_query_mode_enumerate: {
-                            fmd_fmd_query_locate_paths_omp(fmd, tdx[tid].str, false, &tdx[tid].paths_or_locs, &tdx[tid].partial_matches);
-                            break;
-                        }
-                        default: {
-                            break;
-                        }
-                    }
-                }
-                #pragma omp barrier
-
-                if(tid == 0) {
-                    for (int_t j = 0; j < i; j++) {
-                        if (!tdx[j].str) continue;
-                        switch (mode) {
-                            case fmd_query_mode_count: {
-                                fprintf(foutput,"%lld\n",tdx[j].count);
-                                fmd_string_free(tdx[j].str);
-                                tdx[j].str = NULL;
-                                break;
-                            }
-                            case fmd_query_mode_locate: {
-                                for(int_t k = 0; k < tdx[j].paths_or_locs->size-1; k++) {
-                                    fprintf(foutput, "%lld, ", (uint64_t)tdx[j].paths_or_locs->data[k]);
-                                }
-                                if(tdx[j].paths_or_locs->size) fprintf(foutput, "%lld, ", (uint64_t)tdx[j].paths_or_locs->data[tdx[j].paths_or_locs->size-1]);
-                                else fprintf(foutput, "-\n");
-                                fmd_string_free(tdx[j].str);
-                                fmd_vector_free(tdx[j].paths_or_locs);
-                                tdx[j].str = NULL;
-                                break;
-                            }
-                            case fmd_query_mode_enumerate: {
-                                no_matching_forks += tdx[j].paths_or_locs->size;
-                                no_missing_forks += tdx[j].partial_matches->size;
-                                for(int_t k = 0; k < tdx[j].paths_or_locs->size; k++) {
-                                    fmd_fork_node_t *root = (fmd_fork_node_t*)tdx[j].paths_or_locs->data[k];
-                                    fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                                    root = (fmd_fork_node_t*)root->parent;
-                                    while(root) {
-                                        fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                                        root = (fmd_fork_node_t*)root->parent;
-                                    }
-                                    if(!verbose) fprintf(foutput, "\n");
-                                    else fprintf(foutput, ": %s\n", tdx[j].str->seq);
-                                }
-                                if(!tdx[j].paths_or_locs->size) fprintf(foutput, "-\n");
-                                fprintf(foutput, "\n");
-                                fmd_fmd_locate_paths_result_free(tdx[j].paths_or_locs, tdx[j].partial_matches);
-                                fmd_string_free(tdx[j].str);
-                                tdx[j].str = NULL;
-                                break;
-                            }
-                            default: {
-                                break;
-                            }
-                        }
-                    }
-                }
-                if(exit_flag)
+        while(true) {
+            i = 0;
+            while (i < batch_size && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
+                int_t len = (int_t)strlen(buf);
+                if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
+                if(!strcmp(buf,FMD_MAIN_QUERY_EXIT_PROMPT)) {
+                    exit_flag = true;
                     break;
-                #pragma omp barrier
+                }
+                fmd_string_init_cstr(&tasks[i].str, buf);
+                queries_processed++;
+                i++;
             }
+
+            clock_gettime(CLOCK_REALTIME, &t1);
+            omp_set_num_threads((int)num_threads);
+            switch(mode) {
+                case fmd_query_mode_count: {
+                    #pragma omp parallel for default(none) shared(fmd, i, tasks)
+                    for(int_t k = 0; k < i; k++) {
+                        tasks[k].count = fmd_fmd_query_count(fmd, tasks[k].str);
+                    }
+                    break;
+                }
+                case fmd_query_mode_locate: {
+                    #pragma omp parallel for default(none) shared(fmd, i, tasks)
+                    for(int_t k = 0; k < i; k++) {
+                        tasks[k].paths_or_locs = fmd_fmd_query_locate_basic(fmd, tasks[k].str);
+                    }
+                    break;
+                }
+                case fmd_query_mode_enumerate: {
+                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads)
+                    for(int_t k = 0; k < i; k++) {
+                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, false, &tasks[k].paths_or_locs,
+                                                       &tasks[k].partial_matches, num_threads);
+                    }
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+            clock_gettime(CLOCK_REALTIME, &t2);
+            query_time += to_sec(t1,t2);
+
+            switch (mode) {
+                case fmd_query_mode_count: {
+                    for (int_t j = 0; j < i; j++) {
+                        if (!tasks[j].str) continue;
+                        fprintf(foutput, "%lld\n", tasks[j].count);
+                        fmd_string_free(tasks[j].str);
+                        tasks[j].str = NULL;
+                    }
+                    break;
+                }
+                case fmd_query_mode_locate: {
+                    for (int_t j = 0; j < i; j++) {
+                        if (!tasks[j].str) continue;
+                        for (int_t k = 0; k < tasks[j].paths_or_locs->size - 1; k++) {
+                            fprintf(foutput, "%lld, ", (uint64_t) tasks[j].paths_or_locs->data[k]);
+                        }
+                        if (tasks[j].paths_or_locs->size) fprintf(foutput, "%lld, ",
+                                                                (uint64_t) tasks[j].paths_or_locs->data[
+                                                                        tasks[j].paths_or_locs->size - 1]);
+                        else fprintf(foutput, "-\n");
+                        fmd_string_free(tasks[j].str);
+                        fmd_vector_free(tasks[j].paths_or_locs);
+                        tasks[j].str = NULL;
+                    }
+                    break;
+                }
+                case fmd_query_mode_enumerate: {
+                    for (int_t j = 0; j < i; j++) {
+                        if (!tasks[j].str) continue;
+                        no_matching_forks += tasks[j].paths_or_locs->size;
+                        no_missing_forks += tasks[j].partial_matches->size;
+                        for (int_t k = 0; k < tasks[j].paths_or_locs->size; k++) {
+                            fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].paths_or_locs->data[k];
+                            fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
+                                    root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                            root = (fmd_fork_node_t *) root->parent;
+                            while (root) {
+                                fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
+                                        root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                                root = (fmd_fork_node_t *) root->parent;
+                            }
+                            if (!verbose) fprintf(foutput, "\n");
+                            else fprintf(foutput, ": %s\n", tasks[j].str->seq);
+                        }
+                        if (!tasks[j].paths_or_locs->size) fprintf(foutput, "-\n");
+                        fprintf(foutput, "\n");
+                        fmd_fmd_locate_paths_result_free(tasks[j].paths_or_locs, tasks[j].partial_matches);
+                        fmd_string_free(tasks[j].str);
+                        tasks[j].str = NULL;
+                    }
+                    break;
+                }
+                default: {
+                    break;
+                }
+            }
+            if(exit_flag)
+                break;
         }
-        clock_gettime(CLOCK_REALTIME, &t2);
-        query_time = to_sec(t1,t2);
         free(buf);
-        free(tdx);
+        free(tasks);
 #else
         char *query_cstr = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
         clock_gettime(CLOCK_REALTIME, &t1);
@@ -672,11 +691,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         fprintf(stderr, "[fmd:query] Queries processed: %lld\n",queries_processed);
         if(queries_processed)
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
-        if(mode == fmd_query_mode_enumerate && queries_processed) {
+        if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {
             fprintf(stderr, "[fmd:query] Total forks for matching queries: %lld\n",no_matching_forks);
-            fprintf(stderr, "[fmd:query] Total forks for partially matching queries: %lld\n",no_missing_forks);
-            fprintf(stderr, "[fmd:query] Average forks per matching query: %.3lf\n",(double)no_matching_forks / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Average forks per partially matching query: %.3lf\n",(double)no_missing_forks / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Average forks per matching: %.3lf\n",(double)no_matching_forks / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Time per fork: %.6lf\n", (double)query_time / (double)no_matching_forks);
+            fprintf(stderr, "[fmd:query] Time per fork per thread: %.6lf\n", (double)query_time / (double)no_matching_forks * (double)num_threads);
+
         }
     }
 
@@ -1074,12 +1094,13 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\tlocate:    Locates the vertex IDs and positions into vertices of the string matches. Results are returned as (vertex_id, index) tuples per line.\n");
             fprintf(stderr, "\tenumerate: Enumerates the paths to which vertices match. Results are returned as (vertex_id, index) (vertex_id) ... (vertex_id) (vertex_id index) per match per line.\n");
             fprintf(stderr, "[fmd:help] Parameters:\n");
-            fprintf(stderr, "\t--reference or -r: Required parameter. Path to the index file. See fmd index for more help.\n");
-            fprintf(stderr, "\t--input     or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
-            fprintf(stderr, "\t--fastq     or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
-            fprintf(stderr, "\t--output    or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
-            fprintf(stderr, "\t--threads   or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
-            fprintf(stderr, "\t--verbose   or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
+            fprintf(stderr, "\t--reference  or -r: Required parameter. Path to the index file. See fmd index for more help.\n");
+            fprintf(stderr, "\t--input      or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
+            fprintf(stderr, "\t--fastq      or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
+            fprintf(stderr, "\t--output     or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
+            fprintf(stderr, "\t--batch-size or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
+            fprintf(stderr, "\t--threads    or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
+            fprintf(stderr, "\t--verbose    or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
             fprintf(stderr, "[fmd:help] Example invocation: fmd query enumerate -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -v\n");
             return_code = 0;
             break;

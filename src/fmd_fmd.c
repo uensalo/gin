@@ -514,7 +514,8 @@ void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector
 }
 
 #ifdef FMD_OMP
-void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, bool match_partial, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
+#include <omp.h>
+void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, bool match_partial, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads) {
     fmd_vector_t *leaves;
     fmd_vector_init(&leaves, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
     fmd_vector_t *graveyard = NULL;
@@ -530,6 +531,7 @@ void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, bool m
 
     fmd_fmd_qr_t *root_query = fmd_fmd_qr_init(root_fork, init_lo, init_hi, string->size - 1, string);
 
+    omp_set_num_threads((int)num_threads);
     #pragma omp parallel default(none) shared(fmd,root_query,leaves,graveyard,match_partial)
     {
         #pragma omp single nowait

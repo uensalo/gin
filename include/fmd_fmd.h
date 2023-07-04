@@ -80,7 +80,7 @@ void fmd_fmd_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_en
 void fmd_fmd_query_locate_paths_stats(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t *no_forks);
 
 #ifdef FMD_OMP
-void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, bool match_partial, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, bool match_partial, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
 void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, fmd_vector_t *exact_matches);
 void fmd_fmd_query_locate_paths_process_query_record_with_partial_matches(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
 #endif
