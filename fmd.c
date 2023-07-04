@@ -537,7 +537,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                             break;
                         }
                         case fmd_query_mode_enumerate: {
-                            fmd_fmd_query_locate_paths(fmd, tdx[tid].str, &tdx[tid].paths_or_locs, &tdx[tid].partial_matches);
+                            fmd_fmd_query_locate_paths_omp(fmd, tdx[tid].str, false, &tdx[tid].paths_or_locs, &tdx[tid].partial_matches);
                             break;
                         }
                         default: {
