@@ -550,7 +550,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 case fmd_query_mode_enumerate: {
                     #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, false, &tasks[k].paths_or_locs,
+                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, true, &tasks[k].paths_or_locs,
                                                        &tasks[k].partial_matches, num_threads);
                     }
                     break;
