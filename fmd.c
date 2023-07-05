@@ -693,9 +693,11 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
         if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {
             fprintf(stderr, "[fmd:query] Total forks for matching queries: %lld\n",no_matching_forks);
+            fprintf(stderr, "[fmd:query] Total forks for partially matching queries: %lld\n",no_missing_forks);
             fprintf(stderr, "[fmd:query] Average forks per matching: %.3lf\n",(double)no_matching_forks / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Time per fork: %.6lf\n", (double)query_time / (double)no_matching_forks);
-            fprintf(stderr, "[fmd:query] Time per fork per thread: %.6lf\n", (double)query_time / (double)no_matching_forks * (double)num_threads);
+            fprintf(stderr, "[fmd:query] Average per query: %.3lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Time per fork: %.6lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks));
+            fprintf(stderr, "[fmd:query] Time per fork per thread: %.6lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks) * (double)num_threads);
 
         }
     }
