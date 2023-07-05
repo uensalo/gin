@@ -16,7 +16,7 @@ mkdir $QUERY_DIR
 QUERY_LEN=10
 NO_QUERIES=65536
 SEED=420
-NUM_THREADS=16
+QUERY_NUM_THREADS=16
 BATCH_SIZE=4096
 INDEX_CONSTRUCTION_PARALLELISM=4
 
@@ -71,5 +71,5 @@ do
     LOG_FILE="$LOG_DIR/${BASENAME}_log,sample_rate_${SAMPLE_RATE}.txt"
 
     # Run the query operation, redirecting stderr to the log file
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 done

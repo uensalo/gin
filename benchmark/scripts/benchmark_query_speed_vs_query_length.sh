@@ -18,12 +18,13 @@ mkdir -p $PERMUTATION_DIR
 
 NO_QUERIES=65536
 SEED=420
-NUM_THREADS=16
+QUERY_NUM_THREADS=16
 TEMPERATURE=1e2
 COOLING=0.99
 TIME=3600
 DEPTH=2
 BATCH_SIZE=4096
+PERMUTATION_NUM_THREADS=128
 
 # Get the input file name and the query lengths
 INPUT_FILE=$1
@@ -39,7 +40,7 @@ if [[ ! -f $COMMON_INDEX_FILE ]]; then
     # No common index file exists, need to create one
     PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_permutation.fmdp"
     # Run the permutation operation
-    $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -j $NUM_THREADS
+    $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -j $PERMUTATION_NUM_THREADS
     # Run the index operation and save the index file to the common directory
     $FMD_DIR/fmd index -i $INPUT_FILE -p $PERMUTATION_FILE -o $COMMON_INDEX_FILE
 fi
@@ -61,5 +62,5 @@ do
     touch $LOG_FILE
 
     # Benchmark the index with the query set, redirecting stderr to the log file
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 done

@@ -18,8 +18,8 @@ mkdir -p $PERMUTATION_DIR
 QUERY_LEN=10
 NO_QUERIES=65536
 SEED=420
-NUM_THREADS=16
 BATCH_SIZE=4096
+QUERY_NUM_THREADS=16
 
 # Get the input file name and the time parameters
 INPUT_FILE=$1
@@ -45,5 +45,5 @@ do
     touch $LOG_FILE
 
     # Benchmark the index with the query set
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 done

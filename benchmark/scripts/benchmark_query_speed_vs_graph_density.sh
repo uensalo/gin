@@ -23,12 +23,13 @@ VERTEX_LABEL_LEN=$2
 QUERY_LEN=10
 NO_QUERIES=65536
 SEED=420
-NUM_THREADS=16
+QUERY_NUM_THREADS=16
 DEPTH=6
 TEMPERATURE=1e2
 COOLING=0.99
 TIME=300
 BATCH_SIZE=4096
+PERMUTATION_NUM_THREADS=128
 
 # Get the graph density values
 shift 2
@@ -57,12 +58,12 @@ do
     touch $LOG_FILE
 
     # Run the permutation operation
-    $FMD_DIR/fmd permutation -i $GRAPH_FILE -d $DEPTH -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -o $PERMUTATION_FILE -v -j $NUM_THREADS 2>> $LOG_FILE
+    $FMD_DIR/fmd permutation -i $GRAPH_FILE -d $DEPTH -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -o $PERMUTATION_FILE -v -j $PERMUTATION_NUM_THREADS 2>> $LOG_FILE
 
     # Run the index operation
     $FMD_DIR/fmd index -i $GRAPH_FILE -p $PERMUTATION_FILE -o $INDEX_FILE -v 2>> $LOG_FILE
 
     # Benchmark the index with the query set
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 
 done
