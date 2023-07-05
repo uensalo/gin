@@ -9,6 +9,7 @@ LOG_DIR=../log/pipeline
 QUERY_DIR=../res/query/pipeline
 INDEX_OUTPUT_DIR=../res/index/pipeline
 PERMUTATION_DIR=../res/permutation/pipeline
+COMMON_INDEX_DIR=../res/index/common
 
 mkdir -p $LOG_DIR
 mkdir -p $INDEX_OUTPUT_DIR
@@ -21,6 +22,7 @@ NO_QUERIES=1048576
 SEED=420
 TEMPERATURE=1e2
 COOLING=0.99
+BATCH_SIZE=4096
 
 # Get the input file name, time, depth and number of threads
 INPUT_FILE=$1
@@ -31,23 +33,26 @@ NUM_THREADS=$4
 # Get the base name of the input file
 BASENAME=$(basename $INPUT_FILE .fmdg)
 
-# Set the output file names
-PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_permutation.fmdp"
-INDEX_FILE="$INDEX_OUTPUT_DIR/${BASENAME}_index.fmdi"
 LOG_FILE="$LOG_DIR/${BASENAME}_log.txt"
 QUERY_FILE="$QUERY_DIR/${BASENAME}_query.fmdq"
 
 # Generate the queries
 python3 $QUERY_SCRIPT $INPUT_FILE $QUERY_LEN $NO_QUERIES "$QUERY_DIR/_" $SEED > $QUERY_FILE
 
-# Run the permutation operation
-echo "Running permutation" | tee -a $LOG_FILE
-$FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -v -j $NUM_THREADS 2>> $LOG_FILE
+# Check if a common index file already exists, otherwise create one
+COMMON_INDEX_FILE="$COMMON_INDEX_DIR/${BASENAME}.${TIME}.fmdi"
+if [[ ! -f $COMMON_INDEX_FILE ]]; then
+    # No common index file exists, need to create one
+    PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_permutation.fmdp"
+    # Run the permutation operation
+    $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -j $NUM_THREADS
+    # Run the index operation and save the index file to the common directory
+    $FMD_DIR/fmd index -i $INPUT_FILE -p $PERMUTATION_FILE -o $COMMON_INDEX_FILE
+fi
 
-# Run the index operation
-echo "Running index" | tee -a $LOG_FILE
-$FMD_DIR/fmd index -i $INPUT_FILE -p $PERMUTATION_FILE -o $INDEX_FILE -v 2>> $LOG_FILE
+# Use the common index file for all the query benchmarks
+INDEX_FILE=$COMMON_INDEX_FILE
 
 # Benchmark the index with the query set
 echo "Running query benchmark" | tee -a $LOG_FILE
-$FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -v 2>> $LOG_FILE
+$FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE

@@ -1,4 +1,5 @@
 #!/bin/bash
+rm -rf ../res/index/common
 ./clean_query_speed_vs_graph_density.sh
 ./clean_query_speed_vs_num_threads.sh
 ./clean_query_speed_vs_permutation_depth.sh
