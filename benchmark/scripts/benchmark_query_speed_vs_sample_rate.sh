@@ -13,10 +13,12 @@ mkdir $LOG_DIR
 mkdir $INDEX_OUTPUT_DIR
 mkdir $QUERY_DIR
 
-QUERY_LEN=25
-NO_QUERIES=1000
+QUERY_LEN=10
+NO_QUERIES=65536
 SEED=420
-NUM_THREADS=4
+NUM_THREADS=16
+BATCH_SIZE=4096
+INDEX_CONSTRUCTION_PARALLELISM=4
 
 # Get the input file name and the sample rates
 INPUT_FILE=$1
@@ -30,6 +32,9 @@ BASENAME=$(basename $INPUT_FILE .fmdg)
 QUERY_FILE="$QUERY_DIR/${BASENAME}_query_speed_vs_sample_rate.fmdq"
 python3 $QUERY_SCRIPT $INPUT_FILE $QUERY_LEN $NO_QUERIES "$QUERY_DIR/_" $SEED > $QUERY_FILE
 
+# Keep track of all background PIDs
+PIDS=()
+
 # Loop over each sample rate and perform the benchmark
 for SAMPLE_RATE in "${SAMPLE_RATES[@]}"
 do
@@ -39,7 +44,32 @@ do
     INDEX_FILE="$INDEX_OUTPUT_DIR/${BASENAME}_index_${SAMPLE_RATE}.fmdi"
     LOG_FILE="$LOG_DIR/${BASENAME}_log,sample_rate_${SAMPLE_RATE}.txt"
     touch $LOG_FILE
-    # Run the index and query operations, redirecting stderr to the log file
-    $FMD_DIR/fmd index -i $INPUT_FILE -s $SAMPLE_RATE -r $SAMPLE_RATE -o $INDEX_FILE -v 2>> $LOG_FILE
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -v 2>> $LOG_FILE
+
+    # Run the index operation in background, redirecting stderr to the log file
+    $FMD_DIR/fmd index -i $INPUT_FILE -s $SAMPLE_RATE -r $SAMPLE_RATE -o $INDEX_FILE -v 2>> $LOG_FILE &
+
+    # Store the background job PID
+    PIDS+=("$!")
+
+    # If we have reached our limit for concurrent jobs, wait for them to finish
+    if (( ${#PIDS[@]} % INDEX_CONSTRUCTION_PARALLELISM == 0 )); then
+        wait "${PIDS[@]}"
+        PIDS=()
+    fi
+done
+
+# Wait for any remaining background jobs to finish
+wait "${PIDS[@]}"
+
+# Now perform the queries one by one
+for SAMPLE_RATE in "${SAMPLE_RATES[@]}"
+do
+    echo "Running queries for sample rate $SAMPLE_RATE"
+
+    # Set the output file names based on the sample rate
+    INDEX_FILE="$INDEX_OUTPUT_DIR/${BASENAME}_index_${SAMPLE_RATE}.fmdi"
+    LOG_FILE="$LOG_DIR/${BASENAME}_log,sample_rate_${SAMPLE_RATE}.txt"
+
+    # Run the query operation, redirecting stderr to the log file
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 done

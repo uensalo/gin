@@ -15,13 +15,14 @@ mkdir -p $INDEX_OUTPUT_DIR
 mkdir -p $QUERY_DIR
 mkdir -p $PERMUTATION_DIR
 
-QUERY_LEN=25
-NO_QUERIES=1000
+QUERY_LEN=10
+NO_QUERIES=65536
 SEED=420
-NUM_THREADS=4
+NUM_THREADS=16
 TEMPERATURE=1e2
 COOLING=0.99
-BASE_TIME=30
+BASE_TIME=300
+BATCH_SIZE=4096
 
 # Get the input file name and the depth values
 INPUT_FILE=$1
@@ -51,10 +52,12 @@ do
     LOG_FILE="$LOG_DIR/${BASENAME}_log_depth_${DEPTH}.txt"
     touch $LOG_FILE
 
-    # Run the permutation and index operations, redirecting stderr to the log file
-    $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -v -j $NUM_THREADS 2>> $LOG_FILE
-    $FMD_DIR/fmd index -i $INPUT_FILE -p $PERMUTATION_FILE -o $INDEX_FILE -v 2>> $LOG_FILE
+    # Check if the index file already exists, if not run the permutation and index operations
+    if [[ ! -f $INDEX_FILE ]]; then
+        $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -v -j $NUM_THREADS 2>> $LOG_FILE
+        $FMD_DIR/fmd index -i $INPUT_FILE -p $PERMUTATION_FILE -o $INDEX_FILE -v 2>> $LOG_FILE
+    fi
 
     # Benchmark the index with the query set
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 done

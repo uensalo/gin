@@ -20,14 +20,15 @@ mkdir -p $GRAPH_DIR
 
 NO_VERTICES=$1
 VERTEX_LABEL_LEN=$2
-QUERY_LEN=25
-NO_QUERIES=1000
+QUERY_LEN=10
+NO_QUERIES=65536
 SEED=420
-NUM_THREADS=4
+NUM_THREADS=16
 DEPTH=6
 TEMPERATURE=1e2
 COOLING=0.99
-TIME=30
+TIME=300
+BATCH_SIZE=4096
 
 # Get the graph density values
 shift 2
@@ -62,6 +63,6 @@ do
     $FMD_DIR/fmd index -i $GRAPH_FILE -p $PERMUTATION_FILE -o $INDEX_FILE -v 2>> $LOG_FILE
 
     # Benchmark the index with the query set
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 
 done
