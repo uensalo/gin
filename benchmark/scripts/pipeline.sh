@@ -10,6 +10,7 @@ QUERY_DIR=../res/query/pipeline
 INDEX_OUTPUT_DIR=../res/index/pipeline
 PERMUTATION_DIR=../res/permutation/pipeline
 COMMON_INDEX_DIR=../res/index/common
+COMMON_PERMUTATION_DIR=../res/permutation/common
 
 mkdir -p $LOG_DIR
 mkdir -p $INDEX_OUTPUT_DIR
@@ -40,13 +41,23 @@ QUERY_FILE="$QUERY_DIR/${BASENAME}_query.fmdq"
 # Generate the queries
 python3 $QUERY_SCRIPT $INPUT_FILE $QUERY_LEN $NO_QUERIES "$QUERY_DIR/_" $SEED > $QUERY_FILE
 
+# Check if a common permutation file already exists, otherwise create one
+COMMON_PERMUTATION_FILE="$COMMON_PERMUTATION_DIR/${BASENAME}_permutation.fmdp"
+if [[ ! -f $COMMON_PERMUTATION_FILE ]]; then
+    mkdir -p $COMMON_PERMUTATION_DIR
+    # No common permutation file exists, need to create one
+    # Run the permutation operation
+    $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $COMMON_PERMUTATION_FILE -j $PERMUTATION_NUM_THREADS
+fi
+
+# Use the common permutation file for all the indexing benchmarks
+PERMUTATION_FILE=$COMMON_PERMUTATION_FILE
+
 # Check if a common index file already exists, otherwise create one
 COMMON_INDEX_FILE="$COMMON_INDEX_DIR/${BASENAME}.${TIME}.fmdi"
 if [[ ! -f $COMMON_INDEX_FILE ]]; then
+    mkdir -p $COMMON_INDEX_DIR
     # No common index file exists, need to create one
-    PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_permutation.fmdp"
-    # Run the permutation operation
-    $FMD_DIR/fmd permutation -i $INPUT_FILE -t $TIME -u $TIME -e $TEMPERATURE -c $COOLING -d $DEPTH -o $PERMUTATION_FILE -j $PERMUTATION_NUM_THREADS
     # Run the index operation and save the index file to the common directory
     $FMD_DIR/fmd index -i $INPUT_FILE -p $PERMUTATION_FILE -o $COMMON_INDEX_FILE
 fi

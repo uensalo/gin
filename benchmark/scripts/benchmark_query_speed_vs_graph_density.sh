@@ -28,7 +28,7 @@ DEPTH=6
 TEMPERATURE=1e2
 COOLING=0.99
 TIME=300
-BATCH_SIZE=4096
+BATCH_SIZE=256
 PERMUTATION_NUM_THREADS=128
 
 # Get the graph density values
@@ -38,7 +38,7 @@ GRAPH_DENSITIES=("$@")
 # Loop over each graph density and perform the benchmark
 for DENSITY in "${GRAPH_DENSITIES[@]}"
 do
-    echo "Running benchmark for graph density $DENSITY"
+    echo "[fmd:benchmark] Running benchmark for graph density $DENSITY:"
 
     # Calculate the number of edges
     NO_EDGES=$(printf "%.0f" $(echo "$NO_VERTICES * $DENSITY" | bc))

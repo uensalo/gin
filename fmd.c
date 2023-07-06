@@ -383,6 +383,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     int_t no_matching_forks = 0;
     int_t no_missing_forks = 0;
+    int_t no_matching_count = 0; // to compare with DFS
 
     static struct option options[] = {
             {"reference",  required_argument, NULL, 'r'},
@@ -595,10 +596,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         no_missing_forks += tasks[j].partial_matches->size;
                         for (int_t k = 0; k < tasks[j].paths_or_locs->size; k++) {
                             fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].paths_or_locs->data[k];
+                            no_matching_count += root->sa_hi - root->sa_lo;
                             fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
                                     root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                             root = (fmd_fork_node_t *) root->parent;
                             while (root) {
+                                no_matching_count += root->sa_hi - root->sa_lo;
                                 fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
                                         root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                                 root = (fmd_fork_node_t *) root->parent;
@@ -693,6 +696,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
         if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {
             fprintf(stderr, "[fmd:query] Total forks for matching queries: %lld\n",no_matching_forks);
+            fprintf(stderr, "[fmd:query] Total count for matching queries: %lld\n",no_matching_count);
             fprintf(stderr, "[fmd:query] Total forks for partially matching queries: %lld\n",no_missing_forks);
             fprintf(stderr, "[fmd:query] Average forks per matching: %.3lf\n",(double)no_matching_forks / (double)queries_processed);
             fprintf(stderr, "[fmd:query] Average forks per query: %.3lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);

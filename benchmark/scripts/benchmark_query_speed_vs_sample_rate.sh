@@ -17,7 +17,7 @@ QUERY_LEN=10
 NO_QUERIES=65536
 SEED=420
 QUERY_NUM_THREADS=16
-BATCH_SIZE=4096
+BATCH_SIZE=256
 INDEX_CONSTRUCTION_PARALLELISM=4
 
 # Get the input file name and the sample rates
@@ -38,11 +38,11 @@ PIDS=()
 # Loop over each sample rate and perform the benchmark
 for SAMPLE_RATE in "${SAMPLE_RATES[@]}"
 do
-    echo "Running benchmark for sample rate $SAMPLE_RATE"
+    echo "[fmd:benchmark] Running benchmark for sample rate $SAMPLE_RATE:"
 
     # Set the output file names based on the sample rate
     INDEX_FILE="$INDEX_OUTPUT_DIR/${BASENAME}_index_${SAMPLE_RATE}.fmdi"
-    LOG_FILE="$LOG_DIR/${BASENAME}_log,sample_rate_${SAMPLE_RATE}.txt"
+    LOG_FILE="$LOG_DIR/${BASENAME}_log_sample_rate_${SAMPLE_RATE}.txt"
     touch $LOG_FILE
 
     # Run the index operation in background, redirecting stderr to the log file
@@ -64,11 +64,11 @@ wait "${PIDS[@]}"
 # Now perform the queries one by one
 for SAMPLE_RATE in "${SAMPLE_RATES[@]}"
 do
-    echo "Running queries for sample rate $SAMPLE_RATE"
+    echo "[fmd:benchmark] Running queries for sample rate $SAMPLE_RATE:"
 
     # Set the output file names based on the sample rate
     INDEX_FILE="$INDEX_OUTPUT_DIR/${BASENAME}_index_${SAMPLE_RATE}.fmdi"
-    LOG_FILE="$LOG_DIR/${BASENAME}_log,sample_rate_${SAMPLE_RATE}.txt"
+    LOG_FILE="$LOG_DIR/${BASENAME}_log_sample_rate_${SAMPLE_RATE}.txt"
 
     # Run the query operation, redirecting stderr to the log file
     $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE

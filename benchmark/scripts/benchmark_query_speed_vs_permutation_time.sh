@@ -22,7 +22,7 @@ QUERY_NUM_THREADS=16
 DEPTH=6
 TEMPERATURE=1e2
 COOLING=0.99
-BATCH_SIZE=4096
+BATCH_SIZE=256
 PERMUTATION_NUM_THREADS=128
 
 # Get the input file name and the time parameters
@@ -40,10 +40,10 @@ python3 $QUERY_SCRIPT $INPUT_FILE $QUERY_LEN $NO_QUERIES "$QUERY_DIR/_" $SEED > 
 # Loop over each time parameter and perform the benchmark
 for TIME in "${TIME_PARAMETERS[@]}"
 do
-    echo "Running benchmark for time parameter $TIME"
+    echo "[fmd:benchmark] Running benchmark for time parameter $TIME:"
 
     # Set the output file names based on the time parameter
-    PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_permutation_time_${TIME}.fmdp"
+    PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_permutation_time_${TIME}_depth_${DEPTH}_threads_${PERMUTATION_NUM_THREADS}.fmdp"
     INDEX_FILE="$INDEX_OUTPUT_DIR/${BASENAME}_index_time_${TIME}.fmdi"
     LOG_FILE="$LOG_DIR/${BASENAME}_log_time_${TIME}.txt"
     touch $LOG_FILE
@@ -56,4 +56,10 @@ do
 
     # Benchmark the index with the query set
     $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+
+    # Log permutation parameters
+    echo "[fmd:benchmark] Permutation Parameters:" >> $LOG_FILE
+    echo "[fmd:benchmark] Permutation Time: $TIME" >> $LOG_FILE
+    echo "[fmd:benchmark] Permutation Depth: $DEPTH" >> $LOG_FILE
+    echo "[fmd:benchmark] Permutation No Threads: $PERMUTATION_NUM_THREADS" >> $LOG_FILE
 done

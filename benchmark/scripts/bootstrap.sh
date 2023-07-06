@@ -7,3 +7,5 @@ mkdir ../res/index/common
 mkdir ../res/query
 mkdir ../res/graph
 mkdir ../res/permutation
+mkdir ../res/permutation/common
+./build_benchmark.sh
