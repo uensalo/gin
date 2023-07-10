@@ -601,7 +601,6 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                     root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                             root = (fmd_fork_node_t *) root->parent;
                             while (root) {
-                                no_matching_count += root->sa_hi - root->sa_lo;
                                 fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
                                         root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                                 root = (fmd_fork_node_t *) root->parent;
@@ -663,6 +662,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         fmd_fork_node_t *root = (fmd_fork_node_t*)paths->data[i];
                         fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                         root = (fmd_fork_node_t*)root->parent;
+                        no_matching_count += root->sa_hi - root->sa_lo;
                         while(root) {
                             fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                             root = (fmd_fork_node_t*)root->parent;
