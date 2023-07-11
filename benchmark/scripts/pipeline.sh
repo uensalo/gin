@@ -23,14 +23,15 @@ NO_QUERIES=1048576
 SEED=420
 TEMPERATURE=1e2
 COOLING=0.99
-BATCH_SIZE=4096
+BATCH_SIZE=256
 
 # Get the input file name, time, depth and number of threads
 INPUT_FILE=$1
 TIME=$2
 DEPTH=$3
 QUERY_NUM_THREADS=$4
-PERMUTATION_NUM_THREADS=$4
+PERMUTATION_NUM_THREADS=$5
+MATCHES_REPORTED=$6
 
 # Get the base name of the input file
 BASENAME=$(basename $INPUT_FILE .fmdg)
@@ -67,4 +68,4 @@ INDEX_FILE=$COMMON_INDEX_FILE
 
 # Benchmark the index with the query set
 echo "Running query benchmark" | tee -a $LOG_FILE
-$FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+$FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v -m $MATCHES_REPORTED 2>> $LOG_FILE
