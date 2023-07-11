@@ -1110,7 +1110,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
             fprintf(stderr, "\t--fastq       or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
-            fprintf(stderr, "\t--max-matches or -m: Optimal parameter. Number of maximum matches to be returned for a query. Setting this to -1 returns all matches. Default: -1\n";)
+            fprintf(stderr, "\t--max-matches or -m: Optimal parameter.  Number of maximum matches to be returned for a query. Setting this to -1 returns all matches. Default: -1\n");
             fprintf(stderr, "\t--batch-size  or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
             fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
             fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
