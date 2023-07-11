@@ -385,6 +385,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     int_t no_matching_forks = 0;
     int_t no_missing_forks = 0;
     int_t no_matching_count = 0; // to compare with DFS
+    int_t no_multiple_vertex_span_forks = 0; // keep track of vertices spanning multiple vertices
+    int_t no_multiple_vertex_span_matches = 0; // same but keeps the count
 
     static struct option options[] = {
             {"reference",  required_argument, NULL, 'r'},
@@ -603,6 +605,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         for (int_t k = 0; k < tasks[j].paths_or_locs->size; k++) {
                             fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].paths_or_locs->data[k];
                             no_matching_count += root->sa_hi - root->sa_lo;
+                            no_multiple_vertex_span_forks += (root->vertex_lo > -1);
+                            no_multiple_vertex_span_matches += (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
                             fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
                                     root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                             root = (fmd_fork_node_t *) root->parent;
@@ -669,6 +673,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                         root = (fmd_fork_node_t*)root->parent;
                         no_matching_count += root->sa_hi - root->sa_lo;
+                        no_multiple_vertex_span_forks += (root->vertex_lo > -1);
+                        no_multiple_vertex_span_matches += (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
                         while(root) {
                             fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                             root = (fmd_fork_node_t*)root->parent;
@@ -697,18 +703,26 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     if(verbose) {
         fprintf(stderr, "[fmd:query] Total querying time in seconds: %lf\n",query_time);
-        fprintf(stderr, "[fmd:query] Queries processed: %lld\n",queries_processed);
+        fprintf(stderr, "[fmd:query] Numer of queries processed: %lld\n",queries_processed);
         if(queries_processed)
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
         if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {
-            fprintf(stderr, "[fmd:query] Total forks for matching queries: %lld\n",no_matching_forks);
-            fprintf(stderr, "[fmd:query] Total count for matching queries: %lld\n",no_matching_count);
-            fprintf(stderr, "[fmd:query] Total forks for partially matching queries: %lld\n",no_missing_forks);
-            fprintf(stderr, "[fmd:query] Average forks per matching: %.3lf\n",(double)no_matching_forks / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Average forks per query: %.3lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Time per fork: %.6lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks));
-            fprintf(stderr, "[fmd:query] Time per fork per thread: %.6lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks) * (double)num_threads);
-
+            fprintf(stderr, "[fmd:query] Forks:\n");
+            fprintf(stderr, "[fmd:query] Number of matching forks: %lld\n",no_matching_forks);
+            fprintf(stderr, "[fmd:query] Number of partial forks: %lld\n",no_missing_forks);
+            fprintf(stderr, "[fmd:query] Number of forks spanning multiple vertices: %lld\n", no_multiple_vertex_span_forks);
+            fprintf(stderr, "[fmd:query] Matches:\n");
+            fprintf(stderr, "[fmd:query] Number of matches: %lld\n",no_matching_count);
+            fprintf(stderr, "[fmd:query] Number of matches spanning multiple vertices: %lld\n", no_multiple_vertex_span_matches);
+            fprintf(stderr, "[fmd:query] Aggregate statistics:\n");
+            fprintf(stderr, "[fmd:query] Average matches per matching fork: %.6lf\n",(double)no_matching_count / (double)no_matching_forks);
+            fprintf(stderr, "[fmd:query] Average matches per fork: %.6lf\n",(double)no_matching_count / ((double)no_matching_forks + (double)no_missing_forks));
+            fprintf(stderr, "[fmd:query] Average forks per query: %.6lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Average matching forks per query: %.6lf\n",((double)no_matching_forks) / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Aggregate timings:\n");
+            fprintf(stderr, "[fmd:query] Average time per fork: %.6lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks));
+            fprintf(stderr, "[fmd:query] Average time per matching fork: %.6lf\n", (double)query_time / ((double)no_matching_forks));
+            fprintf(stderr, "[fmd:query] Average time per match: %.8lf\n", (double)query_time / ((double)no_matching_count));
         }
     }
 
