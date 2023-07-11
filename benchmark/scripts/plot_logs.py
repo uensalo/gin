@@ -170,15 +170,14 @@ def plot_data(x, y, xlabel='x', ylabel='y', title='x vs. y', filename=None, func
 ###############################################################################
 #   Query Speed vs Query Length Plots
 ###############################################################################
-
-#######################################
-#   Total forks vs Query Length
-#######################################
 query_speed_vs_query_length_data = parse_directory('../log/query_speed_vs_query_length')
 query_speed_vs_query_length_data_flat = flatten_and_sort(query_speed_vs_query_length_data, 'QueryLength')
 for item in query_speed_vs_query_length_data_flat:
     print(item)
 
+#######################################
+#   Total forks vs Query Length
+#######################################
 p1x = np.array([item['QueryLength'] for item in query_speed_vs_query_length_data_flat])
 p1y = np.array([item['TotalForksMatching']+item['TotalForksPartialMatching'] for item in query_speed_vs_query_length_data_flat])
 def curve1(x,a,b,c,d):
@@ -198,7 +197,6 @@ plot_data(p2x,p2y,'Query length', 'Matches returned per second')
 p2x = np.array([item['QueryLength'] for item in query_speed_vs_query_length_data_flat])
 p2y = np.array([(item['TotalForksMatching']+item['TotalForksPartialMatching'])/item['TotalQueryTime'] for item in query_speed_vs_query_length_data_flat])
 plot_data(p2x,p2y,'Query length', 'Forks explored per second')
-
 
 #######################################
 #   Query speed vs query length

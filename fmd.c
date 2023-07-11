@@ -371,6 +371,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     int_t num_threads = 1;
     int_t batch_size = 8;
+    int_t max_matches = -1;
     bool parse_fastq = false;
     bool verbose = false;
 
@@ -390,13 +391,14 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             {"input",      required_argument, NULL, 'i'},
             {"fastq",      no_argument,       NULL, 'f'},
             {"output",     required_argument, NULL, 'o'},
-            {"batch_size", required_argument, NULL, 'b'},
+            {"max-matches",required_argument, NULL, 'm'},
+            {"batch-size", required_argument, NULL, 'b'},
             {"threads",    required_argument, NULL, 'j'},
             {"verbose",    no_argument,       NULL, 'v'},
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "r:i:fo:b:j:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "r:i:fo:m:b:j:v", options, &optindex)) != -1) {
         switch(c) {
             case 'r': {
                 fref_path = optarg;
@@ -418,6 +420,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             case 'o': {
                 foutput_path = optarg;
+                break;
+            }
+            case 'm': {
+                max_matches = (int_t)strtoull(optarg, NULL, 10);
                 break;
             }
             case 'b': {
@@ -549,9 +555,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                     break;
                 }
                 case fmd_query_mode_enumerate: {
-                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads)
+                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, true, &tasks[k].paths_or_locs,
+                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, max_matches, &tasks[k].paths_or_locs,
                                                        &tasks[k].partial_matches, num_threads);
                     }
                     break;
@@ -655,7 +661,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 }
                 case fmd_query_mode_enumerate: {
                     fmd_vector_t *paths, *graveyard;
-                    fmd_fmd_query_locate_paths(fmd, query, &paths, &graveyard);
+                    fmd_fmd_query_locate_paths(fmd, query, max_matches, &paths, &graveyard);
                     no_matching_forks += paths->size;
                     no_missing_forks += graveyard->size;
                     for(int_t i = 0; i < paths->size; i++) {
@@ -1100,14 +1106,15 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\tlocate:    Locates the vertex IDs and positions into vertices of the string matches. Results are returned as (vertex_id, index) tuples per line.\n");
             fprintf(stderr, "\tenumerate: Enumerates the paths to which vertices match. Results are returned as (vertex_id, index) (vertex_id) ... (vertex_id) (vertex_id index) per match per line.\n");
             fprintf(stderr, "[fmd:help] Parameters:\n");
-            fprintf(stderr, "\t--reference  or -r: Required parameter. Path to the index file. See fmd index for more help.\n");
-            fprintf(stderr, "\t--input      or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
-            fprintf(stderr, "\t--fastq      or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
-            fprintf(stderr, "\t--output     or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
-            fprintf(stderr, "\t--batch-size or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
-            fprintf(stderr, "\t--threads    or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
-            fprintf(stderr, "\t--verbose    or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
-            fprintf(stderr, "[fmd:help] Example invocation: fmd query enumerate -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -v\n");
+            fprintf(stderr, "\t--reference   or -r: Required parameter. Path to the index file. See fmd index for more help.\n");
+            fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
+            fprintf(stderr, "\t--fastq       or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
+            fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
+            fprintf(stderr, "\t--max-matches or -m: Optimal parameter. Number of maximum matches to be returned for a query. Setting this to -1 returns all matches. Default: -1\n";)
+            fprintf(stderr, "\t--batch-size  or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
+            fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
+            fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd query enumerate -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -m 10 -v\n");
             return_code = 0;
             break;
         }
