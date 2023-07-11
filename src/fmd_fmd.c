@@ -511,7 +511,7 @@ void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_
             if(query->lo >= query->hi) {
                 leaf_node->is_dead = true;
                 fmd_vector_append(graveyard, leaf_node);
-            } else if (max_matches != -1 && leaves->size < max_matches) {
+            } else if (max_matches == -1 || leaves->size < max_matches) {
                 fmd_vector_append(leaves, leaf_node);
             }
         } else {
@@ -618,7 +618,7 @@ void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_
         } else {
             #pragma omp critical(exact_match)
             {
-                if(max_matches != -1 && exact_matches->size < max_matches) {
+                if(max_matches == -1 || exact_matches->size < max_matches) {
                     fmd_vector_append(exact_matches, leaf_node);
                 } else {
                     fmd_vector_append(partial_matches, leaf_node);
