@@ -158,13 +158,13 @@ def plot_data(x, y, xlabel='x', ylabel='y', title='x vs. y', filename=None, func
     plt.ylabel('Y')
     plt.title('Scatter Plot')
     plt.grid(True)
-    if(filename is not None):
-        plt.savefig(filename)
     plt.xlabel(xlabel)
     plt.ylabel(ylabel)
     plt.title(title)
     plt.legend()
-    plt.show()
+    #plt.show()
+    if(filename is not None):
+        plt.savefig(filename)
 
 
 ###############################################################################
