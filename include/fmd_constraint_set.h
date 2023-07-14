@@ -9,7 +9,7 @@ typedef struct fmd_constraint_set_ {
     fmd_vector_t *vertices;
 } fmd_constraint_set_t;
 
-void fmd_constraint_set_enumerate(fmd_vector_t **constraint_sets, fmd_graph_t *graph, int_t depth);
+void fmd_constraint_set_enumerate(fmd_vector_t **constraint_sets, fmd_graph_t *graph, int_t depth, bool multiple_vertex_span);
 void fmd_constraint_set_free(fmd_constraint_set_t *cs);
 uint_t fmd_constraint_set_hash(fmd_constraint_set_t *c1);
 int fmd_constraint_set_comp(fmd_constraint_set_t *c1, fmd_constraint_set_t *c2);
@@ -33,7 +33,7 @@ typedef struct fmd_graph_ecs_ {
     vid_t head_vid;
     vid_t end_vid;
 } fmd_graph_ecs_t;
-fmd_table_t *fmd_constraint_set_extract(fmd_graph_t *graph, int_t max_depth);
+fmd_table_t *fmd_constraint_set_extract(fmd_graph_t *graph, int_t max_depth, bool multiple_vertex_span);
 void fmd_constraint_set_extract_helper(fmd_vector_t *paths,
                                               fmd_string_t *prefix,
                                               fmd_table_t *constraint_sets,
@@ -41,7 +41,8 @@ void fmd_constraint_set_extract_helper(fmd_vector_t *paths,
                                               fmd_table_t *char2idx,
                                               fmd_table_t *idx2char,
                                               fmd_graph_t *graph,
-                                              int_t max_depth);
+                                              int_t max_depth,
+                                              bool multiple_vertex_span);
 
 void fmd_constraint_set_flatten(void *key, void *value, void *p);
 

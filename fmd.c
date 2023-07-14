@@ -739,6 +739,7 @@ int fmd_main_permutation(int argc, char **argv) {
     FILE *fperm = NULL;
 
     bool parse_rgfa = false;
+    bool multiple_vertex_span = false;
 
     int_t depth = 4;
     int_t time = 15;
@@ -758,6 +759,7 @@ int fmd_main_permutation(int argc, char **argv) {
             {"rgfa",        no_argument,       NULL, 'g'},
             {"output",      required_argument, NULL, 'o'},
             {"permutation", required_argument, NULL, 'p'},
+            {"span-paths",  no_argument,       NULL, 's'},
             {"depth",       required_argument, NULL, 'd'},
             {"temperature", required_argument, NULL, 'e'},
             {"cooling",     required_argument, NULL, 'c'},
@@ -768,7 +770,7 @@ int fmd_main_permutation(int argc, char **argv) {
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "i:go:p:d:e:c:t:u:j:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "i:go:p:sd:e:c:t:u:j:v", options, &optindex)) != -1) {
         switch(c) {
             case 'i': {
                 finput_path = optarg;
@@ -796,6 +798,10 @@ int fmd_main_permutation(int argc, char **argv) {
                     return_code = -1;
                     return return_code;
                 }
+                break;
+            }
+            case 's' : {
+                multiple_vertex_span = true;
                 break;
             }
             case 'd': {
@@ -901,8 +907,10 @@ int fmd_main_permutation(int argc, char **argv) {
      **************************************************************************/
     if(verbose) {
         fprintf(stderr, "[fmd:permutation] Extracting constraint sets for each occurring prefix.\n");
+        char *spanstr = multiple_vertex_span ? "True" : "False";
+        fprintf(stderr, "[fmd:permutation] Constraint sets can span multiple vertices: %s\n", spanstr);
     }
-    fmd_constraint_set_enumerate(&constraints, graph, depth);
+    fmd_constraint_set_enumerate(&constraints, graph, depth, multiple_vertex_span);
     if(!constraints) {
         fprintf(stderr, "[fmd:permutation] Something went wrong during constraint set extraction. Quitting.\n");
         fmd_graph_free(graph);
@@ -1141,6 +1149,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--rgfa        or -g: Optional flag. Indicates that the input file is an rGFA file. Default: false\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, one integer as vid per line. Default: stdout\n");
             fprintf(stderr, "\t--permutation or -p: Optional parameter. Path to initial permutation file to start optimizing from. Default: Identity permutation\n");
+            fprintf(stderr, "\t--path-span   or -s: Optional flag. Allows constraint sets to span multiple vertices. Default: False\n");
             fprintf(stderr, "\t--depth       or -d: Optional parameter. Maximum string length to be considered in the construction of constraint sets. Default: 4\n");
             fprintf(stderr, "\t--temperature or -e: Optional parameter. Sets the initial temperature of the annealing process. Default: 1e6\n");
             fprintf(stderr, "\t--cooling     or -c: Optional parameter. Sets the cooling factor of the annealing process. Default: 0.95\n");

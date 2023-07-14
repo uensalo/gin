@@ -1,7 +1,7 @@
 #include "fmd_constraint_set.h"
 
-void fmd_constraint_set_enumerate(fmd_vector_t **constraint_sets, fmd_graph_t *graph, int_t depth) {
-    fmd_table_t *c_table = fmd_constraint_set_extract(graph, depth);
+void fmd_constraint_set_enumerate(fmd_vector_t **constraint_sets, fmd_graph_t *graph, int_t depth, bool multiple_vertex_span) {
+    fmd_table_t *c_table = fmd_constraint_set_extract(graph, depth, multiple_vertex_span);
     fmd_vector_t *constraints = fmd_constraint_set_to_vector(c_table);
     // soft-free the table
     c_table->key_f = &prm_fstruct;
@@ -40,7 +40,7 @@ void fmd_constraint_set_flatten_alphabet(void *key, void *value, void *params) {
     fmd_vector_append(p->alphabet, key);
 }
 
-fmd_table_t *fmd_constraint_set_extract(fmd_graph_t *graph, int_t max_depth) {
+fmd_table_t *fmd_constraint_set_extract(fmd_graph_t *graph, int_t max_depth, bool multiple_vertex_span) {
     // first, construct an alphabet and encoding translation tables
     fmd_vector_t *alphabet;
     fmd_tree_t *alphabet_tree;
@@ -82,7 +82,7 @@ fmd_table_t *fmd_constraint_set_extract(fmd_graph_t *graph, int_t max_depth) {
         path->end_vid = (vid_t)i;
         fmd_vector_append(paths, path);
     }
-    fmd_constraint_set_extract_helper(paths, initial_prefix, constraint_sets, alphabet, char2idx, idx2char, graph, max_depth);
+    fmd_constraint_set_extract_helper(paths, initial_prefix, constraint_sets, alphabet, char2idx, idx2char, graph, max_depth, multiple_vertex_span);
 
     // cleanup and return
     fmd_table_free(char2idx);
@@ -93,13 +93,20 @@ fmd_table_t *fmd_constraint_set_extract(fmd_graph_t *graph, int_t max_depth) {
 }
 
 void fmd_constraint_set_extract_helper(fmd_vector_t *paths,
-                                                       fmd_string_t *prefix,
-                                                       fmd_table_t *constraint_sets,
-                                                       fmd_vector_t *alphabet,
-                                                       fmd_table_t *char2idx,
-                                                       fmd_table_t *idx2char,
-                                                       fmd_graph_t *graph,
-                                                       int_t max_depth) {
+                                       fmd_string_t *prefix,
+                                       fmd_table_t *constraint_sets,
+                                       fmd_vector_t *alphabet,
+                                       fmd_table_t *char2idx,
+                                       fmd_table_t *idx2char,
+                                       fmd_graph_t *graph,
+                                       int_t max_depth,
+                                       bool multiple_vertex_span) {
+    if(!paths->size) {
+        // empty bucket - free the relevant stuff and return without doing anything
+        fmd_vector_free(paths);
+        fmd_string_free(prefix);
+        return;
+    }
     // sort paths into buckets
     fmd_vector_t **buckets = calloc(alphabet->size, sizeof(fmd_vector_t*));
     // init buckets
@@ -112,7 +119,7 @@ void fmd_constraint_set_extract_helper(fmd_vector_t *paths,
         void *last_vertex;
         fmd_table_lookup(graph->vertices, (void*)path->end_vid, &last_vertex);
         fmd_string_t *label = ((fmd_vertex_t*)last_vertex)->label;
-        if(path->pos >= label->size) {
+        if(multiple_vertex_span && path->pos >= label->size) {
             // path exhausted! Consider all outgoing neighbors and generate new paths from this path...
             fmd_vector_t *outgoing_neighbors;
             fmd_table_lookup(graph->outgoing_neighbors, (void*)path->end_vid, &outgoing_neighbors);
@@ -172,7 +179,7 @@ void fmd_constraint_set_extract_helper(fmd_vector_t *paths,
         // call to children recursively
         if(bucket_prefix->size < max_depth) {
             fmd_constraint_set_extract_helper(buckets[i], bucket_prefix, constraint_sets, alphabet, char2idx,
-                                              idx2char, graph, max_depth);
+                                              idx2char, graph, max_depth, multiple_vertex_span);
         }
     }
     // cleanup buckets and paths
