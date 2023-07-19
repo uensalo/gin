@@ -29,13 +29,14 @@ typedef enum fmd_mode_ {
     fmd_mode_no_modes=5
 } fmd_mode_t;
 
-char* fmd_query_mode_names[] = {"count", "locate", "enumerate"};
+char* fmd_query_mode_names[] = {"count", "locate", "enumerate", "breadth"};
 
 typedef enum fmd_query_mode_ {
     fmd_query_mode_count=0,
     fmd_query_mode_locate=1,
     fmd_query_mode_enumerate=2,
-    fmd_query_mode_no_modes=3,
+    fmd_query_mode_breadth=3,
+    fmd_query_mode_no_modes=4,
 } fmd_query_mode_t;
 
 char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query"};
@@ -559,8 +560,14 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 case fmd_query_mode_enumerate: {
                     #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, max_matches, &tasks[k].paths_or_locs,
-                                                       &tasks[k].partial_matches, num_threads);
+                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, max_matches, &tasks[k].paths_or_locs, &tasks[k].partial_matches, num_threads);
+                    }
+                    break;
+                }
+                case fmd_query_mode_breadth: {
+                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
+                    for(int_t k = 0; k < i; k++) {
+                        fmd_fmd_locate_paths_breadth_first(fmd, tasks[k].str, max_matches, &tasks[k].paths_or_locs, &tasks[k].partial_matches);
                     }
                     break;
                 }
@@ -597,7 +604,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                     }
                     break;
                 }
-                case fmd_query_mode_enumerate: {
+
+                case fmd_query_mode_enumerate:
+                case fmd_query_mode_breadth: {
                     for (int_t j = 0; j < i; j++) {
                         if (!tasks[j].str) continue;
                         no_matching_forks += tasks[j].paths_or_locs->size;

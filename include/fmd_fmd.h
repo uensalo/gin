@@ -34,9 +34,9 @@ typedef struct fmd_fork_node_{
     int_t pos;
     bool is_leaf;
     bool is_dead;
-    bool is_cadet; // used to be called is bastard
+    bool is_merged;
 } fmd_fork_node_t;
-fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_cadet);
+fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_merged);
 void fmd_fork_node_free(fmd_fork_node_t *node);
 fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node);
 uint_t fmd_fork_node_hash(fmd_fork_node_t *node);
@@ -82,6 +82,8 @@ void fmd_fmd_query_locate_paths_stats(fmd_fmd_t *fmd, fmd_string_t *string, fmd_
 #ifdef FMD_OMP
 void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
 void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, int_t max_matches, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
+void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
 #endif
 
 bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);

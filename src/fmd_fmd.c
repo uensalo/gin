@@ -1,7 +1,7 @@
 #include "fmd_fmd.h"
 #include "fmd_tree.h"
 
-fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_cadet) {
+fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_merged) {
     fmd_fork_node_t *fn = calloc(1, sizeof(fmd_fork_node_t));
     fn->parent = (struct fmd_fork_node_t*)parent;
     fn->vertex_lo = vlo;
@@ -9,7 +9,7 @@ fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vh
     fn->pos = pos;
     fn->is_leaf = is_leaf;
     fn->is_dead = is_dead;
-    fn->is_cadet = is_cadet;
+    fn->is_merged = false;
     return fn;
 }
 
@@ -46,8 +46,11 @@ uint_t fmd_fork_node_hash(fmd_fork_node_t *node) {
     return hash;
 }
 
-int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2) {
+int fmd_fork_node_comp_exact(fmd_fork_node_t *n1, fmd_fork_node_t *n2) {
     return memcmp(n1, n2, sizeof(fmd_fork_node_t));
+}
+int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2) {
+    return n1->vertex_lo < n2->vertex_lo ? -1 : (n1->vertex_lo > n2->vertex_lo);
 }
 
 fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern) {
@@ -632,6 +635,141 @@ void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_
         }
     }
     fmd_fmd_qr_free(query);
+}
+
+void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
+    // allocate a buffer to group by fork position
+    int_t V = fmd->permutation->size;
+
+    // data structures to return the matches
+    fmd_vector_t *matches;
+    fmd_vector_t *partial_matches;
+    fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+
+    // data structures to keep track of queries, forks, and matches
+    fmd_vector_t *query_records;
+    fmd_vector_init(&query_records, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+
+    // create the initial fork
+    int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
+    int_t init_hi = fmd->graph_fmi->no_chars;
+    fmd_fork_node_t *root_fork = fmd_fork_node_init(NULL,
+                                                    -1, -1,
+                                                    string->size-1,
+                                                    false, false, false);
+    fmd_fmd_qr_t *root_query = fmd_fmd_qr_init(root_fork, init_lo, init_hi, string->size - 1, string);
+    fmd_fmd_advance_query(fmd->graph_fmi, root_query); // match the first character before starting to fork
+
+    if(root_query->hi <= root_query->lo) {
+        *paths = matches;
+        fmd_vector_append(partial_matches, root_query->cur_fork);
+        *dead_ends = partial_matches;
+        fmd_fmd_qr_free(root_query);
+        fmd_vector_free(query_records);
+        return;
+    }
+
+    fmd_vector_append(query_records, root_query);
+    int_t global_pos = string->size-1;
+
+    while(global_pos > 0) {
+        /**********************************************************************
+        * Step 1 - Forking phase: Fork each query at its current position
+        **********************************************************************/
+        fmd_vector_t *forks;
+        fmd_vector_init(&forks, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
+        for(int_t i = 0; i < query_records->size; i++) {
+            fmd_fmd_qr_t *qr = query_records->data[i];
+            int_t c_0_lo, c_0_hi;
+            fmd_fmd_query_precedence_range(fmd->graph_fmi, qr, fmd->c_0, &c_0_lo, &c_0_hi);
+            fmd_vector_t *incoming_sa_intervals;
+            fmd_imt_query(fmd->r2r_tree, c_0_lo-1, c_0_hi-2, &incoming_sa_intervals);
+            for(int_t j = 0; j < incoming_sa_intervals->size; j++) {
+                fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
+                fmd_fork_node_t *fork_node = fmd_fork_node_init(qr->cur_fork, interval->lo, interval->hi+1, qr->pos, false, false, true);
+                fmd_vector_append(forks, fork_node);
+            }
+        }
+
+        /**********************************************************************
+        * Step 2 - Merge phase: merge overlapping ranges on the vertices
+        **********************************************************************/
+        fmd_vector_t *merged;
+        fmd_fmd_compact_forks(forks, &merged);
+
+        /**********************************************************************
+        * Step 3 - Advance Phase: advance each fork once
+        **********************************************************************/
+        fmd_vector_t *next_iter_queries;
+        fmd_vector_init(&next_iter_queries, query_records->size + forks->size, &prm_fstruct);
+        // advance and filter previous queries
+        for(int_t i = 0; i < query_records->size; i++) {
+            fmd_fmd_qr_t *qr = query_records->data[i];
+            fmd_fmd_advance_query(fmd->graph_fmi, qr);
+            if(qr->lo >= qr->hi) { // query died while advancing
+                qr->cur_fork->sa_lo = qr->lo;
+                qr->cur_fork->sa_hi = qr->hi;
+                qr->cur_fork->is_dead = true;
+                fmd_vector_append(partial_matches, qr->cur_fork);
+                fmd_fmd_qr_free(qr);
+            } else {
+                fmd_vector_append(next_iter_queries, qr);
+            }
+        }
+        // advance and filter next forks
+        for(int_t i = 0; i < merged->size; i++) {
+            fmd_fork_node_t *fork = merged->data[i];
+            fmd_fmd_qr_t *qr = fmd_fmd_qr_init(fork, V+1+fork->vertex_lo, V+2+fork->vertex_hi, fork->pos, string);
+            fmd_fmd_advance_query(fmd->graph_fmi, qr);
+            if(qr->lo >= qr->hi) { // query died while advancing
+                qr->cur_fork->sa_lo = qr->lo;
+                qr->cur_fork->sa_hi = qr->hi;
+                qr->cur_fork->is_dead = true;
+                fmd_vector_append(partial_matches, qr->cur_fork);
+                fmd_fmd_qr_free(qr);
+            } else {
+                fmd_vector_append(next_iter_queries, qr);
+            }
+        }
+        fmd_vector_free(query_records);
+        query_records = next_iter_queries;
+        --global_pos;
+    }
+    fmd_vector_init(&matches, query_records->size, &prm_fstruct);
+    matches->size = query_records->size;
+    for(int_t i = 0; i < query_records->size; i++) {
+        fmd_fmd_qr_t *qr = query_records->data[i];
+        qr->cur_fork->sa_lo = qr->lo;
+        qr->cur_fork->sa_hi = qr->hi;
+        matches->data[i] = qr->cur_fork;
+    }
+    *paths = matches;
+    *dead_ends = partial_matches;
+
+}
+
+void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks) {
+    fmd_vector_sort(forks);
+    fmd_vector_t *merged;
+    fmd_vector_init(&merged, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    if(forks->size) {
+        fmd_fork_node_t *cur_fork = fmd_fork_node_copy(forks->data[0]);
+        cur_fork->is_merged = true;
+        fmd_vector_append(merged, cur_fork);
+        fmd_fork_node_free(forks->data[0]);
+        for (int_t i = 1; i < forks->size; i++) {
+            fmd_fork_node_t *next_fork = forks->data[i];
+            if(cur_fork->vertex_hi >= next_fork->vertex_lo) {
+                cur_fork->vertex_hi = next_fork->vertex_hi > cur_fork->vertex_hi ? next_fork->vertex_hi : cur_fork->vertex_hi;
+            } else {
+                cur_fork = fmd_fork_node_copy(next_fork);
+                cur_fork->is_merged = true;
+                fmd_vector_append(merged, cur_fork);
+            }
+            fmd_fork_node_free(next_fork);
+        }
+    }
+    *merged_forks = merged;
 }
 #endif
 
