@@ -654,11 +654,15 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
     int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
     int_t init_hi = fmd->graph_fmi->no_chars;
     fmd_fork_node_t *root_fork = fmd_fork_node_init(NULL,
-                                                    -1, -1,
+                                                    0, V,
                                                     string->size-1,
                                                     false, false, false);
-    fmd_fmd_qr_t *root_query = fmd_fmd_qr_init(root_fork, init_lo, init_hi, string->size - 1, string);
+    fmd_fmd_qr_t *root_query = fmd_fmd_qr_init(root_fork, init_lo, init_hi, string->size-1, string);
     fmd_fmd_advance_query(fmd->graph_fmi, root_query); // match the first character before starting to fork
+    int_t vlo, vhi;
+    fmd_fmd_query_precedence_range(fmd->graph_fmi, root_query, fmd->c_0, &vlo, &vhi);
+    root_fork->vertex_lo = vlo;
+    root_fork->vertex_hi = vhi;
 
     if(root_query->hi <= root_query->lo) {
         *paths = matches;
@@ -670,32 +674,51 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
     }
 
     fmd_vector_append(query_records, root_query);
-    int_t global_pos = string->size-1;
+    int_t global_pos = string->size-1; // stores the position last matched
 
-    while(global_pos > 0) {
+    while(query_records->size && global_pos > 0) {
         /**********************************************************************
         * Step 1 - Forking phase: Fork each query at its current position
         **********************************************************************/
         fmd_vector_t *forks;
         fmd_vector_init(&forks, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-        for(int_t i = 0; i < query_records->size; i++) {
+        for (int_t i = 0; i < query_records->size; i++) {
             fmd_fmd_qr_t *qr = query_records->data[i];
             int_t c_0_lo, c_0_hi;
             fmd_fmd_query_precedence_range(fmd->graph_fmi, qr, fmd->c_0, &c_0_lo, &c_0_hi);
             fmd_vector_t *incoming_sa_intervals;
-            fmd_imt_query(fmd->r2r_tree, c_0_lo-1, c_0_hi-2, &incoming_sa_intervals);
-            for(int_t j = 0; j < incoming_sa_intervals->size; j++) {
-                fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
-                fmd_fork_node_t *fork_node = fmd_fork_node_init(qr->cur_fork, interval->lo, interval->hi+1, qr->pos, false, false, true);
-                fmd_vector_append(forks, fork_node);
+            if(c_0_lo < c_0_hi) {
+                fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
+                for (int_t j = 0; j < incoming_sa_intervals->size; j++) {
+                    fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
+                    fmd_fork_node_t *fork_node = fmd_fork_node_init(qr->cur_fork, interval->lo, interval->hi + 1,
+                                                                    qr->pos, false, false, true);
+                    fmd_vector_append(forks, fork_node);
+                }
             }
         }
 
         /**********************************************************************
         * Step 2 - Merge phase: merge overlapping ranges on the vertices
         **********************************************************************/
+        /* DEBUG PURPOSES
+        printf("Forks: ");
+        for(int_t i = 0; i < forks->size; i++) {
+            fmd_fork_node_t *f = forks->data[i];
+            printf("[%d,%d) ", f->vertex_lo, f->vertex_hi);
+        }
+        printf("\n");
+         */
         fmd_vector_t *merged;
         fmd_fmd_compact_forks(forks, &merged);
+        /* DEBUG PURPOSES
+        printf("Merged: ");
+        for(int_t i = 0; i < merged->size; i++) {
+            fmd_fork_node_t *f = merged->data[i];
+            printf("[%d,%d) ", f->vertex_lo, f->vertex_hi);
+        }
+        printf("\n\n");
+        */
 
         /**********************************************************************
         * Step 3 - Advance Phase: advance each fork once
@@ -707,9 +730,11 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
             fmd_fmd_qr_t *qr = query_records->data[i];
             fmd_fmd_advance_query(fmd->graph_fmi, qr);
             if(qr->lo >= qr->hi) { // query died while advancing
-                qr->cur_fork->sa_lo = qr->lo;
-                qr->cur_fork->sa_hi = qr->hi;
-                qr->cur_fork->is_dead = true;
+                fmd_fork_node_t *dead_node = fmd_fork_node_init(qr->cur_fork, qr->cur_fork->vertex_lo,
+                                                                qr->cur_fork->vertex_hi, qr->pos, true, true, false);
+                dead_node->sa_lo = qr->lo;
+                dead_node->sa_hi = qr->hi;
+                //qr->cur_fork = dead_node;
                 fmd_vector_append(partial_matches, qr->cur_fork);
                 fmd_fmd_qr_free(qr);
             } else {
@@ -722,26 +747,37 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
             fmd_fmd_qr_t *qr = fmd_fmd_qr_init(fork, V+1+fork->vertex_lo, V+2+fork->vertex_hi, fork->pos, string);
             fmd_fmd_advance_query(fmd->graph_fmi, qr);
             if(qr->lo >= qr->hi) { // query died while advancing
-                qr->cur_fork->sa_lo = qr->lo;
-                qr->cur_fork->sa_hi = qr->hi;
-                qr->cur_fork->is_dead = true;
+                fmd_fork_node_t *dead_node = fmd_fork_node_init(qr->cur_fork, qr->cur_fork->vertex_lo,
+                                                                qr->cur_fork->vertex_hi, qr->pos, true, true, false);
+                dead_node->sa_lo = qr->lo;
+                dead_node->sa_hi = qr->hi;
+                //qr->cur_fork = dead_node;
                 fmd_vector_append(partial_matches, qr->cur_fork);
                 fmd_fmd_qr_free(qr);
             } else {
                 fmd_vector_append(next_iter_queries, qr);
             }
         }
+        fmd_vector_free(merged);
         fmd_vector_free(query_records);
         query_records = next_iter_queries;
+
+        for(int_t i = 0; i < next_iter_queries->size; i++) {
+            fmd_fmd_qr_t *qr = next_iter_queries->data[i];
+            printf("Record %d at pos %d has sa [%d,%d)\n", i, qr->pos, qr->lo, qr->hi);
+        }
+        printf("\n");
         --global_pos;
     }
     fmd_vector_init(&matches, query_records->size, &prm_fstruct);
     matches->size = query_records->size;
     for(int_t i = 0; i < query_records->size; i++) {
         fmd_fmd_qr_t *qr = query_records->data[i];
-        qr->cur_fork->sa_lo = qr->lo;
-        qr->cur_fork->sa_hi = qr->hi;
-        matches->data[i] = qr->cur_fork;
+        fmd_fork_node_t *leaf = fmd_fork_node_init(qr->cur_fork, qr->cur_fork->vertex_lo, qr->cur_fork->vertex_hi, qr->pos, true, false, false);
+        leaf->sa_lo = qr->lo;
+        leaf->sa_hi = qr->hi;
+        qr->cur_fork = leaf;
+        matches->data[i] = leaf;
     }
     *paths = matches;
     *dead_ends = partial_matches;
@@ -759,7 +795,7 @@ void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks) {
         fmd_fork_node_free(forks->data[0]);
         for (int_t i = 1; i < forks->size; i++) {
             fmd_fork_node_t *next_fork = forks->data[i];
-            if(cur_fork->vertex_hi >= next_fork->vertex_lo) {
+            if(cur_fork->vertex_hi > next_fork->vertex_lo) {
                 cur_fork->vertex_hi = next_fork->vertex_hi > cur_fork->vertex_hi ? next_fork->vertex_hi : cur_fork->vertex_hi;
             } else {
                 cur_fork = fmd_fork_node_copy(next_fork);
