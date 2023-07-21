@@ -6,6 +6,7 @@
 #include "fmd_fmi.h"
 #include "fmd_table.h"
 #include "fmd_vector.h"
+#include "fmd_match_list.h"
 #include "assert.h"
 
 // separator characters
@@ -85,6 +86,8 @@ void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_
 void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
 #endif
+
+void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_string_t *query, fmd_vector_t *exact_matches);
 
 bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);
 bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi);

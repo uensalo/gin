@@ -738,6 +738,8 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
                 fmd_vector_append(partial_matches, qr->cur_fork);
                 fmd_fmd_qr_free(qr);
             } else {
+                qr->cur_fork->sa_lo = qr->lo;
+                qr->cur_fork->sa_hi = qr->hi;
                 fmd_vector_append(next_iter_queries, qr);
             }
         }
@@ -762,11 +764,13 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
         fmd_vector_free(query_records);
         query_records = next_iter_queries;
 
+        /* DEBUG PURPOSES
         for(int_t i = 0; i < next_iter_queries->size; i++) {
             fmd_fmd_qr_t *qr = next_iter_queries->data[i];
             printf("Record %d at pos %d has sa [%d,%d)\n", i, qr->pos, qr->lo, qr->hi);
         }
-        printf("\n");
+         */
+        //printf("\n");
         --global_pos;
     }
     fmd_vector_init(&matches, query_records->size, &prm_fstruct);
@@ -808,6 +812,44 @@ void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks) {
     *merged_forks = merged;
 }
 #endif
+
+void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_string_t *query, fmd_vector_t *exact_matches) {
+    if(!query || !exact_matches->size) {
+        fmd_vector_init(match_lists, 1, &fmd_fstruct_match_list);
+    }
+    fmd_vector_t *matches;
+    fmd_vector_init(&matches, exact_matches->size, &fmd_fstruct_match_list);
+
+    for(int_t i = 0; i < exact_matches->size; i++) {
+        fmd_fmd_match_list_t *match_list;
+        fmd_fmd_match_list_init(&match_list);
+        fmd_fork_node_t *cur_fork = exact_matches->data[i];
+        int_t start = 0;
+        int_t end = -1;
+        int_t next_sa_lo = -1;
+        int_t next_sa_hi = -1;
+        while(cur_fork) {
+            if(cur_fork->pos > -1) {
+                fmd_string_t *match;
+                end = cur_fork->pos+1;
+                fmd_string_substring(query, start, end, &match);
+                fmd_fmd_match_list_append(match_list,
+                                          match,
+                                          cur_fork->vertex_lo,
+                                          cur_fork->vertex_hi,
+                                          next_sa_lo,
+                                          next_sa_hi);
+                start = end;
+
+            }
+            next_sa_lo = cur_fork->sa_lo;
+            next_sa_hi = cur_fork->sa_hi;
+            cur_fork = (fmd_fork_node_t*)cur_fork->parent;
+        }
+        fmd_vector_append(matches, match_list);
+    }
+    *match_lists = matches;
+}
 
 void fmd_fmd_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends) {
     // keys are pointers, values are actual pointers
