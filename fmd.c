@@ -481,18 +481,20 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     /**************************************************************************
     * 2 - Parse the bitstream into data structures, by the end of this block
-    * fmd should be populated and fmd_buf should be freed
+    * fmd and fmd_dec should be populated and fmd_buf should be freed
     **************************************************************************/
     if(verbose) {
         fprintf(stderr, "[fmd:query] Parsing reference index into data structures.\n");
     }
     fmd_fmd_t *fmd;
+    fmd_fmd_decoder_t *fmd_dec;
     fmd_fmd_serialize_from_buffer(&fmd, fmd_buf, fmd_buf_size);
     if(!fmd) {
         fprintf(stderr, "[fmd:query] Error encountered while parsing reference index. Quitting.\n");
         return_code = -1;
         return return_code;
     }
+    fmd_fmd_decoder_init(&fmd_dec, fmd);
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/

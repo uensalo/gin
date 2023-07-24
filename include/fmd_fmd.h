@@ -71,7 +71,6 @@ typedef struct fmd_fmd_ {
 
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
 void fmd_fmd_free(fmd_fmd_t *fmd);
-
 int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
 
 count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string);
@@ -89,7 +88,33 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
 void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
 void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_string_t *query, fmd_vector_t *exact_matches);
 void fmd_fmd_query_locate_paths_topologise_free(fmd_vector_t *match_lists);
-void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_t *fmd, fmd_vector_t *match_lists, int_t no_max_decode);
+
+
+typedef struct fmd_fmd_decoded_match_ {
+    vid_t vid;
+    int_t offset;
+} fmd_decoded_match_t;
+void                        fmd_decoded_match_init(fmd_decoded_match_t **dec, vid_t vid, int_t offset);
+int                         fmd_decoded_match_comp(fmd_decoded_match_t *dec1, fmd_decoded_match_t *dec2);
+uint_t                      fmd_decoded_match_hash(fmd_decoded_match_t *dec);
+void                        fmd_decoded_match_free(fmd_decoded_match_t *dec);
+fmd_decoded_match_t*        fmd_decoded_match_copy(fmd_decoded_match_t *dec);
+
+static fmd_fstruct_t fmd_fstruct_decoded_match = {
+        (fcomp) fmd_decoded_match_comp,
+        (fhash) fmd_decoded_match_hash,
+        (ffree) fmd_decoded_match_free,
+        (fcopy) fmd_decoded_match_copy,
+};
+
+typedef struct fmd_fmd_decoder_ {
+    fmd_fmd_t *fmd; // fm index for which the decoder will be constructed
+    fmd_vector_t *vertex_bases;  // vertex base indices
+} fmd_fmd_decoder_t;
+
+void fmd_fmd_decoder_init(fmd_fmd_decoder_t **dec, fmd_fmd_t *fmd);
+void fmd_fmd_decoder_free(fmd_fmd_decoder_t *dec);
+void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t no_max_decode);
 
 bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);
 bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi);

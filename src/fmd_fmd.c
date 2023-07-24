@@ -836,7 +836,52 @@ void fmd_fmd_query_locate_paths_topologise_free(fmd_vector_t *match_lists) {
     fmd_vector_free(match_lists);
 }
 
-void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_t *fmd, fmd_vector_t *match_lists, int_t no_max_decode) {
+void fmd_decoded_match_init(fmd_decoded_match_t **dec, vid_t vid, int_t offset) {
+    *dec = calloc(1, sizeof(fmd_decoded_match_t));
+    (*dec)->vid = vid;
+    (*dec)->offset = offset;
+}
+
+int fmd_decoded_match_comp(fmd_decoded_match_t *dec1, fmd_decoded_match_t *dec2) {
+    if(!dec1 || !dec2) return -1;
+    return dec1->vid == dec2->vid ? dec1->offset - dec2->offset : dec1->vid - dec2->vid;
+}
+
+uint_t fmd_decoded_match_hash(fmd_decoded_match_t *dec);
+void fmd_decoded_match_free(fmd_decoded_match_t *dec);
+fmd_decoded_match_t* fmd_decoded_match_copy(fmd_decoded_match_t *dec);
+
+void fmd_fmd_decoder_init(fmd_fmd_decoder_t **dec, fmd_fmd_t *fmd) {
+    fmd_fmd_decoder_t *d = calloc(1, sizeof(fmd_fmd_decoder_t));
+    if(!d) {
+        *dec = NULL;
+        return;
+    }
+    d->fmd = fmd;
+    fmd_vector_init(&d->vertex_bases, fmd->permutation->size, &prm_fstruct);
+
+    int_t V = fmd->permutation->size;
+    fmd_fmi_qr_t qr;
+    qr.lo = 1;
+    qr.hi = V + 1;
+    fmd_vector_t *bases_permuted = fmd_fmi_sa(fmd->graph_fmi, &qr);
+    for(int_t i = 0; i < V; i++) { // code below actually sorts the array :)
+        d->vertex_bases->data[(vid_t)fmd->bwt_to_vid->data[i]] = bases_permuted->data[i];
+    }
+    fmd_vector_free(bases_permuted);
+    *dec = d;
+}
+
+void fmd_fmd_decoder_free(fmd_fmd_decoder_t *dec) {
+    if(!dec) return;
+    fmd_vector_free(dec->vertex_bases);
+    // don't free dec->fmd
+    free(dec);
+}
+
+void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t no_max_decode) {
+    // only decode the last node
+    //for(int_t i = 0; i < )
 }
 
 void fmd_fmd_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends) {
