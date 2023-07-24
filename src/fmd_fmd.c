@@ -675,7 +675,6 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
 
     fmd_vector_append(query_records, root_query);
     int_t global_pos = string->size-1; // stores the position last matched
-
     while(query_records->size && global_pos > 0) {
         /**********************************************************************
         * Step 1 - Forking phase: Fork each query at its current position
@@ -687,44 +686,30 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
             int_t c_0_lo, c_0_hi;
             fmd_fmd_query_precedence_range(fmd->graph_fmi, qr, fmd->c_0, &c_0_lo, &c_0_hi);
             fmd_vector_t *incoming_sa_intervals;
-            if(c_0_lo < c_0_hi) {
+            bool more_to_track = max_matches == -1 || max_matches > query_records->size;
+            if(more_to_track && c_0_lo < c_0_hi) {
                 fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
-                for (int_t j = 0; j < incoming_sa_intervals->size; j++) {
+                int_t no_forks_to_add = max_matches == -1 ? incoming_sa_intervals->size : MIN2(max_matches - query_records->size, incoming_sa_intervals->size);
+                for (int_t j = 0; j < no_forks_to_add; j++) {
                     fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
                     fmd_fork_node_t *fork_node = fmd_fork_node_init(qr->cur_fork, interval->lo, interval->hi + 1,
                                                                     qr->pos, false, false, true);
                     fmd_vector_append(forks, fork_node);
                 }
+                fmd_vector_free(incoming_sa_intervals);
             }
         }
-
         /**********************************************************************
         * Step 2 - Merge phase: merge overlapping ranges on the vertices
         **********************************************************************/
-        /* DEBUG PURPOSES
-        printf("Forks: ");
-        for(int_t i = 0; i < forks->size; i++) {
-            fmd_fork_node_t *f = forks->data[i];
-            printf("[%d,%d) ", f->vertex_lo, f->vertex_hi);
-        }
-        printf("\n");
-         */
         fmd_vector_t *merged;
         fmd_fmd_compact_forks(forks, &merged);
-        /* DEBUG PURPOSES
-        printf("Merged: ");
-        for(int_t i = 0; i < merged->size; i++) {
-            fmd_fork_node_t *f = merged->data[i];
-            printf("[%d,%d) ", f->vertex_lo, f->vertex_hi);
-        }
-        printf("\n\n");
-        */
-
+        fmd_vector_free(forks);
         /**********************************************************************
         * Step 3 - Advance Phase: advance each fork once
         **********************************************************************/
         fmd_vector_t *next_iter_queries;
-        fmd_vector_init(&next_iter_queries, query_records->size + forks->size, &prm_fstruct);
+        fmd_vector_init(&next_iter_queries, query_records->size + merged->size, &prm_fstruct);
         // advance and filter previous queries
         for(int_t i = 0; i < query_records->size; i++) {
             fmd_fmd_qr_t *qr = query_records->data[i];
@@ -734,7 +719,7 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
                                                                 qr->cur_fork->vertex_hi, qr->pos, true, true, false);
                 dead_node->sa_lo = qr->lo;
                 dead_node->sa_hi = qr->hi;
-                //qr->cur_fork = dead_node;
+                qr->cur_fork = dead_node;
                 fmd_vector_append(partial_matches, qr->cur_fork);
                 fmd_fmd_qr_free(qr);
             } else {
@@ -744,33 +729,28 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
             }
         }
         // advance and filter next forks
-        for(int_t i = 0; i < merged->size; i++) {
+        for (int_t i = 0; i < merged->size; i++) {
             fmd_fork_node_t *fork = merged->data[i];
-            fmd_fmd_qr_t *qr = fmd_fmd_qr_init(fork, V+1+fork->vertex_lo, V+2+fork->vertex_hi, fork->pos, string);
+            fmd_fmd_qr_t *qr = fmd_fmd_qr_init(fork, V + 1 + fork->vertex_lo, V + 2 + fork->vertex_hi, fork->pos,
+                                               string);
             fmd_fmd_advance_query(fmd->graph_fmi, qr);
-            if(qr->lo >= qr->hi) { // query died while advancing
+            if (qr->lo >= qr->hi) { // query died while advancing
                 fmd_fork_node_t *dead_node = fmd_fork_node_init(qr->cur_fork, qr->cur_fork->vertex_lo,
-                                                                qr->cur_fork->vertex_hi, qr->pos, true, true, false);
+                                                                qr->cur_fork->vertex_hi, qr->pos, true, true,
+                                                                false);
                 dead_node->sa_lo = qr->lo;
                 dead_node->sa_hi = qr->hi;
-                //qr->cur_fork = dead_node;
+                qr->cur_fork = dead_node;
                 fmd_vector_append(partial_matches, qr->cur_fork);
                 fmd_fmd_qr_free(qr);
             } else {
                 fmd_vector_append(next_iter_queries, qr);
             }
         }
+
         fmd_vector_free(merged);
         fmd_vector_free(query_records);
         query_records = next_iter_queries;
-
-        /* DEBUG PURPOSES
-        for(int_t i = 0; i < next_iter_queries->size; i++) {
-            fmd_fmd_qr_t *qr = next_iter_queries->data[i];
-            printf("Record %d at pos %d has sa [%d,%d)\n", i, qr->pos, qr->lo, qr->hi);
-        }
-         */
-        //printf("\n");
         --global_pos;
     }
     fmd_vector_init(&matches, query_records->size, &prm_fstruct);
@@ -782,10 +762,11 @@ void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, in
         leaf->sa_hi = qr->hi;
         qr->cur_fork = leaf;
         matches->data[i] = leaf;
+        fmd_fmd_qr_free(qr);
     }
+    fmd_vector_free(query_records);
     *paths = matches;
     *dead_ends = partial_matches;
-
 }
 
 void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks) {
@@ -796,7 +777,7 @@ void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks) {
         fmd_fork_node_t *cur_fork = fmd_fork_node_copy(forks->data[0]);
         cur_fork->is_merged = true;
         fmd_vector_append(merged, cur_fork);
-        fmd_fork_node_free(forks->data[0]);
+        //fmd_fork_node_free(forks->data[0]);
         for (int_t i = 1; i < forks->size; i++) {
             fmd_fork_node_t *next_fork = forks->data[i];
             if(cur_fork->vertex_hi > next_fork->vertex_lo) {
@@ -806,7 +787,7 @@ void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks) {
                 cur_fork->is_merged = true;
                 fmd_vector_append(merged, cur_fork);
             }
-            fmd_fork_node_free(next_fork);
+            //fmd_fork_node_free(next_fork);
         }
     }
     *merged_forks = merged;
@@ -840,7 +821,6 @@ void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_strin
                                           next_sa_lo,
                                           next_sa_hi);
                 start = end;
-
             }
             next_sa_lo = cur_fork->sa_lo;
             next_sa_hi = cur_fork->sa_hi;
@@ -849,6 +829,14 @@ void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_strin
         fmd_vector_append(matches, match_list);
     }
     *match_lists = matches;
+}
+
+void fmd_fmd_query_locate_paths_topologise_free(fmd_vector_t *match_lists) {
+    if(!match_lists) return;
+    fmd_vector_free(match_lists);
+}
+
+void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_t *fmd, fmd_vector_t *match_lists, int_t no_max_decode) {
 }
 
 void fmd_fmd_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends) {

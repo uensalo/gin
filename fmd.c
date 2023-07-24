@@ -631,6 +631,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         }
                         if (!tasks[j].paths_or_locs->size) fprintf(foutput, "-\n");
                         fprintf(foutput, "\n");
+                        fmd_fmd_query_locate_paths_topologise_free(match_lists);
                         fmd_fmd_locate_paths_result_free(tasks[j].paths_or_locs, tasks[j].partial_matches);
                         fmd_string_free(tasks[j].str);
                         tasks[j].str = NULL;
@@ -743,7 +744,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     if(verbose) {
         fprintf(stderr, "[fmd:query] Total querying time in seconds: %lf\n",query_time);
-        fprintf(stderr, "[fmd:query] Numer of queries processed: %lld\n",queries_processed);
+        fprintf(stderr, "[fmd:query] Number of queries processed: %lld\n",queries_processed);
         if(queries_processed)
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
         if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {

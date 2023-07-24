@@ -83,11 +83,13 @@ void fmd_fmd_query_locate_paths_stats(fmd_fmd_t *fmd, fmd_string_t *string, fmd_
 #ifdef FMD_OMP
 void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
 void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, int_t max_matches, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
-void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends);
-void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
 #endif
 
+void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
 void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_string_t *query, fmd_vector_t *exact_matches);
+void fmd_fmd_query_locate_paths_topologise_free(fmd_vector_t *match_lists);
+void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_t *fmd, fmd_vector_t *match_lists, int_t no_max_decode);
 
 bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);
 bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi);
