@@ -6,7 +6,8 @@
 #include "fmd_fmi.h"
 #include "fmd_table.h"
 #include "fmd_vector.h"
-#include "fmd_match_list.h"
+#include "fmd_match_chain.h"
+#include "fmd_tree.h"
 #include "assert.h"
 
 // separator characters
@@ -73,32 +74,29 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
 void fmd_fmd_free(fmd_fmd_t *fmd);
 int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
 
-count_t fmd_fmd_query_count(fmd_fmd_t *fmd, fmd_string_t *string);
-fmd_vector_t *fmd_fmd_query_locate_basic(fmd_fmd_t *fmd, fmd_string_t *string);
-void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends);
-void fmd_fmd_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
-void fmd_fmd_query_locate_paths_stats(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t *no_forks);
+void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
+void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, int_t max_forks, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
+void fmd_fmd_query_locate_paths_legacy(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_query_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
 
-#ifdef FMD_OMP
-void fmd_fmd_query_locate_paths_omp(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
-void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, int_t max_matches, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
-#endif
-
-void fmd_fmd_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_matches, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
-void fmd_fmd_query_locate_paths_topologise(fmd_vector_t **match_lists, fmd_string_t *query, fmd_vector_t *exact_matches);
-void fmd_fmd_query_locate_paths_topologise_free(fmd_vector_t *match_lists);
 
+// for reporting results
+void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain);
+void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *exact_matches, fmd_vector_t **match_lists);
+void fmd_fmd_topologise_forks_free(fmd_vector_t *match_lists);
 
 typedef struct fmd_fmd_decoded_match_ {
     vid_t vid;
     int_t offset;
 } fmd_decoded_match_t;
-void                        fmd_decoded_match_init(fmd_decoded_match_t **dec, vid_t vid, int_t offset);
-int                         fmd_decoded_match_comp(fmd_decoded_match_t *dec1, fmd_decoded_match_t *dec2);
-uint_t                      fmd_decoded_match_hash(fmd_decoded_match_t *dec);
-void                        fmd_decoded_match_free(fmd_decoded_match_t *dec);
-fmd_decoded_match_t*        fmd_decoded_match_copy(fmd_decoded_match_t *dec);
+
+void                 fmd_decoded_match_init(fmd_decoded_match_t **dec, vid_t vid, int_t offset);
+int                  fmd_decoded_match_comp(fmd_decoded_match_t *dec1, fmd_decoded_match_t *dec2);
+uint_t               fmd_decoded_match_hash(fmd_decoded_match_t *dec);
+void                 fmd_decoded_match_free(fmd_decoded_match_t *dec);
+fmd_decoded_match_t* fmd_decoded_match_copy(fmd_decoded_match_t *dec);
 
 static fmd_fstruct_t fmd_fstruct_decoded_match = {
         (fcomp) fmd_decoded_match_comp,
@@ -114,7 +112,23 @@ typedef struct fmd_fmd_decoder_ {
 
 void fmd_fmd_decoder_init(fmd_fmd_decoder_t **dec, fmd_fmd_t *fmd);
 void fmd_fmd_decoder_free(fmd_fmd_decoder_t *dec);
-void fmd_fmd_query_locate_decode(fmd_vector_t **decoded, fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t no_max_decode);
+/**
+ *
+ * @param dec FMD decoder object
+ * @param sa_lo (inclusive) Start range over the suffix array
+ * @param sa_hi (exclusive) End range over the suffix array
+ * @param max_matches Number of maximum matches to decode, -1 to decode all
+ * @param matches Reference to the output vector containing fmd_decoded_match_t objects
+ */
+void fmd_fmd_decoder_decode_one(fmd_fmd_decoder_t *dec, int_t sa_lo, int_t sa_hi, int_t max_matches, fmd_vector_t **matches);
+/**
+ *
+ * @param dec FMD decoder object
+ * @param matches List of exact matches obtained from a call to one of the fmd_query_locate_(...)
+ * @param max_matches Number of maximum matches to decode, -1 to decode all
+ * @param decoded Reference to the output vector containing fmd_vector_t objects containing fmd_decoded_match_t objects
+ */
+void fmd_fmd_decoder_decode_ends(fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t max_matches, fmd_vector_t **decoded);
 
 bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);
 bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi);

@@ -2,7 +2,7 @@
 
 void fmd_min_heap_init(fmd_min_heap_t **heap, int_t capacity, fmd_fstruct_t *key_f, fmd_fstruct_t *val_f) {
     *heap = (fmd_min_heap_t *)malloc(sizeof(fmd_min_heap_t));
-    (*heap)->data = (fmd_min_heap_kv_t **)calloc(capacity, sizeof(fmd_min_heap_kv_t *));
+    (*heap)->data = (fmd_min_heap_kv_t *)calloc(capacity, sizeof(fmd_min_heap_kv_t));
     (*heap)->capacity = capacity;
     (*heap)->size = 0;
     (*heap)->key_f = key_f;
@@ -10,24 +10,20 @@ void fmd_min_heap_init(fmd_min_heap_t **heap, int_t capacity, fmd_fstruct_t *key
 }
 
 void fmd_min_heap_free(fmd_min_heap_t *heap) {
-    for (size_t i = 0; i < heap->size; i++) {
-        free(heap->data[i]);
-    }
     free(heap->data);
     free(heap);
 }
 
 bool fmd_min_heap_push(fmd_min_heap_t *heap, void *key, void *value) {
     if (heap->size == heap->capacity) {
-        heap->data = realloc(heap->data, (heap->capacity *= 2) * sizeof(fmd_min_heap_kv_t *));
+        heap->data = realloc(heap->data, (heap->capacity *= 2) * sizeof(fmd_min_heap_kv_t));
         if(!heap->data) {
             return false;
         }
     }
     fmd_min_heap_kv_t *kv = calloc(1,sizeof(fmd_min_heap_kv_t));
-    kv->key = key;
-    kv->value = value;
-    heap->data[heap->size] = kv;
+    heap->data[heap->size].key = key;
+    heap->data[heap->size].value = value;
     fmd_min_heap_sift_up(heap, heap->size);
     heap->size++;
     return true;
@@ -39,11 +35,9 @@ bool fmd_min_heap_pop(fmd_min_heap_t *heap, void **key, void **value) {
         *value = NULL;
         return false;
     }
-    *key = heap->data[0]->key;
-    *value = heap->data[0]->value;
-    free(heap->data[0]);
-    heap->data[0] = heap->data[heap->size - 1];
-    heap->size--;
+    *key = heap->data[0].key;
+    *value = heap->data[0].value;
+    heap->data[0] = heap->data[--heap->size];
     fmd_min_heap_sift_down(heap, 0);
     return true;
 }
@@ -54,18 +48,18 @@ bool fmd_min_heap_peek(fmd_min_heap_t *heap, void **key, void **value) {
         *value = NULL;
         return false;
     }
-    *key = heap->data[0]->key;
-    *value = heap->data[0]->value;
+    *key = heap->data[0].key;
+    *value = heap->data[0].value;
     return true;
 }
 
 void fmd_min_heap_sift_up(fmd_min_heap_t *heap, int_t index) {
     while (index > 0) {
-        int_t parent = (index - 1) / 2;
-        if (heap->key_f->comp_f(heap->data[parent]->key, heap->data[index]->key) <= 0) {
+        int_t parent = (index-1)>>1;
+        if (heap->key_f->comp_f(heap->data[parent].key, heap->data[index].key) <= 0) {
             break;
         }
-        fmd_min_heap_kv_t *tmp = heap->data[index];
+        fmd_min_heap_kv_t tmp = heap->data[index];
         heap->data[index] = heap->data[parent];
         heap->data[parent] = tmp;
         index = parent;
@@ -73,16 +67,35 @@ void fmd_min_heap_sift_up(fmd_min_heap_t *heap, int_t index) {
 }
 
 void fmd_min_heap_sift_down(fmd_min_heap_t *heap, int_t index) {
+    fmd_min_heap_kv_t tmp = heap->data[index];
+    int_t index_2p1 = (index<<1)+1;
+    while (index_2p1 < heap->size) {
+        int_t smallest = index_2p1;
+        int_t right = index_2p1+1;
+        if (right < heap->size && heap->key_f->comp_f(heap->data[right].key, heap->data[smallest].key) < 0) {
+            smallest = right;
+        }
+        if (heap->key_f->comp_f(tmp.key, heap->data[smallest].key) <= 0) {
+            break;
+        }
+        heap->data[index] = heap->data[smallest];
+        index = smallest;
+        index_2p1 = (index<<1)+1;
+    }
+    heap->data[index] = tmp;
+}
+
+void fmd_min_heap_sift_down_old(fmd_min_heap_t *heap, int_t index) {
     while (2 * index + 1 < heap->size) {
         int_t smallest = 2 * index + 1;
         int_t right = 2 * index + 2;
-        if (right < heap->size && heap->key_f->comp_f(heap->data[right]->key, heap->data[smallest]->key) < 0) {
+        if (right < heap->size && heap->key_f->comp_f(heap->data[right].key, heap->data[smallest].key) < 0) {
             smallest = right;
         }
-        if (heap->key_f->comp_f(heap->data[index]->key, heap->data[smallest]->key) <= 0) {
+        if (heap->key_f->comp_f(heap->data[index].key, heap->data[smallest].key) <= 0) {
             break;
         }
-        fmd_min_heap_kv_t *tmp = heap->data[index];
+        fmd_min_heap_kv_t tmp = heap->data[index];
         heap->data[index] = heap->data[smallest];
         heap->data[smallest] = tmp;
         index = smallest;
@@ -94,7 +107,7 @@ int fmd_min_heap_comp(fmd_min_heap_t *h1, fmd_min_heap_t *h2) {
         return (int)(h1->size - h2->size);
     }
     for (int_t i = 0; i < h1->size; ++i) {
-        int key_comp = h1->key_f->comp_f(h1->data[i]->key, h2->data[i]->key);
+        int key_comp = h1->key_f->comp_f(h1->data[i].key, h2->data[i].key);
         if (key_comp != 0) {
             return key_comp;
         }
@@ -106,7 +119,7 @@ uint_t fmd_min_heap_hash(fmd_min_heap_t *heap) {
     const uint_t prime = 1099511628211LLU;
     uint_t hash = 14695981039346656037LLU;
     for (int_t i = 0; i < heap->size; ++i) {
-        uint_t key_hash = heap->key_f->hash_f(heap->data[i]->key);
+        uint_t key_hash = heap->key_f->hash_f(heap->data[i].key);
         hash ^= key_hash;
         hash *= prime;
     }
@@ -119,12 +132,9 @@ fmd_min_heap_t *fmd_min_heap_copy(fmd_min_heap_t *heap) {
     copy->size = heap->size;
     copy->key_f = heap->key_f;
     copy->val_f = heap->val_f;
-    copy->data = calloc(copy->capacity, sizeof(fmd_min_heap_kv_t *));
+    copy->data = calloc(copy->capacity, sizeof(fmd_min_heap_kv_t));
     for (int_t i = 0; i < copy->size; ++i) {
-        fmd_min_heap_kv_t *kv = calloc(1, sizeof(fmd_min_heap_kv_t));
-        kv->key = heap->key_f->copy_f(heap->data[i]->key);
-        kv->value = heap->val_f->copy_f(heap->data[i]->value);
-        copy->data[i] = kv;
+        copy->data[i] = heap->data[i];
     }
     return copy;
 }

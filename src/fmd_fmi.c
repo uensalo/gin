@@ -307,8 +307,9 @@ count_t fmd_fmi_rank(fmd_fmi_t *fmi, word_t enc, int_t pos) {
 
 fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     fmd_vector_t *rval;
-    fmd_vector_init(&rval, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    fmd_vector_init(&rval, (int_t)qr->hi - (int_t)qr->lo, &prm_fstruct);
     if(!rval) return NULL;
+    #pragma omp parallel for default(none) shared(qr, fmi, rval)
     for(int_t j = (int_t)qr->lo; j < (int_t)qr->hi; j++) {
         count_t count = 0;
         int_t i = j;
@@ -326,11 +327,12 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 i = (int_t)(fmi->char_counts[encoding] + rank - 1);
             } else {
                 // sa entry is present, interpolate and compute entry in next range
-                fmd_vector_append(rval,(void*)(sa_entry + count));
+                rval->data[j - qr->lo] = (void*)(sa_entry + count);
                 break;
             }
         }
     }
+    rval->size = (int_t)qr->hi - (int_t)qr->lo;
     return rval;
 }
 
