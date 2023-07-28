@@ -712,7 +712,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         fprintf(stderr, "[fmd:query] Number of queries processed: %lld\n",queries_processed);
         if(queries_processed)
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
-        if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {
+        if((mode == fmd_query_mode_enumerate || mode == fmd_query_mode_breadth) && queries_processed && no_matching_forks) {
             fprintf(stderr, "[fmd:query] Forks:\n");
             fprintf(stderr, "[fmd:query] Number of matching forks: %lld\n",no_matching_forks);
             fprintf(stderr, "[fmd:query] Number of partial forks: %lld\n",no_missing_forks);
@@ -721,13 +721,13 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             fprintf(stderr, "[fmd:query] Number of matches: %lld\n",no_matching_count);
             fprintf(stderr, "[fmd:query] Number of matches spanning multiple vertices: %lld\n", no_multiple_vertex_span_matches);
             fprintf(stderr, "[fmd:query] Aggregate statistics:\n");
-            fprintf(stderr, "[fmd:query] Average matches per matching fork: %.6lf\n",(double)no_matching_count / (double)no_matching_forks);
-            fprintf(stderr, "[fmd:query] Average matches per fork: %.6lf\n",(double)no_matching_count / ((double)no_matching_forks + (double)no_missing_forks));
-            fprintf(stderr, "[fmd:query] Average forks per query: %.6lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Average matching forks per query: %.6lf\n",((double)no_matching_forks) / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Average matches per matching fork: %.8lf\n",(double)no_matching_count / (double)no_matching_forks);
+            fprintf(stderr, "[fmd:query] Average matches per fork: %.8lf\n",(double)no_matching_count / ((double)no_matching_forks + (double)no_missing_forks));
+            fprintf(stderr, "[fmd:query] Average forks per query: %.8lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);
+            fprintf(stderr, "[fmd:query] Average matching forks per query: %.8lf\n",((double)no_matching_forks) / (double)queries_processed);
             fprintf(stderr, "[fmd:query] Aggregate timings:\n");
-            fprintf(stderr, "[fmd:query] Average time per fork: %.6lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks));
-            fprintf(stderr, "[fmd:query] Average time per matching fork: %.6lf\n", (double)query_time / ((double)no_matching_forks));
+            fprintf(stderr, "[fmd:query] Average time per fork: %.8lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks));
+            fprintf(stderr, "[fmd:query] Average time per matching fork: %.8lf\n", (double)query_time / ((double)no_matching_forks));
             fprintf(stderr, "[fmd:query] Average time per match: %.8lf\n", (double)query_time / ((double)no_matching_count));
         }
     }
