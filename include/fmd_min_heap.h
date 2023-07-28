@@ -9,7 +9,7 @@ typedef struct fmd_min_heap_kv_s {
 } fmd_min_heap_kv_t;
 
 typedef struct fmd_min_heap_s {
-    fmd_min_heap_kv_t **data;
+    fmd_min_heap_kv_t *data;
     int_t capacity;
     int_t size;
     fmd_fstruct_t *key_f;
@@ -31,7 +31,7 @@ fmd_min_heap_t *fmd_min_heap_copy(fmd_min_heap_t *heap);
 uint_t fmd_min_heap_hash(fmd_min_heap_t *heap);
 int fmd_min_heap_comp(fmd_min_heap_t *h1, fmd_min_heap_t *h2);
 
-fmd_fstruct_t fmd_fstruct_min_heap = {
+static fmd_fstruct_t fmd_fstruct_min_heap = {
         (fcomp) fmd_min_heap_comp,
         (fhash) fmd_min_heap_hash,
         (ffree) fmd_min_heap_free,

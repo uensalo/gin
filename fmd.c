@@ -5,6 +5,7 @@
 #include "rgfa_parser.h"
 #include "permutation_parser.h"
 #include "fmdg_parser.h"
+//#include "fmd_fuzzy.h"
 #ifdef FMD_OMP
 #include <omp.h>
 #endif
@@ -29,13 +30,12 @@ typedef enum fmd_mode_ {
     fmd_mode_no_modes=5
 } fmd_mode_t;
 
-char* fmd_query_mode_names[] = {"count", "locate", "enumerate"};
+char* fmd_query_mode_names[] = {"enumerate", "breadth"};
 
 typedef enum fmd_query_mode_ {
-    fmd_query_mode_count=0,
-    fmd_query_mode_locate=1,
-    fmd_query_mode_enumerate=2,
-    fmd_query_mode_no_modes=3,
+    fmd_query_mode_enumerate=0,
+    fmd_query_mode_breadth=1,
+    fmd_query_mode_no_modes=2,
 } fmd_query_mode_t;
 
 char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query"};
@@ -371,7 +371,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     int_t num_threads = 1;
     int_t batch_size = 8;
+    int_t max_forks = -1;
     int_t max_matches = -1;
+    bool decode = false;
     bool parse_fastq = false;
     bool verbose = false;
 
@@ -380,7 +382,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     // statistics for path enumeration
     int_t queries_processed = 0;
+    int_t queries_decoded = 0;
     double query_time = .0;
+    double query_decoding_time = .0;
 
     int_t no_matching_forks = 0;
     int_t no_missing_forks = 0;
@@ -393,14 +397,16 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             {"input",      required_argument, NULL, 'i'},
             {"fastq",      no_argument,       NULL, 'f'},
             {"output",     required_argument, NULL, 'o'},
-            {"max-matches",required_argument, NULL, 'm'},
+            {"max-forks",  required_argument, NULL, 'm'},
+            {"max-matches",required_argument, NULL, 'M'},
+            {"decode",     no_argument,       NULL, 'd'},
             {"batch-size", required_argument, NULL, 'b'},
             {"threads",    required_argument, NULL, 'j'},
             {"verbose",    no_argument,       NULL, 'v'},
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "r:i:fo:m:b:j:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "r:i:fo:m:M:db:j:v", options, &optindex)) != -1) {
         switch(c) {
             case 'r': {
                 fref_path = optarg;
@@ -424,7 +430,15 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 foutput_path = optarg;
                 break;
             }
+            case 'd': {
+                decode = true;
+                break;
+            }
             case 'm': {
+                max_forks = (int_t)strtoull(optarg, NULL, 10);
+                break;
+            }
+            case 'M': {
                 max_matches = (int_t)strtoull(optarg, NULL, 10);
                 break;
             }
@@ -479,18 +493,20 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     /**************************************************************************
     * 2 - Parse the bitstream into data structures, by the end of this block
-    * fmd should be populated and fmd_buf should be freed
+    * fmd and fmd_dec should be populated and fmd_buf should be freed
     **************************************************************************/
     if(verbose) {
         fprintf(stderr, "[fmd:query] Parsing reference index into data structures.\n");
     }
     fmd_fmd_t *fmd;
+    fmd_fmd_decoder_t *fmd_dec;
     fmd_fmd_serialize_from_buffer(&fmd, fmd_buf, fmd_buf_size);
     if(!fmd) {
         fprintf(stderr, "[fmd:query] Error encountered while parsing reference index. Quitting.\n");
         return_code = -1;
         return return_code;
     }
+    fmd_fmd_decoder_init(&fmd_dec, fmd);
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/
@@ -505,6 +521,14 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             return return_code;
         }
     }
+    if(foutput_path) {
+        foutput = fopen(foutput_path, "w");
+        if(!foutput) {
+            fprintf(stderr, "[fmd:query] Can't open output file %s, quitting.\n", foutput_path);
+            return_code = -1;
+            return return_code;
+        }
+    }
     if(parse_fastq) {
         // not yet implemented
         fprintf(stderr, "[fmd:query] Fastq parsing mode not yet implemented. Quitting.\n");
@@ -512,16 +536,17 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         fmd_fmd_free(fmd);
         return return_code;
     } else {
-#ifdef FMD_OMP
         int_t i;
         char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char*));
         typedef struct query_task_ {
             fmd_string_t *str;
             uint64_t count;
-            fmd_vector_t *paths_or_locs;
+            fmd_vector_t *exact_matches;
             fmd_vector_t *partial_matches;
         } query_task_t;
+#ifdef FMD_OMP
         omp_set_num_threads((int)num_threads);
+#endif
         query_task_t *tasks = calloc(batch_size, sizeof(query_task_t));
         bool exit_flag = false;
 
@@ -540,27 +565,21 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
 
             clock_gettime(CLOCK_REALTIME, &t1);
+#ifdef FMD_OMP
             omp_set_num_threads((int)num_threads);
+#endif
             switch(mode) {
-                case fmd_query_mode_count: {
-                    #pragma omp parallel for default(none) shared(fmd, i, tasks)
-                    for(int_t k = 0; k < i; k++) {
-                        tasks[k].count = fmd_fmd_query_count(fmd, tasks[k].str);
-                    }
-                    break;
-                }
-                case fmd_query_mode_locate: {
-                    #pragma omp parallel for default(none) shared(fmd, i, tasks)
-                    for(int_t k = 0; k < i; k++) {
-                        tasks[k].paths_or_locs = fmd_fmd_query_locate_basic(fmd, tasks[k].str);
-                    }
-                    break;
-                }
                 case fmd_query_mode_enumerate: {
                     #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_locate_paths_omp(fmd, tasks[k].str, max_matches, &tasks[k].paths_or_locs,
-                                                       &tasks[k].partial_matches, num_threads);
+                        fmd_fmd_query_locate_paths(fmd, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches, num_threads);
+                    }
+                    break;
+                }
+                case fmd_query_mode_breadth: {
+                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
+                    for(int_t k = 0; k < i; k++) {
+                        fmd_fmd_query_locate_paths_breadth_first(fmd, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches);
                     }
                     break;
                 }
@@ -571,63 +590,107 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             clock_gettime(CLOCK_REALTIME, &t2);
             query_time += to_sec(t1,t2);
 
-            switch (mode) {
-                case fmd_query_mode_count: {
-                    for (int_t j = 0; j < i; j++) {
-                        if (!tasks[j].str) continue;
-                        fprintf(foutput, "%lld\n", tasks[j].count);
-                        fmd_string_free(tasks[j].str);
-                        tasks[j].str = NULL;
-                    }
-                    break;
-                }
-                case fmd_query_mode_locate: {
-                    for (int_t j = 0; j < i; j++) {
-                        if (!tasks[j].str) continue;
-                        for (int_t k = 0; k < tasks[j].paths_or_locs->size - 1; k++) {
-                            fprintf(foutput, "%lld, ", (uint64_t) tasks[j].paths_or_locs->data[k]);
+            if(decode) {
+                clock_gettime(CLOCK_REALTIME, &t1);
+                switch(mode) {
+                    case fmd_query_mode_enumerate:
+                    case fmd_query_mode_breadth: {
+                        for(int_t j = 0; j < i; j++) {
+                            if(!tasks[j].str) continue;
+                            fmd_vector_t *decoded_matches;
+                            fmd_fmd_decoder_decode_ends(fmd_dec,tasks[j].exact_matches, max_matches, &decoded_matches);
+                            for(int_t k = 0; k < decoded_matches->size; k++) {
+                                fmd_vector_t *decoded_matches_for_fork = decoded_matches->data[k];
+                                for(int_t l = 0; l < decoded_matches_for_fork->size; l++) {
+                                    fmd_decoded_match_t *decoded_match = decoded_matches_for_fork->data[l];
+                                    fprintf(foutput, "%s:(v:%lld,o:%lld)\n", tasks[j].str->seq, decoded_match->vid, decoded_match->offset);
+                                }
+                            }
+                            fmd_vector_free(decoded_matches);
+                            fmd_fmd_query_locate_paths_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
+                            fmd_string_free(tasks[j].str);
                         }
-                        if (tasks[j].paths_or_locs->size) fprintf(foutput, "%lld, ",
-                                                                (uint64_t) tasks[j].paths_or_locs->data[
-                                                                        tasks[j].paths_or_locs->size - 1]);
-                        else fprintf(foutput, "-\n");
-                        fmd_string_free(tasks[j].str);
-                        fmd_vector_free(tasks[j].paths_or_locs);
-                        tasks[j].str = NULL;
+                        break;
                     }
-                    break;
+                    default: {
+                        break;
+                    }
                 }
-                case fmd_query_mode_enumerate: {
-                    for (int_t j = 0; j < i; j++) {
-                        if (!tasks[j].str) continue;
-                        no_matching_forks += tasks[j].paths_or_locs->size;
-                        no_missing_forks += tasks[j].partial_matches->size;
-                        for (int_t k = 0; k < tasks[j].paths_or_locs->size; k++) {
-                            fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].paths_or_locs->data[k];
-                            no_matching_count += root->sa_hi - root->sa_lo;
-                            no_multiple_vertex_span_forks += (root->vertex_lo > -1);
-                            no_multiple_vertex_span_matches += (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
-                            fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
-                                    root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                            root = (fmd_fork_node_t *) root->parent;
-                            while (root) {
-                                fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
+                clock_gettime(CLOCK_REALTIME, &t2);
+                query_decoding_time += to_sec(t1, t2);
+            }
+            else {
+                switch (mode) {
+                    case fmd_query_mode_breadth: {
+                        for (int_t j = 0; j < i; j++) {
+                            if (!tasks[j].str) continue;
+                            fmd_vector_t *match_chains;
+                            fmd_fmd_topologise_forks(tasks[j].str, tasks[j].exact_matches, &match_chains);
+                            no_matching_forks += tasks[j].exact_matches->size;
+                            no_missing_forks += tasks[j].partial_matches->size;
+                            for (int_t k = 0; k < match_chains->size; k++) {
+                                fmd_match_chain_t *list = match_chains->data[k];
+                                fmd_fmd_match_node_t *root = (fmd_fmd_match_node_t *) list->head;
+                                no_matching_count += root->sa_hi - root->sa_lo;
+                                no_multiple_vertex_span_forks += (root->v_lo > -1);
+                                no_multiple_vertex_span_matches +=
+                                        (root->v_hi > root->v_lo) * (root->sa_hi - root->sa_lo);
+                                fprintf(foutput, "(%s,v:(%lld,%lld),sa:(%lld,%lld))", root->matching_substring->seq,
+                                        root->v_lo,
+                                        root->v_hi, root->sa_lo, root->sa_hi);
+                                root = (fmd_fmd_match_node_t *) root->next;
+                                while (root != list->dummy) {
+                                    fprintf(foutput, "->(%s,v:(%lld,%lld),sa:(%lld,%lld))",
+                                            root->matching_substring->seq, root->v_lo,
+                                            root->v_hi, root->sa_lo, root->sa_hi);
+                                    root = (fmd_fmd_match_node_t *) root->next;
+                                }
+                                if (!verbose) fprintf(foutput, "\n");
+                                else fprintf(foutput, ": %s\n", tasks[j].str->seq);
+                            }
+                            if (!tasks[j].exact_matches->size) fprintf(foutput, "-\n");
+                            fprintf(foutput, "\n");
+                            fmd_fmd_topologise_forks_free(match_chains);
+                            fmd_fmd_query_locate_paths_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
+                            fmd_string_free(tasks[j].str);
+                            tasks[j].str = NULL;
+                        }
+                        break;
+                    }
+                    case fmd_query_mode_enumerate: {
+                        for (int_t j = 0; j < i; j++) {
+                            if (!tasks[j].str) continue;
+                            no_matching_forks += tasks[j].exact_matches->size;
+                            no_missing_forks += tasks[j].partial_matches->size;
+                            for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
+                                fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].exact_matches->data[k];
+                                no_matching_count += root->sa_hi - root->sa_lo;
+                                no_multiple_vertex_span_forks += (root->vertex_lo > -1);
+                                no_multiple_vertex_span_matches +=
+                                        (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
+                                fprintf(foutput, "%s:(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", tasks[j].str->seq,
+                                        root->vertex_lo,
                                         root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
                                 root = (fmd_fork_node_t *) root->parent;
+                                while (root) {
+                                    fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
+                                            root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                                    root = (fmd_fork_node_t *) root->parent;
+                                }
+                                if (!verbose) fprintf(foutput, "\n");
+                                else fprintf(foutput, ": %s\n", tasks[j].str->seq);
                             }
-                            if (!verbose) fprintf(foutput, "\n");
-                            else fprintf(foutput, ": %s\n", tasks[j].str->seq);
+                            if (!tasks[j].exact_matches->size) fprintf(foutput, "-\n");
+                            fprintf(foutput, "\n");
+                            fmd_fmd_query_locate_paths_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
+                            fmd_string_free(tasks[j].str);
+                            tasks[j].str = NULL;
                         }
-                        if (!tasks[j].paths_or_locs->size) fprintf(foutput, "-\n");
-                        fprintf(foutput, "\n");
-                        fmd_fmd_locate_paths_result_free(tasks[j].paths_or_locs, tasks[j].partial_matches);
-                        fmd_string_free(tasks[j].str);
-                        tasks[j].str = NULL;
+                        break;
                     }
-                    break;
-                }
-                default: {
-                    break;
+                    default: {
+                        break;
+                    }
                 }
             }
             if(exit_flag)
@@ -635,65 +698,6 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         }
         free(buf);
         free(tasks);
-#else
-        char *query_cstr = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
-        clock_gettime(CLOCK_REALTIME, &t1);
-        while(fgets(query_cstr, FMD_MAIN_QUERY_BUF_LEN, finput)) {
-            size_t query_len = strlen(query_cstr);
-            if(!query_len) continue; // skip empty lines
-            if(query_cstr[query_len-1] == '\n')query_cstr[query_len-1] = 0; // get rid of the line break
-            if(!strcmp(query_cstr,FMD_MAIN_QUERY_EXIT_PROMPT)) break; // break if exit prompt is given
-
-            fmd_string_t *query;
-            fmd_string_init_cstr(&query, query_cstr);
-            queries_processed++;
-
-            switch(mode) {
-                case fmd_query_mode_count: {
-                    uint64_t count = fmd_fmd_query_count(fmd, query);
-                    fprintf(foutput,"%lld\n",count);
-                    break;
-                }
-                case fmd_query_mode_locate: {
-                    fmd_vector_t *locs = fmd_fmd_query_locate_basic(fmd, query);
-                    for(int_t i = 0; i < locs->size-1; i++) {
-                        fprintf(foutput, "%lld, ", (uint64_t)locs->data[i]);
-                    }
-                    if(locs->size) fprintf(foutput, "%lld, ", (uint64_t)locs->data[locs->size-1]);
-                    free(locs);
-                    break;
-                }
-                case fmd_query_mode_enumerate: {
-                    fmd_vector_t *paths, *graveyard;
-                    fmd_fmd_query_locate_paths(fmd, query, max_matches, &paths, &graveyard);
-                    no_matching_forks += paths->size;
-                    no_missing_forks += graveyard->size;
-                    for(int_t i = 0; i < paths->size; i++) {
-                        fmd_fork_node_t *root = (fmd_fork_node_t*)paths->data[i];
-                        fprintf(foutput, "(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                        root = (fmd_fork_node_t*)root->parent;
-                        no_matching_count += root->sa_hi - root->sa_lo;
-                        no_multiple_vertex_span_forks += (root->vertex_lo > -1);
-                        no_multiple_vertex_span_matches += (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
-                        while(root) {
-                            fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo, root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                            root = (fmd_fork_node_t*)root->parent;
-                        }
-                        fprintf(foutput, "\n");
-                    }
-                    fprintf(foutput, "\n");
-                    fmd_fmd_locate_paths_result_free(paths, graveyard);
-                }
-                default: {
-                    break;
-                }
-            }
-            fmd_string_free(query);
-        }
-        clock_gettime(CLOCK_REALTIME, &t2);
-        query_time = to_sec(t1,t2);
-        free(query_cstr);
-#endif
     }
     /**************************************************************************
     * 4 - Free all data structures and return
@@ -703,7 +707,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     if(verbose) {
         fprintf(stderr, "[fmd:query] Total querying time in seconds: %lf\n",query_time);
-        fprintf(stderr, "[fmd:query] Numer of queries processed: %lld\n",queries_processed);
+        if(decode)
+            fprintf(stderr, "[fmd:query] Total decoding time in seconds: %lf\n",query_decoding_time);
+        fprintf(stderr, "[fmd:query] Number of queries processed: %lld\n",queries_processed);
         if(queries_processed)
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
         if(mode == fmd_query_mode_enumerate && queries_processed && no_matching_forks) {
@@ -726,6 +732,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         }
     }
 
+    fmd_fmd_decoder_free(fmd_dec);
     fmd_fmd_free(fmd);
     return return_code;
 }
@@ -1124,15 +1131,16 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "[fmd:help] fmd query loads a graph index in fmdi format into memory and runs the provided queries on the graph.\n");
             fprintf(stderr, "[fmd:help] Query inputs are expected in the form of one string per line or in FASTQ format.\n");
             fprintf(stderr, "[fmd:help] fmd query supports many querying modes, which are described below:\n");
-            fprintf(stderr, "\tcount:     Counts the occurrences of the string in the space of strings induced by the string graph. Results are returned as a single integer per line.\n");
-            fprintf(stderr, "\tlocate:    Locates the vertex IDs and positions into vertices of the string matches. Results are returned as (vertex_id, index) tuples per line.\n");
+            fprintf(stderr, "\tbreadth: Enumerates the paths to which vertices match in a breadth first merge manner. Results are returned as (vertex_id, index) (vertex_id) ... (vertex_id) (vertex_id index) per match per line.\n");
             fprintf(stderr, "\tenumerate: Enumerates the paths to which vertices match. Results are returned as (vertex_id, index) (vertex_id) ... (vertex_id) (vertex_id index) per match per line.\n");
             fprintf(stderr, "[fmd:help] Parameters:\n");
             fprintf(stderr, "\t--reference   or -r: Required parameter. Path to the index file. See fmd index for more help.\n");
             fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
             fprintf(stderr, "\t--fastq       or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
-            fprintf(stderr, "\t--max-matches or -m: Optimal parameter.  Number of maximum matches to be returned for a query. Setting this to -1 returns all matches. Default: -1\n");
+            fprintf(stderr, "\t--max-forks   or -m: Optional parameter. Number of maximum forks to be tracked for a query. Setting this to -1 tracks all forks. Default: -1\n");
+            fprintf(stderr, "\t--max-matches or -M: Optional parameter. Maximum number of matches decoded for a query. Setting this to -1 decodes all matches. Default: -1\n");
+            fprintf(stderr, "\t--decode      or -d: Optional flag.      Decodes the matches into text space. Setting to true may result in combinatorial blowup. Default: False\n");
             fprintf(stderr, "\t--batch-size  or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
             fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
             fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
