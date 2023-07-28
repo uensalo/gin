@@ -71,5 +71,5 @@ do
     LOG_FILE="$LOG_DIR/${BASENAME}_log_sample_rate_${SAMPLE_RATE}.txt"
 
     # Run the query operation, redirecting stderr to the log file
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query breadth -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 done

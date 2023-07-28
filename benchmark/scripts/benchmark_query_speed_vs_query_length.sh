@@ -73,7 +73,7 @@ do
     touch $LOG_FILE
 
     # Benchmark the index with the query set, redirecting stderr to the log file
-    $FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query breadth -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v 2>> $LOG_FILE
 
     # Log permutation parameters
     echo "[fmd:benchmark] Permutation Parameters:" >> $LOG_FILE
