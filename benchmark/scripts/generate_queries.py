@@ -1,13 +1,14 @@
 import sys
 import random
 import argparse
+from collections import defaultdict
 
 def sample_strings(input_file, length, num_samples, output_file, seed=None):
     if seed is not None:
         random.seed(seed)
 
     vertices = {}
-    edges = []
+    adjacency_list = defaultdict(list)
     with open(input_file, 'r') as f:
         for line in f:
             type, id, data = line.strip().split('\t')
@@ -16,7 +17,7 @@ def sample_strings(input_file, length, num_samples, output_file, seed=None):
                 vertices[id] = data
             elif type == 'E':
                 _, from_vertex, to_vertex = line.strip().split('\t')
-                edges.append((int(from_vertex), int(to_vertex)))
+                adjacency_list[int(from_vertex)].append(int(to_vertex))
 
     with open(output_file, 'w') as f:
         for _ in range(num_samples):
@@ -29,10 +30,9 @@ def sample_strings(input_file, length, num_samples, output_file, seed=None):
                 needed = length - len(string)
 
                 while len(string) < length:
-                    outgoing = [edge for edge in edges if edge[0] == vertex]
-                    if not outgoing:
+                    if not adjacency_list[vertex]:
                         break
-                    _, vertex = random.choice(outgoing)
+                    vertex = random.choice(adjacency_list[vertex])
                     path.append(vertex)
                     needed = length - len(string)
                     string += vertices[vertex][:needed]
@@ -43,8 +43,6 @@ def sample_strings(input_file, length, num_samples, output_file, seed=None):
                     f.write("{} ,{}\t{}\n".format('\t'.join(map(str, path)), first_offset, last_offset))
                     print(string)
                     break
-                #else:
-                #    print(f"Failed to generate a string of length {length}. Retrying...", file=sys.stderr)
 
         print("exit();")
 
