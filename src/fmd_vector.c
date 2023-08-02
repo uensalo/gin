@@ -25,6 +25,13 @@ void fmd_vector_free(fmd_vector_t *vec) {
     }
 }
 
+void fmd_vector_free_disown(fmd_vector_t *vec) {
+    if(vec) {
+        free(vec->data);
+        free(vec);
+    }
+}
+
 void fmd_vector_grow(fmd_vector_t *vec) {
     vec->data = realloc(vec->data, (vec->capacity *= 2) * sizeof(void *));
 }

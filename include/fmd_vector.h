@@ -13,6 +13,7 @@ typedef struct fmd_vector_ {
 
 void fmd_vector_init(fmd_vector_t **vec, int_t initial_capacity, fmd_fstruct_t *f);
 void fmd_vector_free(fmd_vector_t *vec);
+void fmd_vector_free_disown(fmd_vector_t *vec);
 void fmd_vector_grow(fmd_vector_t *vec);
 void fmd_vector_shrink(fmd_vector_t *vec);
 void fmd_vector_fit(fmd_vector_t *vec);

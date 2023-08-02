@@ -30,12 +30,11 @@ typedef enum fmd_mode_ {
     fmd_mode_no_modes=5
 } fmd_mode_t;
 
-char* fmd_query_mode_names[] = {"enumerate", "breadth"};
+char* fmd_query_mode_names[] = {"find"};
 
 typedef enum fmd_query_mode_ {
-    fmd_query_mode_enumerate=0,
-    fmd_query_mode_breadth=1,
-    fmd_query_mode_no_modes=2,
+    fmd_query_mode_find=0,
+    fmd_query_mode_no_modes=1,
 } fmd_query_mode_t;
 
 char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query"};
@@ -389,8 +388,6 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     int_t no_matching_forks = 0;
     int_t no_missing_forks = 0;
     int_t no_matching_count = 0; // to compare with DFS
-    int_t no_multiple_vertex_span_forks = 0; // keep track of vertices spanning multiple vertices
-    int_t no_multiple_vertex_span_matches = 0; // same but keeps the count
 
     static struct option options[] = {
             {"reference",  required_argument, NULL, 'r'},
@@ -506,7 +503,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         return_code = -1;
         return return_code;
     }
-    fmd_fmd_decoder_init(&fmd_dec, fmd);
+    if(decode) {
+        fmd_fmd_decoder_init(&fmd_dec, fmd);
+    }
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/
@@ -569,17 +568,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             omp_set_num_threads((int)num_threads);
 #endif
             switch(mode) {
-                case fmd_query_mode_enumerate: {
+                case fmd_query_mode_find: {
                     #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_locate_paths(fmd, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches, num_threads);
-                    }
-                    break;
-                }
-                case fmd_query_mode_breadth: {
-                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
-                    for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_locate_paths_breadth_first(fmd, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches);
+                        fmd_fmd_query_find(fmd, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches);
                     }
                     break;
                 }
@@ -593,8 +585,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             if(decode) {
                 clock_gettime(CLOCK_REALTIME, &t1);
                 switch(mode) {
-                    case fmd_query_mode_enumerate:
-                    case fmd_query_mode_breadth: {
+                    case fmd_query_mode_find: {
                         for(int_t j = 0; j < i; j++) {
                             if(!tasks[j].str) continue;
                             fmd_vector_t *decoded_matches;
@@ -607,7 +598,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                 }
                             }
                             fmd_vector_free(decoded_matches);
-                            fmd_fmd_query_locate_paths_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
+                            fmd_fmd_query_find_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
                             fmd_string_free(tasks[j].str);
                         }
                         break;
@@ -621,72 +612,37 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             else {
                 switch (mode) {
-                    case fmd_query_mode_breadth: {
+                    case fmd_query_mode_find: {
                         for (int_t j = 0; j < i; j++) {
                             if (!tasks[j].str) continue;
-                            fmd_vector_t *match_chains;
-                            fmd_fmd_topologise_forks(tasks[j].str, tasks[j].exact_matches, &match_chains);
-                            no_matching_forks += tasks[j].exact_matches->size;
-                            no_missing_forks += tasks[j].partial_matches->size;
-                            for (int_t k = 0; k < match_chains->size; k++) {
-                                fmd_match_chain_t *list = match_chains->data[k];
-                                fmd_fmd_match_node_t *root = (fmd_fmd_match_node_t *) list->head;
-                                no_matching_count += root->sa_hi - root->sa_lo;
-                                no_multiple_vertex_span_forks += (root->v_lo > -1);
-                                no_multiple_vertex_span_matches +=
-                                        (root->v_hi > root->v_lo) * (root->sa_hi - root->sa_lo);
-                                fprintf(foutput, "(%s,v:(%lld,%lld),sa:(%lld,%lld))", root->matching_substring->seq,
-                                        root->v_lo,
-                                        root->v_hi, root->sa_lo, root->sa_hi);
-                                root = (fmd_fmd_match_node_t *) root->next;
-                                while (root != list->dummy) {
-                                    fprintf(foutput, "->(%s,v:(%lld,%lld),sa:(%lld,%lld))",
-                                            root->matching_substring->seq, root->v_lo,
-                                            root->v_hi, root->sa_lo, root->sa_hi);
+                            if (!tasks[j].exact_matches->size) {
+                                fprintf(foutput, "%s:(0)\n",tasks[j].str->seq);
+                                fprintf(foutput, "\t:-\n",tasks[j].str->seq);
+                            } else {
+                                fmd_vector_t *match_chains;
+                                int_t count;
+                                fmd_fmd_topologise_forks(tasks[j].str, tasks[j].exact_matches, &match_chains, &count);
+                                fprintf(foutput, "%s:(%lld)\n",tasks[j].str->seq, count);
+                                no_matching_forks += tasks[j].exact_matches->size;
+                                no_missing_forks += tasks[j].partial_matches->size;
+                                for (int_t k = 0; k < match_chains->size; k++) {
+                                    fmd_match_chain_t *list = match_chains->data[k];
+                                    fmd_fmd_match_node_t *root = (fmd_fmd_match_node_t *) list->head;
+                                    no_matching_count += root->sa_hi - root->sa_lo;
+                                    fprintf(foutput, "\t(%s,sa:(%lld,%lld))", root->matching_substring->seq, root->sa_lo,root->sa_hi);
                                     root = (fmd_fmd_match_node_t *) root->next;
+                                    while (root != list->dummy) {
+                                        fprintf(foutput, "<-(%s,sa:(%lld,%lld))", root->matching_substring->seq, root->sa_lo, root->sa_hi);
+                                        root = (fmd_fmd_match_node_t *) root->next;
+                                    }
+                                    fprintf(foutput, "\n");
                                 }
-                                if (!verbose) fprintf(foutput, "\n");
-                                else fprintf(foutput, ": %s\n", tasks[j].str->seq);
+                                fmd_fmd_topologise_forks_free(match_chains);
                             }
-                            if (!tasks[j].exact_matches->size) fprintf(foutput, "-\n");
-                            fprintf(foutput, "\n");
-                            fmd_fmd_topologise_forks_free(match_chains);
-                            fmd_fmd_query_locate_paths_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
+                            fmd_fmd_query_find_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
                             fmd_string_free(tasks[j].str);
                             tasks[j].str = NULL;
                         }
-                        break;
-                    }
-                    case fmd_query_mode_enumerate: {
-                        for (int_t j = 0; j < i; j++) {
-                            if (!tasks[j].str) continue;
-                            no_matching_forks += tasks[j].exact_matches->size;
-                            no_missing_forks += tasks[j].partial_matches->size;
-                            for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
-                                fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].exact_matches->data[k];
-                                no_matching_count += root->sa_hi - root->sa_lo;
-                                no_multiple_vertex_span_forks += (root->vertex_lo > -1);
-                                no_multiple_vertex_span_matches +=
-                                        (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
-                                fprintf(foutput, "%s:(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", tasks[j].str->seq,
-                                        root->vertex_lo,
-                                        root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                                root = (fmd_fork_node_t *) root->parent;
-                                while (root) {
-                                    fprintf(foutput, "->(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
-                                            root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
-                                    root = (fmd_fork_node_t *) root->parent;
-                                }
-                                if (!verbose) fprintf(foutput, "\n");
-                                else fprintf(foutput, ": %s\n", tasks[j].str->seq);
-                            }
-                            if (!tasks[j].exact_matches->size) fprintf(foutput, "-\n");
-                            fprintf(foutput, "\n");
-                            fmd_fmd_query_locate_paths_result_free(tasks[j].exact_matches, tasks[j].partial_matches);
-                            fmd_string_free(tasks[j].str);
-                            tasks[j].str = NULL;
-                        }
-                        break;
                     }
                     default: {
                         break;
@@ -712,14 +668,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         fprintf(stderr, "[fmd:query] Number of queries processed: %lld\n",queries_processed);
         if(queries_processed)
             fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
-        if((mode == fmd_query_mode_enumerate || mode == fmd_query_mode_breadth) && queries_processed && no_matching_forks) {
+        if((mode == fmd_query_mode_find) && queries_processed && no_matching_forks) {
             fprintf(stderr, "[fmd:query] Forks:\n");
             fprintf(stderr, "[fmd:query] Number of matching forks: %lld\n",no_matching_forks);
             fprintf(stderr, "[fmd:query] Number of partial forks: %lld\n",no_missing_forks);
-            fprintf(stderr, "[fmd:query] Number of forks spanning multiple vertices: %lld\n", no_multiple_vertex_span_forks);
             fprintf(stderr, "[fmd:query] Matches:\n");
             fprintf(stderr, "[fmd:query] Number of matches: %lld\n",no_matching_count);
-            fprintf(stderr, "[fmd:query] Number of matches spanning multiple vertices: %lld\n", no_multiple_vertex_span_matches);
             fprintf(stderr, "[fmd:query] Aggregate statistics:\n");
             fprintf(stderr, "[fmd:query] Average matches per matching fork: %.8lf\n",(double)no_matching_count / (double)no_matching_forks);
             fprintf(stderr, "[fmd:query] Average matches per fork: %.8lf\n",(double)no_matching_count / ((double)no_matching_forks + (double)no_missing_forks));
@@ -731,8 +685,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             fprintf(stderr, "[fmd:query] Average time per match: %.8lf\n", (double)query_time / ((double)no_matching_count));
         }
     }
-
-    fmd_fmd_decoder_free(fmd_dec);
+    if(decode)
+        fmd_fmd_decoder_free(fmd_dec);
     fmd_fmd_free(fmd);
     return return_code;
 }
@@ -1130,9 +1084,8 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "[fmd:help] ---------- fmd:query ----------\n");
             fprintf(stderr, "[fmd:help] fmd query loads a graph index in fmdi format into memory and runs the provided queries on the graph.\n");
             fprintf(stderr, "[fmd:help] Query inputs are expected in the form of one string per line or in FASTQ format.\n");
-            fprintf(stderr, "[fmd:help] fmd query supports many querying modes, which are described below:\n");
-            fprintf(stderr, "\tbreadth: Enumerates the paths to which vertices match in a breadth first merge manner. Results are returned as (vertex_id, index) (vertex_id) ... (vertex_id) (vertex_id index) per match per line.\n");
-            fprintf(stderr, "\tenumerate: Enumerates the paths to which vertices match. Results are returned as (vertex_id, index) (vertex_id) ... (vertex_id) (vertex_id index) per match per line.\n");
+            fprintf(stderr, "[fmd:help] fmd query various modes (currently a single one), which are described below:\n");
+            fprintf(stderr, "\tfind: Finds matching walk roots. Results are returned as (vertex_id, index) per match per line if --decode is enabled, otherwise returns the path matching of the query as: <query>(<partial_match>,sa:[start,end))<- ...\n");
             fprintf(stderr, "[fmd:help] Parameters:\n");
             fprintf(stderr, "\t--reference   or -r: Required parameter. Path to the index file. See fmd index for more help.\n");
             fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
@@ -1144,7 +1097,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--batch-size  or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
             fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
             fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
-            fprintf(stderr, "[fmd:help] Example invocation: fmd query enumerate -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -m 10 -v\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd query enumerate -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -m 5 -M 10 -v\n");
             return_code = 0;
             break;
         }

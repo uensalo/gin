@@ -37,7 +37,7 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_fmd.c
     ${PROJECT_SOURCE_DIR}/fmd_constraint_set.c
     ${PROJECT_SOURCE_DIR}/fmd_annealing.c
-    ${PROJECT_SOURCE_DIR}/fmd_fuzzy.c
+    #${PROJECT_SOURCE_DIR}/fmd_fuzzy.c
     ${PROJECT_SOURCE_DIR}/fmd_match_chain.c
 )
 set(H_FILES
@@ -54,7 +54,7 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_fmd.h
     ${PROJECT_HEADER_DIR}/fmd_constraint_set.h
     ${PROJECT_HEADER_DIR}/fmd_annealing.h
-    ${PROJECT_HEADER_DIR}/fmd_fuzzy.h
+    #${PROJECT_HEADER_DIR}/fmd_fuzzy.h
     ${PROJECT_HEADER_DIR}/fmd_match_chain.h
     ${PROJECT_HEADER_DIR}/rgfa_parser.h
     ${PROJECT_HEADER_DIR}/permutation_parser.h
@@ -78,6 +78,7 @@ if(BUILD_OPENMP)
         set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     endif()
 endif()
+
 ################################################################################
 # dependencies
 ################################################################################

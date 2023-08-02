@@ -28,7 +28,7 @@ fmd_match_chain_t *fmd_fmd_match_chain_copy(fmd_match_chain_t *chain) {
 
     fmd_fmd_match_node_t *current = chain->dummy->next;
     while(current != chain->dummy) {
-        fmd_fmd_match_chain_append(copy, current->matching_substring, current->v_lo, current->v_hi, current->sa_lo, current->sa_hi);
+        fmd_fmd_match_chain_append(copy, current->matching_substring, current->sa_lo, current->sa_hi);
         current = current->next;
     }
 
@@ -41,8 +41,6 @@ uint_t fmd_fmd_match_chain_hash(fmd_match_chain_t *chain) {
     fmd_fmd_match_node_t *current = chain->dummy->next;
     while(current != chain->dummy) {
         uint_t hash_item = fmd_string_hash(current->matching_substring)
-                ^ prm_hash_f((void*)current->v_lo)
-                ^ prm_hash_f((void*)current->v_hi)
                 ^ prm_hash_f((void*)current->sa_lo)
                 ^ prm_hash_f((void*)current->sa_hi);
         hash ^= hash_item;
@@ -66,14 +64,11 @@ int fmd_fmd_match_chain_comp(fmd_match_chain_t *l1, fmd_match_chain_t *l2) {
     return (n1 != l1->dummy) - (n2 != l2->dummy);
 }
 
-void fmd_fmd_match_chain_append(fmd_match_chain_t *chain, fmd_string_t *match_string, int_t v_lo, int_t v_hi, int_t sa_lo, int_t sa_hi) {
+void fmd_fmd_match_chain_append(fmd_match_chain_t *chain, fmd_string_t *match_string, int_t sa_lo, int_t sa_hi) {
     fmd_fmd_match_node_t *new_node = (fmd_fmd_match_node_t*)calloc(1,sizeof(fmd_fmd_match_node_t));
     new_node->matching_substring = match_string;
-    new_node->v_lo = v_lo;
-    new_node->v_hi = v_hi;
     new_node->sa_lo = sa_lo;
     new_node->sa_hi = sa_hi;
-
     if (chain->size == 0) {
         chain->head = new_node;
         chain->tail = new_node;
@@ -91,14 +86,11 @@ void fmd_fmd_match_chain_append(fmd_match_chain_t *chain, fmd_string_t *match_st
     chain->size++;
 }
 
-void fmd_fmd_match_chain_prepend(fmd_match_chain_t *chain, fmd_string_t *match_string, int_t v_lo, int_t v_hi, int_t sa_lo, int_t sa_hi) {
+void fmd_fmd_match_chain_prepend(fmd_match_chain_t *chain, fmd_string_t *match_string, int_t sa_lo, int_t sa_hi) {
     fmd_fmd_match_node_t *new_node = (fmd_fmd_match_node_t*)calloc(1,sizeof(fmd_fmd_match_node_t));
     new_node->matching_substring = match_string;
-    new_node->v_lo = v_lo;
-    new_node->v_hi = v_hi;
     new_node->sa_lo = sa_lo;
     new_node->sa_hi = sa_hi;
-
     if (chain->size == 0) {
         chain->head = new_node;
         chain->tail = new_node;
