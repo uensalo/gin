@@ -553,6 +553,8 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
     // allocate a buffer to group by fork position
     int_t V = fmd->permutation->size;
 
+    printf("%s\n",string->seq);
+
     // data structures to return the matches
     fmd_vector_t *matches;
     fmd_vector_t *partial_matches;
@@ -586,7 +588,6 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
         *paths = matches;
         fmd_vector_append(partial_matches, root_fork);
         *dead_ends = partial_matches;
-        //fmd_fmd_qr_free(root_query);
         fmd_vector_free(forks);
         return;
     }
@@ -607,7 +608,7 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
             fmd_vector_t *incoming_sa_intervals;
             bool more_to_track = max_forks == -1 || max_forks > forks->size;
             if(more_to_track && c_0_lo < c_0_hi) {
-                fmd_fork_node_t *fork_root = fork;
+                fmd_fork_node_t *fork_root;
                 fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
                 int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
                 if(no_forks_to_add) {
@@ -617,7 +618,7 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
                 for (int_t j = 0; j < no_forks_to_add; j++) {
                     fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
                     fmd_fork_node_t *new_fork = fmd_fork_node_init(fork_root,
-                                                                   V+1+fork->vertex_lo, V+2+fork->vertex_hi,
+                                                                   V+1+interval->lo, V+2+interval->hi,
                                                                    interval->lo, interval->hi + 1,
                                                                    fork->pos,
                                                                    false, false, true);
@@ -634,7 +635,7 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
         **********************************************************************/
         fmd_vector_t *merged;
         fmd_fmd_compact_forks(fmd, new_forks, &merged);
-        //fmd_vector_free(new_forks);
+        fmd_vector_free(new_forks);
         /**********************************************************************
         * Step 3 - Advance Phase: advance each fork once
         **********************************************************************/
@@ -656,7 +657,6 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
                 {
                     fmd_vector_append(partial_matches, fork);
                 }
-                //fmd_fmd_qr_free(qr);
             } else {
                 #pragma omp critical(next_iter_queries_append)
                 {
@@ -668,7 +668,6 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
         #pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks)
         for (int_t i = 0; i < merged->size; i++) {
             fmd_fork_node_t *fork = merged->data[i];
-            //fmd_fmd_qr_t *qr = fmd_fmd_qr_init(fork, V + 1 + fork->vertex_lo, V + 2 + fork->vertex_hi, fork->pos, string);
             fmd_fmd_advance_query(fmd, fork, string);
             if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
                 fmd_fork_node_t *dead_node = fmd_fork_node_init(fork,
@@ -688,29 +687,34 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
                 }
             }
         }
-        //fmd_vector_free_disown(merged);
-        //fmd_vector_free_disown(forks);
+        fmd_vector_free_disown(merged);
+        fmd_vector_free_disown(forks);
+        #ifdef FMD_BREADTH_MERGE_TWICE
+        fmd_vector_sort(next_iter_forks);
+        fmd_vector_t *compacted;
+
+        printf("prev: ");
+        for(int_t i = 0; i < next_iter_forks->size; i++) {
+            fmd_fork_node_t *fork = next_iter_forks->data[i];
+            printf("[%d,%d) ", fork->sa_lo, fork->sa_hi);
+        }
+        printf("\n");
+
+        fmd_fmd_compact_forks(fmd, next_iter_forks, &compacted);
+        fmd_vector_free(next_iter_forks);
+        next_iter_forks = compacted;
+
+        printf("next: ");
+        for(int_t i = 0; i < next_iter_forks->size; i++) {
+            fmd_fork_node_t *fork = next_iter_forks->data[i];
+            printf("[%d,%d) ", fork->sa_lo, fork->sa_hi);
+        }
+        printf("\n");
+
+        #endif
         forks = next_iter_forks;
         --global_pos;
     }
-    //fmd_vector_init(&matches, forks->size, &fmd_fstruct_fork_node);
-    //#pragma omp parallel for default(none) shared(forks, matches)
-    /*
-    for(int_t i = 0; i < forks->size; i++) {
-        fmd_fork_node_t *fork = forks->data[i];
-        fmd_fork_node_t *leaf = fmd_fork_node_init(fork,
-                                                   fork->sa_lo, fork->sa_hi,
-                                                   fork->vertex_lo, fork->vertex_hi,
-                                                   fork->pos,
-                                                   true, false, false);
-
-        //qr->cur_fork = leaf;
-        matches->data[i] = leaf;
-        //fmd_fmd_qr_free(qr);
-    }
-    matches->size = forks->size;
-    //fmd_vector_free_disown(forks);
-     */
     *paths = forks;
     *dead_ends = partial_matches;
 }
@@ -718,7 +722,7 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks) {
     fmd_vector_sort(forks);
     fmd_vector_t *merged;
-    fmd_vector_init(&merged, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+    fmd_vector_init(&merged, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
     int_t V = fmd->permutation->size;
     if(forks->size) {
         fmd_fork_node_t *cur_fork = fmd_fork_node_copy(forks->data[0]);

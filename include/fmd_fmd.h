@@ -55,16 +55,6 @@ static fmd_fstruct_t fmd_fstruct_fork_node = {
         (fcopy) fmd_fork_node_copy,
 };
 
-//typedef struct fmd_fmd_qr_{
-//    fmd_fork_node_t *cur_fork;
-//    int_t lo;
-//    int_t hi;
-//    int_t pos;
-//    fmd_string_t *pattern;
-//} fmd_fmd_qr_t;
-//fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern);
-//void fmd_fmd_qr_free(fmd_fmd_qr_t *q);
-
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
     char_t c_1; // character marking the end of a vertex
