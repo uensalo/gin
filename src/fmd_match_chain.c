@@ -73,7 +73,6 @@ void fmd_fmd_match_chain_append(fmd_match_chain_t *chain, fmd_string_t *match_st
     new_node->v_hi = v_hi;
     new_node->sa_lo = sa_lo;
     new_node->sa_hi = sa_hi;
-
     if (chain->size == 0) {
         chain->head = new_node;
         chain->tail = new_node;
@@ -98,7 +97,6 @@ void fmd_fmd_match_chain_prepend(fmd_match_chain_t *chain, fmd_string_t *match_s
     new_node->v_hi = v_hi;
     new_node->sa_lo = sa_lo;
     new_node->sa_hi = sa_hi;
-
     if (chain->size == 0) {
         chain->head = new_node;
         chain->tail = new_node;

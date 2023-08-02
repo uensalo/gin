@@ -506,7 +506,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         return_code = -1;
         return return_code;
     }
-    fmd_fmd_decoder_init(&fmd_dec, fmd);
+    if(decode) {
+        fmd_fmd_decoder_init(&fmd_dec, fmd);
+    }
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
     **************************************************************************/
@@ -622,6 +624,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             else {
                 switch (mode) {
                     case fmd_query_mode_breadth: {
+
                         for (int_t j = 0; j < i; j++) {
                             if (!tasks[j].str) continue;
                             fmd_vector_t *match_chains;
@@ -631,10 +634,6 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                             for (int_t k = 0; k < match_chains->size; k++) {
                                 fmd_match_chain_t *list = match_chains->data[k];
                                 fmd_fmd_match_node_t *root = (fmd_fmd_match_node_t *) list->head;
-                                no_matching_count += root->sa_hi - root->sa_lo;
-                                no_multiple_vertex_span_forks += (root->v_lo > -1);
-                                no_multiple_vertex_span_matches +=
-                                        (root->v_hi > root->v_lo) * (root->sa_hi - root->sa_lo);
                                 fprintf(foutput, "(%s,v:(%lld,%lld),sa:(%lld,%lld))", root->matching_substring->seq,
                                         root->v_lo,
                                         root->v_hi, root->sa_lo, root->sa_hi);
@@ -647,6 +646,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                 }
                                 if (!verbose) fprintf(foutput, "\n");
                                 else fprintf(foutput, ": %s\n", tasks[j].str->seq);
+                                no_matching_count += list->tail->sa_hi - list->tail->sa_lo;
+                                no_multiple_vertex_span_forks += (list->tail->v_lo > -1);
+                                no_multiple_vertex_span_matches +=
+                                        (list->tail->v_hi > list->tail->v_lo) * (list->tail->sa_hi - list->tail->sa_lo);
                             }
                             if (!tasks[j].exact_matches->size) fprintf(foutput, "-\n");
                             fprintf(foutput, "\n");
@@ -657,6 +660,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         }
                         break;
                     }
+
                     case fmd_query_mode_enumerate: {
                         for (int_t j = 0; j < i; j++) {
                             if (!tasks[j].str) continue;
@@ -731,8 +735,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             fprintf(stderr, "[fmd:query] Average time per match: %.8lf\n", (double)query_time / ((double)no_matching_count));
         }
     }
-
-    fmd_fmd_decoder_free(fmd_dec);
+    if(decode)
+        fmd_fmd_decoder_free(fmd_dec);
     fmd_fmd_free(fmd);
     return return_code;
 }

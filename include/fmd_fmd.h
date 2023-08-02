@@ -38,7 +38,11 @@ typedef struct fmd_fork_node_{
     bool is_dead;
     bool is_merged;
 } fmd_fork_node_t;
-fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t vlo, int_t vhi, int_t pos, bool is_leaf, bool is_dead, bool is_merged);
+fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent,
+                                    int_t sa_lo, int_t sa_hi,
+                                    int_t v_lo, int_t v_hi,
+                                    int_t pos,
+                                    bool is_leaf, bool is_dead, bool is_merged); // todo: pack flags
 void fmd_fork_node_free(fmd_fork_node_t *node);
 fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node);
 uint_t fmd_fork_node_hash(fmd_fork_node_t *node);
@@ -51,15 +55,15 @@ static fmd_fstruct_t fmd_fstruct_fork_node = {
         (fcopy) fmd_fork_node_copy,
 };
 
-typedef struct fmd_fmd_qr_{
-    fmd_fork_node_t *cur_fork;
-    int_t lo;
-    int_t hi;
-    int_t pos;
-    fmd_string_t *pattern;
-} fmd_fmd_qr_t;
-fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern);
-void fmd_fmd_qr_free(fmd_fmd_qr_t *q);
+//typedef struct fmd_fmd_qr_{
+//    fmd_fork_node_t *cur_fork;
+//    int_t lo;
+//    int_t hi;
+//    int_t pos;
+//    fmd_string_t *pattern;
+//} fmd_fmd_qr_t;
+//fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern);
+//void fmd_fmd_qr_free(fmd_fmd_qr_t *q);
 
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
@@ -75,12 +79,12 @@ void fmd_fmd_free(fmd_fmd_t *fmd);
 int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
 
 void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
-void fmd_fmd_query_locate_paths_process_query_record(fmd_fmd_t *fmd, fmd_fmd_qr_t *rec, int_t max_forks, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
+void fmd_fmd_query_locate_paths_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
 void fmd_fmd_query_locate_paths_legacy(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_query_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
 
 void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
-void fmd_fmd_compact_forks(fmd_vector_t *forks, fmd_vector_t **merged_forks);
+void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
 
 // for reporting results
 void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain);
@@ -130,8 +134,8 @@ void fmd_fmd_decoder_decode_one(fmd_fmd_decoder_t *dec, int_t sa_lo, int_t sa_hi
  */
 void fmd_fmd_decoder_decode_ends(fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t max_matches, fmd_vector_t **decoded);
 
-bool fmd_fmd_advance_query(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr);
-bool fmd_fmd_query_precedence_range(fmd_fmi_t *fmi, fmd_fmd_qr_t *qr, char_t c, int_t *lo, int_t *hi);
+bool fmd_fmd_advance_query(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
+bool fmd_fmd_query_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *qr, char_t c, int_t *lo, int_t *hi);
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 
