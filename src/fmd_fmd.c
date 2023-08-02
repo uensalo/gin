@@ -587,9 +587,11 @@ void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, in
 }
 
 void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
-    if(!cache) { // no cache: default bootstrap
+    fmd_vector_t *forks = NULL;
+    int_t bootstrap_depth = -1;
+    if(!cache) {
+        // no cache: default bootstrap
         //data structures to keep track of forks
-        fmd_vector_t *forks;
         fmd_vector_init(&forks, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
 
         // create the initial fork
@@ -620,10 +622,32 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
             return;
         }
         fmd_vector_append(forks, main);
-        fmd_fmd_query_find_bootstrapped(fmd, forks, string->size - 1, string, max_forks, paths, dead_ends);
+        bootstrap_depth = string->size-1;
     } else {
-
+        // cache lookup to get a bootstrap
+        fmd_vector_t *bootstrap;
+        void *lookup;
+        int_t cached_suffix_start = string->size <= cache->depth ? 0 : string->size - cache->depth;
+        fmd_string_t *cached_suffix;
+        fmd_string_substring(string, cached_suffix_start, string->size, &cached_suffix);
+        bootstrap_depth = cached_suffix_start;
+        fmd_table_lookup(&cache->cache[cached_suffix->size], cached_suffix, &lookup);
+        fmd_vector_t *cached_forks = lookup;
+        fmd_vector_init(&bootstrap, cached_forks->size, &fmd_fstruct_fork_node);
+        #pragma omp parallel for default(none) shared(cached_forks, bootstrap)
+        for(int_t i = 0; i < cached_forks->size; i++) {
+            fmd_fork_node_t *cached_fork = cached_forks->data[i];
+            fmd_fork_node_t *fork = fmd_fork_node_init(cached_fork,
+                                                       cached_fork->sa_lo,
+                                                       cached_fork->sa_hi,
+                                                       cached_fork->pos,
+                                                       MAIN);
+            bootstrap->data[i] = fork;
+        }
+        bootstrap->size = cached_forks->size;
+        forks = bootstrap;
     }
+    fmd_fmd_query_find_bootstrapped(fmd, forks, bootstrap_depth, string, max_forks, paths, dead_ends);
 }
 
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks) {
@@ -842,14 +866,14 @@ void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends
 
     for(int_t i = 0; i < paths->size; i++) {
         fmd_fork_node_t *cur = paths->data[i];
-        while(cur) {
+        while(cur && cur->type != CACH) {
             bool inserted = fmd_tree_insert(visited, cur, cur);
             cur = (fmd_fork_node_t*)cur->parent;
         }
     }
     for(int_t i = 0; i < dead_ends->size; i++) {
         fmd_fork_node_t *cur = dead_ends->data[i];
-        while(cur) {
+        while(cur && cur->type != CACH) {
             bool inserted = fmd_tree_insert(visited, cur, cur);
             cur = (fmd_fork_node_t*)cur->parent;
         }
