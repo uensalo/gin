@@ -27,22 +27,25 @@
 #define FMD_FMD_IMT_INTERVAL_LIST_LENGTH_BIT_LENGTH 32
 #define FMD_FMD_IMT_INTERVAL_BOUNDARY_BIT_LENGTH 40
 
+typedef enum fmd_fork_node_type_{
+    ROOT = 0,
+    MAIN = 1,
+    BKPT = 2, // breakpoint
+    FALT = 3, // fork indicating alternate path
+    LEAF = 4, // matching leaf
+    DEAD = 5, // partial match
+} fmd_fork_node_type_t;
 typedef struct fmd_fork_node_{
     struct fmd_fork_node_t *parent;
-    int_t vertex_lo;
-    int_t vertex_hi;
     int_t sa_lo;
     int_t sa_hi;
     int_t pos;
-    bool is_leaf;
-    bool is_dead;
-    bool is_merged;
+    fmd_fork_node_type_t type;
 } fmd_fork_node_t;
 fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent,
                                     int_t sa_lo, int_t sa_hi,
-                                    int_t v_lo, int_t v_hi,
                                     int_t pos,
-                                    bool is_leaf, bool is_dead, bool is_merged); // todo: pack flags
+                                    fmd_fork_node_type_t type);
 void fmd_fork_node_free(fmd_fork_node_t *node);
 fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node);
 uint_t fmd_fork_node_hash(fmd_fork_node_t *node);

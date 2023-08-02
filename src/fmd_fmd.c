@@ -1,17 +1,16 @@
 #include "fmd_fmd.h"
 
 
-fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent, int_t sa_lo, int_t sa_hi, int_t v_lo, int_t v_hi, int_t pos, bool is_leaf, bool is_dead, bool is_merged) {
+fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent,
+                                    int_t sa_lo, int_t sa_hi,
+                                    int_t pos,
+                                    fmd_fork_node_type_t type) {
     fmd_fork_node_t *fn = calloc(1, sizeof(fmd_fork_node_t));
     fn->parent = (struct fmd_fork_node_t*)parent;
     fn->sa_lo = sa_lo;
     fn->sa_hi = sa_hi;
-    fn->vertex_lo = v_lo;
-    fn->vertex_hi = v_hi;
     fn->pos = pos;
-    fn->is_leaf = is_leaf;
-    fn->is_dead = is_dead;
-    fn->is_merged = false;
+    fn->type = type;
     return fn;
 }
 
@@ -33,17 +32,13 @@ fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node) {
 uint_t fmd_fork_node_hash(fmd_fork_node_t *node) {
     const uint_t prime = 1099511628211LLU;
     uint_t hash = 14695981039346656037LLU;
-    hash ^= prm_hash_f((void*)node->vertex_lo);
-    hash *= prime;
-    hash ^= prm_hash_f((void*)node->vertex_hi);
-    hash *= prime;
     hash ^= prm_hash_f((void*)node->sa_lo);
     hash *= prime;
     hash ^= prm_hash_f((void*)node->sa_hi);
     hash *= prime;
     hash ^= prm_hash_f((void*)node->pos);
     hash *= prime;
-    hash ^= prm_hash_f((void*)node->is_leaf);
+    hash ^= prm_hash_f((void*)node->type);
     hash *= prime;
     return hash;
 }
@@ -52,24 +47,8 @@ int fmd_fork_node_comp_exact(fmd_fork_node_t *n1, fmd_fork_node_t *n2) {
     return memcmp(n1, n2, sizeof(fmd_fork_node_t));
 }
 int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2) {
-    return n1->vertex_lo < n2->vertex_lo ? -1 : (n1->vertex_lo > n2->vertex_lo);
+    return n1->sa_lo < n2->sa_lo ? -1 : (n1->sa_lo > n2->sa_lo);
 }
-
-/*
-fmd_fmd_qr_t *fmd_fmd_qr_init(fmd_fork_node_t *cur_fork, int_t lo, int_t hi, int_t pos, fmd_string_t *pattern) {
-    fmd_fmd_qr_t *qr = calloc(1, sizeof(fmd_fmd_qr_t));
-    qr->cur_fork = cur_fork;
-    qr->lo = lo;
-    qr->hi = hi;
-    qr->pos = pos;
-    qr->pattern = pattern;
-    return qr;
-}
-
-void fmd_fmd_qr_free(fmd_fmd_qr_t *q) {
-    if(q) free(q);
-}
-*/
 
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate) {
     fmd_fmd_t *f = calloc(1, sizeof(fmd_fmd_t));
@@ -353,92 +332,6 @@ int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2) {
     return c1 == 0 && c2 == 0 && c3 == 0 && c4 == 0 && c5 && c6 ? 0 : -1;
 }
 
-void fmd_fmd_query_locate_paths_legacy(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
-    // walk root count
-    fmd_vector_t *leaves;
-    fmd_vector_init(&leaves, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-    fmd_vector_t *graveyard;
-    fmd_vector_init(&graveyard, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-    // push initial query
-    fmd_vector_t *stack;
-    fmd_vector_init(&stack, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
-    int_t V = fmd->permutation->size;
-    int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
-    int_t init_hi = fmd->graph_fmi->no_chars;
-    fmd_fork_node_t *root_fork = fmd_fork_node_init(NULL,
-                                                    init_lo, init_hi,
-                                                    -1, -1,
-                                                    string->size-1,
-                                                    false, false, false);
-    fmd_vector_append(stack, root_fork);
-    while(stack->size > 0) {
-        // check if max matches have been exceeded. If not, continue matching. Else, kill it.
-        if(max_forks != -1 && leaves->size >= max_forks) {
-            // flush the stack
-            while(stack->size > 0) {
-                fmd_fork_node_t *fork;
-                fmd_vector_pop(stack, (void *) &fork);
-                fmd_fork_node_free(fork);
-            }
-            break;
-        }
-        // pop one from the stack
-        fmd_fork_node_t *cur_fork;
-        fmd_vector_pop(stack, (void*)&cur_fork);
-        while(cur_fork->pos > -1) {
-            // now check: are there any exhausted vertices?
-            int_t c_0_lo, c_0_hi;
-            bool okc = fmd_fmd_advance_query(fmd, cur_fork, string);
-            bool ok = fmd_fmd_query_precedence_range(fmd, cur_fork, fmd->c_0, &c_0_lo, &c_0_hi);
-            // if(!ok... // this check is not needed if everything goes ok in coding time :)
-            if (cur_fork->pos == -1) break;
-            // check if we need to fork into other vertices or not
-            if(c_0_hi > c_0_lo) {
-                // we have a walk having the current suffix of the query as a prefix
-                fmd_fork_node_t *royal_node = fmd_fork_node_init(cur_fork, cur_fork->sa_lo, cur_fork->sa_hi,
-                                                                 cur_fork->vertex_lo, cur_fork->vertex_hi,
-                                                                 cur_fork->pos,
-                                                                 false, false, false);
-                fmd_vector_t *incoming_sa_intervals;
-                fmd_imt_query(fmd->r2r_tree, c_0_lo-1, c_0_hi-2, &incoming_sa_intervals);
-                for(int_t i = 0; i < incoming_sa_intervals->size; i++) {
-                    fmd_imt_interval_t *interval = incoming_sa_intervals->data[i];
-                    fmd_fork_node_t *cadet_node = fmd_fork_node_init(cur_fork, V+1+interval->lo, V+2+interval->hi,
-                                                                     interval->lo, interval->hi+1,
-                                                                     cur_fork->pos,
-                                                                     false, false, true);
-                    fmd_vector_append(stack, cadet_node);
-                }
-                cur_fork = royal_node;
-                fmd_vector_free(incoming_sa_intervals);
-            }
-            if(!okc || cur_fork->sa_lo == cur_fork->sa_hi) {
-                fmd_fork_node_t *dead_node = fmd_fork_node_init(cur_fork, cur_fork->sa_lo, cur_fork->sa_hi, c_0_lo, c_0_hi, cur_fork->pos, true, true, false);
-                cur_fork = dead_node;
-                break;
-            }
-        }
-        if(!cur_fork->is_dead && !cur_fork->is_leaf) {
-            fmd_fork_node_t *leaf_node = fmd_fork_node_init(cur_fork, cur_fork->sa_lo, cur_fork->sa_hi,
-                                                            cur_fork->vertex_lo, cur_fork->vertex_hi,
-                                                            cur_fork->pos,
-                                                            true, false, false);
-            if(cur_fork->sa_lo >= cur_fork->sa_hi) {
-                leaf_node->is_dead = true;
-                fmd_vector_append(graveyard, leaf_node);
-            } else if (max_forks == -1 || leaves->size < max_forks) {
-                fmd_vector_append(leaves, leaf_node);
-            }
-        } else {
-            fmd_vector_append(graveyard, cur_fork);
-        }
-        //fmd_fork_node_free(cur_fork);
-    }
-    fmd_vector_free(stack);
-    *paths = leaves;
-    *dead_ends = graveyard;
-}
-
 #ifdef FMD_OMP
 #include <omp.h>
 #endif
@@ -453,9 +346,8 @@ void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_
     int_t init_hi = fmd->graph_fmi->no_chars;
     fmd_fork_node_t *root_fork = fmd_fork_node_init(NULL,
                                                     init_lo, init_hi,
-                                                    -1, -1,
                                                     string->size-1,
-                                                    false, false, false);
+                                                    ROOT);
 #ifdef FMD_OMP
     omp_set_num_threads((int)num_threads);
 #endif
@@ -493,18 +385,16 @@ void fmd_fmd_query_locate_paths_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fo
             // we have a walk having the current suffix of the query as a prefix
             fmd_fork_node_t *royal_node = fmd_fork_node_init(fork,
                                                              fork->sa_lo, fork->sa_hi,
-                                                             fork->vertex_lo, fork->vertex_hi,
+                                                             //fork->v_lo, fork->v_hi,
                                                              fork->pos,
-                                                             false, false,false);
+                                                             MAIN);
             fmd_vector_t *incoming_sa_intervals;
             fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
             for (int_t i = 0; i < incoming_sa_intervals->size; i++) {
                 fmd_imt_interval_t *interval = incoming_sa_intervals->data[i];
-                fmd_fork_node_t *new_fork = fmd_fork_node_init(royal_node, V + 1 + interval->lo, V + 2 + interval->hi,
-                                                                 interval->lo, interval->hi + 1,
-                                                                 fork->pos, false, false, true);
-                //fmd_fmd_qr_t *fork = fmd_fmd_qr_init(cadet_node, V + 1 + interval->lo, V + 2 + interval->hi, query->pos,
-                //                                     query->pattern);
+                fmd_fork_node_t *new_fork = fmd_fork_node_init(royal_node, V+1+interval->lo, V+2+interval->hi,
+                                                                 //interval->lo, interval->hi + 1,
+                                                                 fork->pos, FALT);
                 // fire subtask
                 #pragma omp task default(none) shared(fmd, new_fork, exact_matches, partial_matches, max_forks, pattern)
                 fmd_fmd_query_locate_paths_process_fork(fmd, new_fork, max_forks, pattern, exact_matches, partial_matches);
@@ -514,18 +404,20 @@ void fmd_fmd_query_locate_paths_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fo
         }
         if (!okc || fork->sa_lo == fork->sa_hi) {
             fmd_fork_node_t *dead_node = fmd_fork_node_init(fork, fork->sa_lo, fork->sa_hi,
-                                                            c_0_lo, c_0_hi, fork->pos,
-                                                            true, true,false);
+                                                            //c_0_lo, c_0_hi,
+                                                            fork->pos,
+                                                            DEAD);
             fork = dead_node;
             break;
         }
     }
-    if (!fork->is_dead && !fork->is_leaf) {
+    if (fork->type != DEAD && fork->type != LEAF) {
         fmd_fork_node_t *leaf_node = fmd_fork_node_init(fork, fork->sa_lo, fork->sa_hi,
-                                                        fork->vertex_lo, fork->vertex_hi, fork->pos,
-                                                        true, false, false);
+                                                        //fork->v_lo, fork->v_hi,
+                                                        fork->pos,
+                                                        LEAF);
         if (fork->sa_lo >= fork->sa_hi) {
-            leaf_node->is_dead = true;
+            leaf_node->type = DEAD;
             #pragma omp critical(partial_match)
             {
                 fmd_vector_append(partial_matches, leaf_node);
@@ -553,7 +445,7 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
     // allocate a buffer to group by fork position
     int_t V = fmd->permutation->size;
 
-    printf("%s\n",string->seq);
+   // printf("%s\n",string->seq);
 
     // data structures to return the matches
     fmd_vector_t *matches;
@@ -567,34 +459,32 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
     // create the initial fork
     int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
     int_t init_hi = fmd->graph_fmi->no_chars;
-    fmd_fork_node_t *root_fork = fmd_fork_node_init(NULL,
-                                                    init_lo, init_hi,
-                                                    0, V,
-                                                    string->size-1,
-                                                    false, false, false);
+    fmd_fork_node_t *root = fmd_fork_node_init(NULL,
+                                               init_lo, init_hi,
+                                               string->size-1,
+                                               ROOT);
     // fold the root fork onto itself before advancing
-    fmd_fork_node_t *root = fmd_fork_node_copy(root_fork);
-    root_fork->parent = (struct fmd_fork_node_t*)root;
+
+    fmd_fork_node_t *main = fmd_fork_node_copy(root);
+    main->parent = (struct fmd_fork_node_t*)root;
+    main->type = MAIN;
 
     // now advance the root once before starting to fork
-    fmd_fmd_advance_query(fmd, root_fork, string);
-    int_t vlo, vhi;
-    fmd_fmd_query_precedence_range(fmd, root_fork, fmd->c_0, &vlo, &vhi);
-    root_fork->vertex_lo = vlo-1;
-    root_fork->vertex_hi = vhi-1;
+    fmd_fmd_advance_query(fmd, main, string);
 
-    if(root_fork->sa_hi <= root_fork->sa_lo) {
+    if(main->sa_hi <= main->sa_lo) {
         fmd_vector_init(&matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
         *paths = matches;
-        fmd_vector_append(partial_matches, root_fork);
+        main->type = DEAD;
+        fmd_vector_append(partial_matches, main);
         *dead_ends = partial_matches;
         fmd_vector_free(forks);
         return;
     }
 
-    fmd_vector_append(forks, root_fork);
-    int_t global_pos = string->size-1; // stores the position last matched
-    while(forks->size && global_pos > 0) {
+    fmd_vector_append(forks, main);
+    int_t t = string->size-1; // stores the position last matched
+    while(forks->size && t > 0) {
         /**********************************************************************
         * Step 1 - Forking phase: Fork each query at its current position
         **********************************************************************/
@@ -605,23 +495,31 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
             fmd_fork_node_t *fork = forks->data[i];
             int_t c_0_lo, c_0_hi;
             fmd_fmd_query_precedence_range(fmd, fork, fmd->c_0, &c_0_lo, &c_0_hi);
-            fmd_vector_t *incoming_sa_intervals;
             bool more_to_track = max_forks == -1 || max_forks > forks->size;
             if(more_to_track && c_0_lo < c_0_hi) {
-                fmd_fork_node_t *fork_root;
+                fmd_fork_node_t *breakpoint;
+                fmd_vector_t *incoming_sa_intervals;
                 fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
                 int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
                 if(no_forks_to_add) {
-                    fork_root = fmd_fork_node_copy(fork); // fold the fork on itself to create a "checkpoint"
-                    fork->parent = (struct fmd_fork_node_t *)fork_root;
+                    breakpoint = fmd_fork_node_init(fork,
+                                                    fork->sa_lo, fork->sa_hi,
+                                                    fork->pos,
+                                                    BKPT);
+                    breakpoint->parent = (struct fmd_fork_node_t *)fork;
+                    fmd_fork_node_t *folded = fmd_fork_node_init(breakpoint,
+                                                                 fork->sa_lo, fork->sa_hi,
+                                                                 fork->pos,
+                                                                 MAIN);
+                    fork = folded;
+                    forks->data[i] = fork;
                 }
                 for (int_t j = 0; j < no_forks_to_add; j++) {
                     fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
-                    fmd_fork_node_t *new_fork = fmd_fork_node_init(fork_root,
+                    fmd_fork_node_t *new_fork = fmd_fork_node_init(breakpoint,
                                                                    V+1+interval->lo, V+2+interval->hi,
-                                                                   interval->lo, interval->hi + 1,
                                                                    fork->pos,
-                                                                   false, false, true);
+                                                                   FALT);
                     #pragma omp critical(forks_append)
                     {
                         fmd_vector_append(new_forks, new_fork);
@@ -642,22 +540,24 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
         fmd_vector_t *next_iter_forks;
         fmd_vector_init(&next_iter_forks, forks->size + merged->size, &fmd_fstruct_fork_node);
         // advance and filter previous queries
-        #pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string)
+        #pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
         for(int_t i = 0; i < forks->size; i++) {
             fmd_fork_node_t *fork = forks->data[i];
             fmd_fmd_advance_query(fmd, fork, string);
             if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
                 fmd_fork_node_t *dead_node = fmd_fork_node_init(fork,
                                                                 fork->sa_lo, fork->sa_hi,
-                                                                fork->vertex_lo, fork->vertex_hi,
                                                                 fork->pos,
-                                                                true, true, false);
+                                                                DEAD);
                 fork = dead_node;
                 #pragma omp critical(partial_matches_append)
                 {
                     fmd_vector_append(partial_matches, fork);
                 }
             } else {
+                if(t==1) {
+                    fork->type = LEAF;
+                }
                 #pragma omp critical(next_iter_queries_append)
                 {
                     fmd_vector_append(next_iter_forks, fork);
@@ -665,22 +565,29 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
             }
         }
         // advance and filter next forks
-        #pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks)
+        #pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks, t)
         for (int_t i = 0; i < merged->size; i++) {
             fmd_fork_node_t *fork = merged->data[i];
             fmd_fmd_advance_query(fmd, fork, string);
             if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
                 fmd_fork_node_t *dead_node = fmd_fork_node_init(fork,
                                                                 fork->sa_lo, fork->sa_hi,
-                                                                fork->vertex_lo, fork->vertex_hi,
                                                                 fork->pos,
-                                                                true, true, false);
+                                                                DEAD);
                 fork = dead_node;
                 #pragma omp critical(partial_matches_append)
                 {
                     fmd_vector_append(partial_matches, fork);
                 }
             } else {
+                fmd_fork_node_t *folded = fmd_fork_node_init(fork,
+                                                             fork->sa_lo, fork->sa_hi,
+                                                             fork->pos,
+                                                             MAIN);
+                if(t==1) {
+                    folded->type = LEAF;
+                }
+                fork = folded;
                 #pragma omp critical(next_iter_queries_append)
                 {
                     fmd_vector_append(next_iter_forks, fork);
@@ -689,31 +596,8 @@ void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *stri
         }
         fmd_vector_free_disown(merged);
         fmd_vector_free_disown(forks);
-        #ifdef FMD_BREADTH_MERGE_TWICE
-        fmd_vector_sort(next_iter_forks);
-        fmd_vector_t *compacted;
-
-        printf("prev: ");
-        for(int_t i = 0; i < next_iter_forks->size; i++) {
-            fmd_fork_node_t *fork = next_iter_forks->data[i];
-            printf("[%d,%d) ", fork->sa_lo, fork->sa_hi);
-        }
-        printf("\n");
-
-        fmd_fmd_compact_forks(fmd, next_iter_forks, &compacted);
-        fmd_vector_free(next_iter_forks);
-        next_iter_forks = compacted;
-
-        printf("next: ");
-        for(int_t i = 0; i < next_iter_forks->size; i++) {
-            fmd_fork_node_t *fork = next_iter_forks->data[i];
-            printf("[%d,%d) ", fork->sa_lo, fork->sa_hi);
-        }
-        printf("\n");
-
-        #endif
         forks = next_iter_forks;
-        --global_pos;
+        --t;
     }
     *paths = forks;
     *dead_ends = partial_matches;
@@ -723,25 +607,17 @@ void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **m
     fmd_vector_sort(forks);
     fmd_vector_t *merged;
     fmd_vector_init(&merged, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-    int_t V = fmd->permutation->size;
     if(forks->size) {
         fmd_fork_node_t *cur_fork = fmd_fork_node_copy(forks->data[0]);
-        cur_fork->is_merged = true;
         fmd_vector_append(merged, cur_fork);
-        //fmd_fork_node_free(forks->data[0]);
         for (int_t i = 1; i < forks->size; i++) {
             fmd_fork_node_t *next_fork = forks->data[i];
-            if(cur_fork->vertex_hi > next_fork->vertex_lo) {
-                cur_fork->vertex_hi = next_fork->vertex_hi > cur_fork->vertex_hi ? next_fork->vertex_hi : cur_fork->vertex_hi;
-                //cur_fork->sa_hi = next_fork->sa_hi > cur_fork->sa_hi ? next_fork->sa_hi : cur_fork->sa_hi;
+            if(cur_fork->sa_hi > next_fork->sa_lo) {
+                cur_fork->sa_hi = next_fork->sa_hi > cur_fork->sa_hi ? next_fork->sa_hi : cur_fork->sa_hi;
             } else {
-                cur_fork->sa_lo = V+1+cur_fork->vertex_lo;
-                cur_fork->sa_hi = V+2+cur_fork->vertex_hi,
                 cur_fork = fmd_fork_node_copy(next_fork);
-                cur_fork->is_merged = true;
                 fmd_vector_append(merged, cur_fork);
             }
-            //fmd_fork_node_free(next_fork);
         }
     }
     *merged_forks = merged;
@@ -753,23 +629,38 @@ void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_mat
     fmd_fork_node_t *cur_fork = fork;
     int_t start = 0;
     int_t end = -1;
-    int_t next_sa_lo = -1;
-    int_t next_sa_hi = -1;
+    int_t cur_sa_lo = -1;
+    int_t cur_sa_hi = -1;
     while(cur_fork) {
-        if(cur_fork->pos > -1) {
-            fmd_string_t *match;
-            end = cur_fork->pos+1;
-            fmd_string_substring(query, start, end, &match);
-            fmd_fmd_match_chain_append(match_chain,
-                                       match,
-                                       cur_fork->vertex_lo,
-                                       cur_fork->vertex_hi,
-                                       next_sa_lo,
-                                       next_sa_hi);
-            start = end;
+        switch (cur_fork->type) {
+            case LEAF:{
+                cur_sa_lo = cur_fork->sa_lo;
+                cur_sa_hi = cur_fork->sa_hi;
+                break;
+            }
+            case ROOT: {
+                end = query->size;
+                fmd_string_t *subs;
+                fmd_string_substring(query, start, end, &subs);
+                fmd_fmd_match_chain_append(match_chain, subs, cur_sa_lo, cur_sa_hi);
+                start = end;
+                break;
+            }
+            case FALT: {
+                end = ((fmd_fork_node_t*)(cur_fork->parent))->pos+1;
+                fmd_string_t *subs;
+                fmd_string_substring(query, start, end, &subs);
+                fmd_fmd_match_chain_append(match_chain, subs, cur_sa_lo, cur_sa_hi);
+                start = end;
+                cur_fork = (fmd_fork_node_t*)cur_fork->parent;
+                cur_sa_lo = cur_fork->sa_lo;
+                cur_sa_hi = cur_fork->sa_hi;
+                break;
+            }
+            default: {
+                break;
+            }
         }
-        next_sa_lo = cur_fork->sa_lo;
-        next_sa_hi = cur_fork->sa_hi;
         cur_fork = (fmd_fork_node_t*)cur_fork->parent;
     }
     *chain = match_chain;
@@ -783,31 +674,10 @@ void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *exact_matches, 
     fmd_vector_init(&matches, exact_matches->size, &fmd_fstruct_match_list);
 
     for(int_t i = 0; i < exact_matches->size; i++) {
-        fmd_match_chain_t *match_list;
-        fmd_fmd_match_chain_init(&match_list);
-        fmd_fork_node_t *cur_fork = exact_matches->data[i];
-        int_t start = 0;
-        int_t end = -1;
-        int_t next_sa_lo = -1;
-        int_t next_sa_hi = -1;
-        while(cur_fork) {
-            if(cur_fork->pos > -1) {
-                fmd_string_t *match;
-                end = cur_fork->pos+1;
-                fmd_string_substring(query, start, end, &match);
-                fmd_fmd_match_chain_append(match_list,
-                                           match,
-                                           cur_fork->vertex_lo,
-                                           cur_fork->vertex_hi,
-                                           next_sa_lo,
-                                           next_sa_hi);
-                start = end;
-            }
-            next_sa_lo = cur_fork->sa_lo;
-            next_sa_hi = cur_fork->sa_hi;
-            cur_fork = (fmd_fork_node_t*)cur_fork->parent;
-        }
-        fmd_vector_append(matches, match_list);
+        fmd_match_chain_t *match_chain;
+        fmd_fork_node_t *fork = exact_matches->data[i];
+        fmd_fmd_topologise_fork(fork, query, &match_chain);
+        fmd_vector_append(matches, match_chain);
     }
     *match_chains = matches;
 }

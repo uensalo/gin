@@ -21,7 +21,6 @@ bool fmd_min_heap_push(fmd_min_heap_t *heap, void *key, void *value) {
             return false;
         }
     }
-    fmd_min_heap_kv_t *kv = calloc(1,sizeof(fmd_min_heap_kv_t));
     heap->data[heap->size].key = key;
     heap->data[heap->size].value = value;
     fmd_min_heap_sift_up(heap, heap->size);

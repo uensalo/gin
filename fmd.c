@@ -623,8 +623,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             else {
                 switch (mode) {
+                    case fmd_query_mode_enumerate:
                     case fmd_query_mode_breadth: {
-
                         for (int_t j = 0; j < i; j++) {
                             if (!tasks[j].str) continue;
                             fmd_vector_t *match_chains;
@@ -635,17 +635,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                 fmd_match_chain_t *list = match_chains->data[k];
                                 fmd_fmd_match_node_t *root = (fmd_fmd_match_node_t *) list->head;
                                 no_matching_count += root->sa_hi - root->sa_lo;
-                                no_multiple_vertex_span_forks += (root->v_lo > -1);
-                                no_multiple_vertex_span_matches +=
-                                        (root->v_hi > root->v_lo) * (root->sa_hi - root->sa_lo);
-                                fprintf(foutput, "(%s,v:(%lld,%lld),sa:(%lld,%lld))", root->matching_substring->seq,
-                                        root->v_lo,
-                                        root->v_hi, root->sa_lo, root->sa_hi);
+                                fprintf(foutput, "(%s,sa:(%lld,%lld))", root->matching_substring->seq, root->sa_lo,
+                                        root->sa_hi);
                                 root = (fmd_fmd_match_node_t *) root->next;
                                 while (root != list->dummy) {
-                                    fprintf(foutput, "<-(%s,v:(%lld,%lld),sa:(%lld,%lld))",
-                                            root->matching_substring->seq, root->v_lo,
-                                            root->v_hi, root->sa_lo, root->sa_hi);
+                                    fprintf(foutput, "<-(%s,sa:(%lld,%lld))",
+                                            root->matching_substring->seq, root->sa_lo, root->sa_hi);
                                     root = (fmd_fmd_match_node_t *) root->next;
                                 }
                                 if (!verbose) fprintf(foutput, "\n");
@@ -658,10 +653,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                             fmd_string_free(tasks[j].str);
                             tasks[j].str = NULL;
                         }
-                        break;
                     }
 
-                    case fmd_query_mode_enumerate: {
+
+                        /*
                         for (int_t j = 0; j < i; j++) {
                             if (!tasks[j].str) continue;
                             no_matching_forks += tasks[j].exact_matches->size;
@@ -669,16 +664,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                             for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
                                 fmd_fork_node_t *root = (fmd_fork_node_t *) tasks[j].exact_matches->data[k];
                                 no_matching_count += root->sa_hi - root->sa_lo;
-                                no_multiple_vertex_span_forks += (root->vertex_lo > -1);
-                                no_multiple_vertex_span_matches +=
-                                        (root->vertex_hi > root->vertex_lo) * (root->sa_hi - root->sa_lo);
-                                fprintf(foutput, "%s:(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", tasks[j].str->seq,
-                                        root->vertex_lo,
-                                        root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                                //no_multiple_vertex_span_forks += (root->v_lo > -1);
+                                //no_multiple_vertex_span_matches += (root->v_hi > root->v_lo) * (root->sa_hi - root->sa_lo);
+                                fprintf(foutput, "%s:sa:(%lld,%lld),pos:%lld)", tasks[j].str->seq, root->sa_lo, root->sa_hi, root->pos);
                                 root = (fmd_fork_node_t *) root->parent;
                                 while (root) {
-                                    fprintf(foutput, "<-(v:(%lld,%lld),sa:(%lld,%lld),pos:%lld)", root->vertex_lo,
-                                            root->vertex_hi, root->sa_lo, root->sa_hi, root->pos);
+                                    fprintf(foutput, "<-(v:sa:(%lld,%lld),pos:%lld)", root->sa_lo, root->sa_hi, root->pos);
                                     root = (fmd_fork_node_t *) root->parent;
                                 }
                                 if (!verbose) fprintf(foutput, "\n");
@@ -692,6 +683,8 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         }
                         break;
                     }
+                         */
+
                     default: {
                         break;
                     }

@@ -8,8 +8,6 @@ typedef struct fmd_fmd_match_node_ {
     struct fmd_fmd_match_node_ *next;
     struct fmd_fmd_match_node_ *prev;
     fmd_string_t *matching_substring;
-    int_t v_lo;
-    int_t v_hi;
     int_t sa_lo;
     int_t sa_hi;
 } fmd_fmd_match_node_t;
@@ -32,8 +30,8 @@ static fmd_fstruct_t fmd_fstruct_match_list = {
         (fcopy) fmd_fmd_match_chain_copy,
 };
 
-void fmd_fmd_match_chain_append(fmd_match_chain_t *list, fmd_string_t *match_string, int_t v_lo, int_t v_hi, int_t sa_lo, int_t sa_hi);
-void fmd_fmd_match_chain_prepend(fmd_match_chain_t *list, fmd_string_t *match_string, int_t v_lo, int_t v_hi, int_t sa_lo, int_t sa_hi);
+void fmd_fmd_match_chain_append(fmd_match_chain_t *list, fmd_string_t *match_string, int_t sa_lo, int_t sa_hi);
+void fmd_fmd_match_chain_prepend(fmd_match_chain_t *list, fmd_string_t *match_string, int_t sa_lo, int_t sa_hi);
 
 
 

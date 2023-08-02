@@ -6,7 +6,6 @@ set(CMAKE_C_STANDARD 99)
 set(BUILD_OPENMP ON)
 set(BUILD_TESTS OFF)
 set(DEBUG OFF)
-set(BREADTH_MERGE_TWICE OFF)
 
 if(DEBUG)
     add_link_options(-fsanitize=address)
@@ -80,9 +79,6 @@ if(BUILD_OPENMP)
     endif()
 endif()
 
-if(BREADTH_MERGE_TWICE)
-    add_definitions(-DFMD_BREADTH_MERGE_TWICE)
-endif()
 ################################################################################
 # dependencies
 ################################################################################
