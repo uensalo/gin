@@ -370,6 +370,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     int_t num_threads = 1;
     int_t batch_size = 8;
+    int_t cache_depth = 0;
     int_t max_forks = -1;
     int_t max_matches = -1;
     bool decode = false;
@@ -394,6 +395,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             {"input",      required_argument, NULL, 'i'},
             {"fastq",      no_argument,       NULL, 'f'},
             {"output",     required_argument, NULL, 'o'},
+            {"cache",      required_argument, NULL, 'c'},
             {"max-forks",  required_argument, NULL, 'm'},
             {"max-matches",required_argument, NULL, 'M'},
             {"decode",     no_argument,       NULL, 'd'},
@@ -403,7 +405,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "r:i:fo:m:M:db:j:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "r:i:fo:c:m:M:db:j:v", options, &optindex)) != -1) {
         switch(c) {
             case 'r': {
                 fref_path = optarg;
@@ -421,6 +423,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             case 'f': {
                 parse_fastq = true;
+                break;
+            }
+            case 'c': {
+                cache_depth = (int_t)strtoull(optarg, NULL, 10);
                 break;
             }
             case 'o': {
@@ -490,12 +496,13 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
     /**************************************************************************
     * 2 - Parse the bitstream into data structures, by the end of this block
-    * fmd and fmd_dec should be populated and fmd_buf should be freed
+    * fmd, fmd_dec, fmd_cache should be populated and fmd_buf should be freed
     **************************************************************************/
     if(verbose) {
         fprintf(stderr, "[fmd:query] Parsing reference index into data structures.\n");
     }
     fmd_fmd_t *fmd;
+    fmd_fmd_cache_t *fmd_cache = NULL;
     fmd_fmd_decoder_t *fmd_dec;
     fmd_fmd_serialize_from_buffer(&fmd, fmd_buf, fmd_buf_size);
     if(!fmd) {
@@ -505,6 +512,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     }
     if(decode) {
         fmd_fmd_decoder_init(&fmd_dec, fmd);
+    }
+    if(cache_depth) {
+        fmd_fmd_cache_init(&fmd_cache, fmd, cache_depth);
     }
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
@@ -569,9 +579,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 #endif
             switch(mode) {
                 case fmd_query_mode_find: {
-                    #pragma omp parallel for default(none) shared(fmd, i, tasks, num_threads, max_matches)
+                    #pragma omp parallel for default(none) shared(fmd, fmd_cache, i, tasks, num_threads, max_matches)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_find(fmd, NULL, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches);
+                        fmd_fmd_query_find(fmd, fmd_cache, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches);
                     }
                     break;
                 }

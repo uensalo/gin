@@ -631,17 +631,18 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
         fmd_string_t *cached_suffix;
         fmd_string_substring(string, cached_suffix_start, string->size, &cached_suffix);
         bootstrap_depth = cached_suffix_start;
-        fmd_table_lookup(&cache->cache[cached_suffix->size], cached_suffix, &lookup);
+        fmd_table_lookup(&cache->cache[cached_suffix->size-1], cached_suffix, &lookup);
         fmd_vector_t *cached_forks = lookup;
         fmd_vector_init(&bootstrap, cached_forks->size, &fmd_fstruct_fork_node);
-        #pragma omp parallel for default(none) shared(cached_forks, bootstrap)
+        #pragma omp parallel for default(none) shared(cached_forks, bootstrap, bootstrap_depth)
         for(int_t i = 0; i < cached_forks->size; i++) {
             fmd_fork_node_t *cached_fork = cached_forks->data[i];
+            fmd_fork_node_type_t type = bootstrap_depth ? MAIN : LEAF;
             fmd_fork_node_t *fork = fmd_fork_node_init(cached_fork,
                                                        cached_fork->sa_lo,
                                                        cached_fork->sa_hi,
-                                                       cached_fork->pos,
-                                                       MAIN);
+                                                       bootstrap_depth-1,
+                                                       type);
             bootstrap->data[i] = fork;
         }
         bootstrap->size = cached_forks->size;
@@ -678,19 +679,22 @@ void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_mat
     int_t end = -1;
     int_t cur_sa_lo = -1;
     int_t cur_sa_hi = -1;
-    while(cur_fork) {
+    bool terminate = false;
+    while(!terminate) {
         switch (cur_fork->type) {
             case LEAF:{
                 cur_sa_lo = cur_fork->sa_lo;
                 cur_sa_hi = cur_fork->sa_hi;
                 break;
             }
+            case CACH:
             case ROOT: {
                 end = query->size;
                 fmd_string_t *subs;
                 fmd_string_substring(query, start, end, &subs);
                 fmd_fmd_match_chain_append(match_chain, subs, cur_sa_lo, cur_sa_hi);
                 start = end;
+                terminate = true;
                 break;
             }
             case FALT: {
@@ -709,6 +713,7 @@ void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_mat
             }
         }
         cur_fork = (fmd_fork_node_t*)cur_fork->parent;
+        if(!cur_fork) terminate = true;
     }
     *chain = match_chain;
 }
@@ -885,6 +890,28 @@ void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends
     fmd_vector_free(dead_ends);
 }
 
+void fmd_fmd_cache_init_helper(fmd_fmd_cache_t *cache, fmd_fmd_t *fmd, fmd_string_t *str, fmd_vector_t *forks, fmd_vector_t *partial_matches) {
+    // generate extensions of the string
+    fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
+    for(int_t i = 5; i < alphabet->size; i++) { // first five characters are RESERVED.
+        fmd_string_t *extension = fmd_string_copy(str);
+        fmd_string_insert(extension, 0, (char_t)alphabet->data[i]);
+        fmd_vector_t *cur_forks = fmd_vector_copy(forks);
+        fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
+        int_t t = 1;
+        fmd_fmd_query_find_step(fmd, extension, -1, &t, &cur_forks, &partial_matches);
+        for(int_t j = 0; j < cur_forks->size; j++) {
+            fmd_fork_node_t *fork = cur_forks->data[j];
+            fork->pos = 0;
+            fork->type = CACH;
+        }
+        fmd_table_insert(&cache->cache[extension->size-1], extension, cur_forks);
+        if(extension->size < cache->depth) {
+            fmd_fmd_cache_init_helper(cache, fmd, extension, cur_forks, partial_matches);
+        }
+    }
+}
+
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     fmd_fmd_cache_t *c = calloc(1, sizeof(fmd_fmd_cache_t*));
     if(!c) {
@@ -892,14 +919,60 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
         return;
     }
     c->cache = calloc(depth, sizeof(fmd_table_t));
-    for(int_t i = 0; i < depth; i++) {
-
-    }
-    c->fmd = fmd;
     c->depth = depth;
+    // initialize the cache
+    for(int_t i = 0; i < depth; i++) {
+        fmd_table_t *bucket;
+        fmd_table_init(&bucket, FMD_HT_INIT_SIZE, &fmd_fstruct_string, &fmd_fstruct_vector);
+        c->cache[i] = *bucket;
+    }
+    // populate the cache
+    // create the root fork
+    int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
+    int_t init_hi = fmd->graph_fmi->no_chars;
+    fmd_fork_node_t *root = fmd_fork_node_init(NULL,
+                                               init_lo, init_hi,
+                                               0,
+                                               ROOT);
+
+    fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
+
+    fmd_vector_t *partial_matches;
+    fmd_vector_t *start_strings;
+    fmd_vector_t *start_forks;
+    fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
+    fmd_vector_init(&start_strings, alphabet->size, &prm_fstruct);
+    fmd_vector_init(&start_forks, alphabet->size, &prm_fstruct);
+    for(int_t i = 5; i < alphabet->size; i++) { // first five characters are RESERVED.
+        char_t c = (char_t)alphabet->data[i];
+        fmd_string_t *str;
+        fmd_string_init(&str, FMD_STRING_INIT_SIZE);
+        fmd_string_insert(str, 0, c);
+        fmd_vector_append(start_strings, str);
+        // fold the root fork
+        fmd_fork_node_t *main = fmd_fork_node_copy(root);
+        main->parent = (struct fmd_fork_node_t *) root;
+        main->type = MAIN;
+        main->pos = 0;
+        fmd_fmd_advance_fork(fmd, main, str);
+        main->pos = 0;
+        fmd_vector_append(start_forks, main);
+    }
+    for(int_t i = 0; i < start_forks->size; i++) {
+        fmd_table_insert(&c->cache[0], start_strings->data[i], start_forks->data[i]);
+        fmd_vector_t *fork_vector;
+        fmd_vector_init(&fork_vector, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
+        fmd_vector_append(fork_vector, start_forks->data[i]);
+        fmd_fmd_cache_init_helper(c, fmd, start_strings->data[i], fork_vector, partial_matches);
+    }
+    fmd_vector_free(start_strings);
+    fmd_vector_free(start_forks);
+    *cache = c;
 }
 
-void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
+void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
+    return; // TODO
+}
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *pattern) {
     fmd_fmi_t *fmi = fmd->graph_fmi;

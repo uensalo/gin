@@ -77,10 +77,10 @@ static fmd_fstruct_t fmd_fstruct_fork_node = {
 };
 
 typedef struct fmd_fmd_cache_ {
-    fmd_fmd_t *fmd;
     int_t depth;
     fmd_table_t *cache; // stores array of tables of size depth
 } fmd_fmd_cache_t;
+void fmd_fmd_cache_init_helper(fmd_fmd_cache_t *cache, fmd_fmd_t *fmd, fmd_string_t *str, fmd_vector_t *forks, fmd_vector_t *partial_matches);
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 
