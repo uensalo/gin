@@ -68,4 +68,4 @@ INDEX_FILE=$COMMON_INDEX_FILE
 
 # Benchmark the index with the query set
 echo "Running query benchmark" | tee -a $LOG_FILE
-$FMD_DIR/fmd query enumerate -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v -m $MATCHES_REPORTED 2>> $LOG_FILE
+$FMD_DIR/fmd query find -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v -m $MATCHES_REPORTED 2>> $LOG_FILE

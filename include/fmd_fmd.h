@@ -27,6 +27,22 @@
 #define FMD_FMD_IMT_INTERVAL_LIST_LENGTH_BIT_LENGTH 32
 #define FMD_FMD_IMT_INTERVAL_BOUNDARY_BIT_LENGTH 40
 
+typedef struct fmd_fmd_ {
+    char_t c_0; // character marking the beginning of a vertex
+    char_t c_1; // character marking the end of a vertex
+    fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
+    fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
+    fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
+    fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
+} fmd_fmd_t;
+
+void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
+void fmd_fmd_free(fmd_fmd_t *fmd);
+int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
+
+/******************************************************************************
+ * Querying (forks, functions, caching)
+ *****************************************************************************/
 typedef enum fmd_fork_node_type_{
     ROOT = 0,
     MAIN = 1,
@@ -58,30 +74,21 @@ static fmd_fstruct_t fmd_fstruct_fork_node = {
         (fcopy) fmd_fork_node_copy,
 };
 
-typedef struct fmd_fmd_ {
-    char_t c_0; // character marking the beginning of a vertex
-    char_t c_1; // character marking the end of a vertex
-    fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
-    fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
-    fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
-    fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
-} fmd_fmd_t;
+bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
+bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *qr, char_t c, int_t *lo, int_t *hi);
 
-void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
-void fmd_fmd_free(fmd_fmd_t *fmd);
-int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
+void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
+void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
 
-void fmd_fmd_query_locate_paths(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
-void fmd_fmd_query_locate_paths_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
-void fmd_fmd_query_locate_paths_legacy(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
-void fmd_fmd_query_locate_paths_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
-
-void fmd_fmd_query_locate_paths_breadth_first(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
+void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
 
-// for reporting results
+/******************************************************************************
+ * Result reporting
+ *****************************************************************************/
 void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain);
-void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *exact_matches, fmd_vector_t **match_lists);
+void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *exact_matches, fmd_vector_t **match_lists, int_t *count);
 void fmd_fmd_topologise_forks_free(fmd_vector_t *match_lists);
 
 typedef struct fmd_fmd_decoded_match_ {
@@ -127,8 +134,7 @@ void fmd_fmd_decoder_decode_one(fmd_fmd_decoder_t *dec, int_t sa_lo, int_t sa_hi
  */
 void fmd_fmd_decoder_decode_ends(fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t max_matches, fmd_vector_t **decoded);
 
-bool fmd_fmd_advance_query(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
-bool fmd_fmd_query_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *qr, char_t c, int_t *lo, int_t *hi);
+
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 
