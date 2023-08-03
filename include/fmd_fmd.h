@@ -90,6 +90,7 @@ typedef struct fmd_fmd_cache_ {
     int_t depth;
     fmd_table_t **tables;
     fmd_fmd_t *fmd;
+    int_t cache_size; // statistics
 } fmd_fmd_cache_t;
 typedef struct fmd_fmd_cache_helper_p_ {
     fmd_vector_t *partial_matches;

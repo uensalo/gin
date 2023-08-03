@@ -916,7 +916,7 @@ void fmd_fmd_cache_init_helper(fmd_fmd_cache_t *cache, fmd_fmd_t *fmd, fmd_strin
 
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches) {
 #ifdef FMD_OMP
-    omp_set_num_threads(1); // force single thread
+    omp_set_num_threads(1); // force single thread, way faster for some reason...
 #endif
     fmd_vector_t *forks= *cur_forks;
     int_t V = fmd->permutation->size;
@@ -953,7 +953,7 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
                                                                V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                FALT);
-#pragma omp critical(forks_append)
+                #pragma omp critical(forks_append)
                 {
                     fmd_vector_append(new_forks, new_fork);
                 }
@@ -1060,6 +1060,7 @@ void fmd_fmd_cache_init_helper_trav(void *key, void *value, void *params) {
         // insert the extension into the cache, and the lists are pointer datatypes.
         ref_forks->f = &prm_fstruct;
         fmd_table_insert(cache->tables[extension->size-1], extension, ref_forks);
+        cache->cache_size += (int_t)extension->size * (int_t)sizeof(char_t);
     }
 }
 
@@ -1077,6 +1078,7 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
         *cache = NULL;
         return;
     }
+    c->cache_size = 0;
     c->tables = calloc(depth, sizeof(fmd_table_t*));
     c->depth = depth;
     c->fmd = fmd;
@@ -1109,6 +1111,7 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
         fmd_vector_init(&forks, 1, &prm_fstruct);
         fmd_vector_append(forks, main);
         fmd_table_insert(c->tables[0], str, forks);
+        c->cache_size += (int_t)str->size * (int_t)sizeof(char_t);
     }
     // extend each bucket
     c->fmd = fmd;
@@ -1118,7 +1121,6 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     for(int_t i = 0; i < depth-1; i++) {
         fmd_table_traverse(c->tables[i], &helper_params, fmd_fmd_cache_init_helper_trav);
     }
-
     fmd_vector_t *leaves;
     fmd_vector_init(&leaves, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
     for(int_t i = 0; i < depth; i++) {
@@ -1135,8 +1137,8 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     for(int_t j = 0; j < leaves->size; j++) {
         fmd_fork_node_t *cur = leaves->data[j];
         while(cur) {
-            //printf("cur->parent: %lld\n", parent);
-            fmd_tree_insert(visited, cur, cur);
+            bool inserted = fmd_tree_insert(visited, cur, cur);
+            if(inserted) c->cache_size += sizeof(fmd_fstruct_fork_node);
             cur = (fmd_fork_node_t*)cur->parent;
         }
     }

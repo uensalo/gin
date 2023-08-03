@@ -383,8 +383,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     // statistics for path enumeration
     int_t queries_processed = 0;
     int_t queries_decoded = 0;
+    double index_parse_time = .0;
     double query_time = .0;
     double query_decoding_time = .0;
+    double cache_build_time = .0;
 
     int_t no_matching_forks = 0;
     int_t no_missing_forks = 0;
@@ -504,7 +506,11 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     fmd_fmd_t *fmd;
     fmd_fmd_cache_t *fmd_cache = NULL;
     fmd_fmd_decoder_t *fmd_dec;
+    clock_gettime(CLOCK_REALTIME, &t1);
     fmd_fmd_serialize_from_buffer(&fmd, fmd_buf, fmd_buf_size);
+    clock_gettime(CLOCK_REALTIME, &t2);
+    index_parse_time += to_sec(t1,t2);
+
     if(!fmd) {
         fprintf(stderr, "[fmd:query] Error encountered while parsing reference index. Quitting.\n");
         return_code = -1;
@@ -514,7 +520,16 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
         fmd_fmd_decoder_init(&fmd_dec, fmd);
     }
     if(cache_depth) {
+        if(verbose) {
+            fprintf(stderr, "[fmd:query] Building a cache of depth %lld.\n", cache_depth);
+        }
+        clock_gettime(CLOCK_REALTIME, &t1);
         fmd_fmd_cache_init(&fmd_cache, fmd, cache_depth);
+        clock_gettime(CLOCK_REALTIME, &t2);
+        cache_build_time += to_sec(t1,t2);
+        if(verbose) {
+            fprintf(stderr, "[fmd:query] Cache of depth %lld built with size %lf.\n", cache_depth, (double)fmd_cache->cache_size / 1e6);
+        }
     }
     /**************************************************************************
     * 3 - Parse queries from the input stream and query depending on the mode
@@ -672,7 +687,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     if(foutput_path) fclose(foutput);
 
     if(verbose) {
+        fprintf(stderr, "[fmd:query] Index parse time in seconds: %lf\n", index_parse_time);
         fprintf(stderr, "[fmd:query] Total querying time in seconds: %lf\n",query_time);
+        if(cache_depth) {
+            fprintf(stderr, "[fmd:query] Cache build time in seconds: %lf\n",cache_build_time);
+            fprintf(stderr, "[fmd:query] Cache size in MB: %.4lf\n", (double)fmd_cache->cache_size / 1e9);
+        }
         if(decode)
             fprintf(stderr, "[fmd:query] Total decoding time in seconds: %lf\n",query_decoding_time);
         fprintf(stderr, "[fmd:query] Number of queries processed: %lld\n",queries_processed);
@@ -1065,7 +1085,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
     if(!progname) {
         fprintf(stderr, "%s%s%s\n%s%s",
                 "[fmd:help] fmd! FM-Index like graph indexing algorithm toolkit \n",
-                "[fmd:help] Needle in a haystack? More like string in a graph. Version 1.0",
+                "[fmd:help] Needle in a haystack? More like string in a graph. Version 1.1",
                 fmd_version,
                 "[fmd:help] Please use fmd help <program_name> to learn more about a particular program\n",
                 "[fmd:help] List of currently available programs: ");
@@ -1105,6 +1125,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--input       or -i: Optional parameter. Path to the input file containing string queries, with one string per line. Default: stdin\n");
             fprintf(stderr, "\t--fastq       or -f: Optional flag.      Specifies if queries are contained in fastq format. Default: False\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter. Path to the output file, produced in one of the query mode formats described above. Default: stdout\n");
+            fprintf(stderr, "\t--cache       or -c: Optional parameter. Caches matches for all suffixes up to length specified by this parameter. Can result in huge speedups. Default: 0\n");
             fprintf(stderr, "\t--max-forks   or -m: Optional parameter. Number of maximum forks to be tracked for a query. Setting this to -1 tracks all forks. Default: -1\n");
             fprintf(stderr, "\t--max-matches or -M: Optional parameter. Maximum number of matches decoded for a query. Setting this to -1 decodes all matches. Default: -1\n");
             fprintf(stderr, "\t--decode      or -d: Optional flag.      Decodes the matches into text space. Setting to true may result in combinatorial blowup. Default: False\n");
