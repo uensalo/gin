@@ -560,7 +560,7 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     * Double compaction
     ************************************************************/
     /*
-    fmd_vector_sort(next_iter_forks);
+    //fmd_vector_sort(next_iter_forks);
     fmd_vector_t *compacted;
     fmd_fmd_compact_forks(fmd, next_iter_forks, &compacted);
     fmd_vector_free(next_iter_forks);
@@ -895,30 +895,6 @@ void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends
     dead_ends->f = &prm_fstruct;
     fmd_vector_free(dead_ends);
 }
-
-/*
-void fmd_fmd_cache_init_helper(fmd_fmd_cache_t *cache, fmd_fmd_t *fmd, fmd_string_t *str, fmd_vector_t *forks, fmd_vector_t *partial_matches) {
-    // generate extensions of the string
-    fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
-    for(int_t i = 5; i < alphabet->size; i++) { // first five characters are RESERVED.
-        fmd_string_t *extension = fmd_string_copy(str);
-        fmd_string_insert(extension, 0, (char_t)alphabet->data[i]);
-        fmd_vector_t *cur_forks = fmd_vector_copy(forks);
-        fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-        int_t t = 1;
-        fmd_fmd_query_find_step(fmd, extension, -1, &t, &cur_forks, &partial_matches);
-        for(int_t j = 0; j < cur_forks->size; j++) {
-            fmd_fork_node_t *fork = cur_forks->data[j];
-            fork->pos = 0;
-            fork->type = CACH;
-        }
-        fmd_table_insert(&cache->cache[extension->size-1], extension, cur_forks);
-        if(extension->size < cache->depth) {
-            fmd_fmd_cache_init_helper(cache, fmd, extension, cur_forks, partial_matches);
-        }
-    }
-}
- */
 
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches) {
 #ifdef FMD_OMP
