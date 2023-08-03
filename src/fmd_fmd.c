@@ -634,8 +634,9 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
         fmd_table_lookup(cache->tables[cached_suffix->size-1], cached_suffix, &lookup);
         fmd_vector_t *cached_forks = lookup;
         fmd_vector_init(&bootstrap, cached_forks->size, &fmd_fstruct_fork_node);
-        #pragma omp parallel for default(none) shared(cached_forks, bootstrap, bootstrap_depth)
-        for(int_t i = 0; i < cached_forks->size; i++) {
+        int_t bootstrap_no_forks = max_forks == -1 ? cached_forks->size : (max_forks < cached_forks->size ? max_forks : cached_forks->size);
+        #pragma omp parallel for default(none) shared(cached_forks, bootstrap, bootstrap_depth, bootstrap_no_forks)
+        for(int_t i = 0; i < bootstrap_no_forks; i++) {
             fmd_fork_node_t *cached_fork = cached_forks->data[i];
             fmd_fork_node_type_t type = bootstrap_depth ? MAIN : LEAF;
             fmd_fork_node_t *fork = fmd_fork_node_init(cached_fork,
@@ -897,9 +898,6 @@ void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends
 }
 
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches) {
-#ifdef FMD_OMP
-    omp_set_num_threads(1); // force single thread, way faster for some reason...
-#endif
     fmd_vector_t *forks= *cur_forks;
     int_t V = fmd->permutation->size;
     /**********************************************************************
@@ -907,7 +905,6 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
     **********************************************************************/
     fmd_vector_t *new_forks;
     fmd_vector_init(&new_forks, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-#pragma omp parallel for default(none) shared(forks, fmd, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
@@ -935,10 +932,7 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
                                                                V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                FALT);
-                #pragma omp critical(forks_append)
-                {
-                    fmd_vector_append(new_forks, new_fork);
-                }
+                fmd_vector_append(new_forks, new_fork);
             }
             fmd_vector_free(incoming_sa_intervals);
         }
@@ -955,7 +949,6 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
     fmd_vector_t *next_iter_forks;
     fmd_vector_init(&next_iter_forks, forks->size + merged->size, &prm_fstruct);
     // advance and filter previous queries
-#pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string)
     for(int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
@@ -965,21 +958,14 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
                                                             -1,
                                                             DEAD);
             fork = dead_node;
-#pragma omp critical(partial_matches_append)
-            {
-                fmd_vector_append(*partial_matches, fork);
-            }
+            fmd_vector_append(*partial_matches, fork);
         } else {
             fork->type = CACH;
             fork->pos = 0; // rewind
-#pragma omp critical(next_iter_queries_append)
-            {
-                fmd_vector_append(next_iter_forks, fork);
-            }
+            fmd_vector_append(next_iter_forks, fork);
         }
     }
     // advance and filter next forks
-#pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks)
     for (int_t i = 0; i < merged->size; i++) {
         fmd_fork_node_t *fork = merged->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
@@ -989,20 +975,14 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
                                                             -1,
                                                             DEAD);
             fork = dead_node;
-#pragma omp critical(partial_matches_append)
-            {
-                fmd_vector_append(*partial_matches, fork);
-            }
+            fmd_vector_append(*partial_matches, fork);
         } else {
             fmd_fork_node_t *folded = fmd_fork_node_init(fork,
                                                          fork->sa_lo, fork->sa_hi,
                                                          0, // rewind
                                                          CACH);
             fork = folded;
-#pragma omp critical(next_iter_queries_append)
-            {
-                fmd_vector_append(next_iter_forks, fork);
-            }
+            fmd_vector_append(next_iter_forks, fork);
         }
     }
     fmd_vector_free_disown(merged);
