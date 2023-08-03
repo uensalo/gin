@@ -681,9 +681,15 @@ void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_mat
     int_t cur_sa_lo = -1;
     int_t cur_sa_hi = -1;
     bool terminate = false;
+    bool cache_encountered = false;
     while(!terminate) {
         switch (cur_fork->type) {
-            case LEAF:{
+            case CACH: {
+                cache_encountered = true;
+                ++end;
+                break;
+            }
+            case LEAF: {
                 cur_sa_lo = cur_fork->sa_lo;
                 cur_sa_hi = cur_fork->sa_hi;
                 break;
@@ -698,7 +704,7 @@ void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_mat
                 break;
             }
             case FALT: {
-                end = ((fmd_fork_node_t*)(cur_fork->parent))->pos+1;
+                end = cache_encountered ? end+1 : ((fmd_fork_node_t*)(cur_fork->parent))->pos+1;
                 fmd_string_t *subs;
                 fmd_string_substring(query, start, end, &subs);
                 fmd_fmd_match_chain_append(match_chain, subs, cur_sa_lo, cur_sa_hi);
