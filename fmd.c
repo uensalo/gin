@@ -695,8 +695,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             fprintf(stderr, "[fmd:query] Average time per match: %.8lf\n", (double)query_time / ((double)no_matching_count));
         }
     }
-    if(decode)
+    if(decode) {
         fmd_fmd_decoder_free(fmd_dec);
+    }
+    if(cache_depth) {
+        fmd_fmd_cache_free(fmd_cache);
+    }
     fmd_fmd_free(fmd);
     return return_code;
 }

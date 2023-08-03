@@ -70,9 +70,17 @@ void fmd_fork_node_free(fmd_fork_node_t *node);
 fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node);
 uint_t fmd_fork_node_hash(fmd_fork_node_t *node);
 int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2);
+int fmd_fork_node_comp_exact(fmd_fork_node_t *n1, fmd_fork_node_t *n2);
 
 static fmd_fstruct_t fmd_fstruct_fork_node = {
         (fcomp) fmd_fork_node_comp,
+        (fhash) fmd_fork_node_hash,
+        (ffree) fmd_fork_node_free,
+        (fcopy) fmd_fork_node_copy,
+};
+
+static fmd_fstruct_t fmd_fstruct_fork_node_exact = {
+        (fcomp) fmd_fork_node_comp_exact,
         (fhash) fmd_fork_node_hash,
         (ffree) fmd_fork_node_free,
         (fcopy) fmd_fork_node_copy,
@@ -83,9 +91,15 @@ typedef struct fmd_fmd_cache_ {
     fmd_table_t **tables;
     fmd_fmd_t *fmd;
 } fmd_fmd_cache_t;
+typedef struct fmd_fmd_cache_helper_p_ {
+    fmd_vector_t *partial_matches;
+    fmd_fmd_cache_t *cache;
+} fmd_fmd_cache_helper_p_t;
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches);
 void fmd_fmd_cache_init_helper_trav(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
+void fmd_fmd_cache_init_helper_prune(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
+void fmd_fmd_cache_free_helper_trav(void* key, void* value, void* params);
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
