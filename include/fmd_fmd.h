@@ -16,6 +16,8 @@
 // permutation encoding characters
 #define FMD_FMD_DEFAULT_a_0 ','
 #define FMD_FMD_DEFAULT_a_1 '.'
+// number of reserved characters
+#define FMD_FMD_NO_RESERVED_CHARS 5
 // bit field lengths for serialization
 #define FMD_FMD_NO_BITS_BIT_LENGTH 64
 #define FMD_FMD_SPECIAL_CHAR_BIT_LENGTH 40
@@ -78,9 +80,11 @@ static fmd_fstruct_t fmd_fstruct_fork_node = {
 
 typedef struct fmd_fmd_cache_ {
     int_t depth;
-    fmd_table_t *cache; // stores array of tables of size depth
+    fmd_table_t **tables;
+    fmd_fmd_t *fmd;
 } fmd_fmd_cache_t;
-void fmd_fmd_cache_init_helper(fmd_fmd_cache_t *cache, fmd_fmd_t *fmd, fmd_string_t *str, fmd_vector_t *forks, fmd_vector_t *partial_matches);
+void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches);
+void fmd_fmd_cache_init_helper_trav(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 
