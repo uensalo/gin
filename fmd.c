@@ -734,7 +734,7 @@ int fmd_main_permutation(int argc, char **argv) {
     FILE *fperm = NULL;
 
     bool parse_rgfa = false;
-    bool multiple_vertex_span = false;
+    bool multiple_vertex_span = true;
 
     int_t depth = 4;
     int_t time = 15;
@@ -796,7 +796,7 @@ int fmd_main_permutation(int argc, char **argv) {
                 break;
             }
             case 's' : {
-                multiple_vertex_span = true;
+                multiple_vertex_span = false;
                 break;
             }
             case 'd': {
