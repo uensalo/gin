@@ -16,6 +16,8 @@
 // permutation encoding characters
 #define FMD_FMD_DEFAULT_a_0 ','
 #define FMD_FMD_DEFAULT_a_1 '.'
+// number of reserved characters
+#define FMD_FMD_NO_RESERVED_CHARS 5
 // bit field lengths for serialization
 #define FMD_FMD_NO_BITS_BIT_LENGTH 64
 #define FMD_FMD_SPECIAL_CHAR_BIT_LENGTH 40
@@ -37,6 +39,7 @@ typedef struct fmd_fmd_ {
 } fmd_fmd_t;
 
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);
+fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 void fmd_fmd_free(fmd_fmd_t *fmd);
 int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
 
@@ -50,6 +53,7 @@ typedef enum fmd_fork_node_type_{
     FALT = 3, // fork indicating alternate path
     LEAF = 4, // matching leaf
     DEAD = 5, // partial match
+    CACH = 6, // cached node, prevents free
 } fmd_fork_node_type_t;
 typedef struct fmd_fork_node_{
     struct fmd_fork_node_t *parent;
@@ -66,6 +70,7 @@ void fmd_fork_node_free(fmd_fork_node_t *node);
 fmd_fork_node_t *fmd_fork_node_copy(fmd_fork_node_t *node);
 uint_t fmd_fork_node_hash(fmd_fork_node_t *node);
 int fmd_fork_node_comp(fmd_fork_node_t *n1, fmd_fork_node_t *n2);
+int fmd_fork_node_comp_exact(fmd_fork_node_t *n1, fmd_fork_node_t *n2);
 
 static fmd_fstruct_t fmd_fstruct_fork_node = {
         (fcomp) fmd_fork_node_comp,
@@ -74,18 +79,45 @@ static fmd_fstruct_t fmd_fstruct_fork_node = {
         (fcopy) fmd_fork_node_copy,
 };
 
+static fmd_fstruct_t fmd_fstruct_fork_node_exact = {
+        (fcomp) fmd_fork_node_comp_exact,
+        (fhash) fmd_fork_node_hash,
+        (ffree) fmd_fork_node_free,
+        (fcopy) fmd_fork_node_copy,
+};
+
+typedef struct fmd_fmd_cache_ {
+    int_t depth;
+    fmd_table_t **tables;
+    fmd_fmd_t *fmd;
+    int_t cache_size; // statistics
+} fmd_fmd_cache_t;
+typedef struct fmd_fmd_cache_helper_p_ {
+    fmd_vector_t *partial_matches;
+    fmd_fmd_cache_t *cache;
+} fmd_fmd_cache_helper_p_t;
+void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches);
+void fmd_fmd_cache_init_helper_trav(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
+void fmd_fmd_cache_init_helper_prune(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
+void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
+void fmd_fmd_cache_free_helper_trav(void* key, void* value, void* params);
+void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
+
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *qr, char_t c, int_t *lo, int_t *hi);
 
-void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
-void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
-
-void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, int_t *t, fmd_vector_t **forks, fmd_vector_t **partial_matches);
+void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
+void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
 void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
 
+// legacy, or for debugging purposes
+void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
+void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
+
 /******************************************************************************
- * Result reporting
+ * Result reporting and decoding
  *****************************************************************************/
 void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain);
 void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *exact_matches, fmd_vector_t **match_lists, int_t *count);
@@ -134,9 +166,9 @@ void fmd_fmd_decoder_decode_one(fmd_fmd_decoder_t *dec, int_t sa_lo, int_t sa_hi
  */
 void fmd_fmd_decoder_decode_ends(fmd_fmd_decoder_t *dec, fmd_vector_t *matches, int_t max_matches, fmd_vector_t **decoded);
 
-
-
-fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
+/******************************************************************************
+ * Serialization and deserialization functions
+ *****************************************************************************/
 
 void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint64_t buf_size);
 /**

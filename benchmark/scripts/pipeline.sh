@@ -18,12 +18,13 @@ mkdir -p $QUERY_DIR
 mkdir -p $PERMUTATION_DIR
 
 # Query generation parameters
-QUERY_LEN=10
+QUERY_LEN=100
 NO_QUERIES=1048576
 SEED=420
 TEMPERATURE=1e2
 COOLING=0.99
 BATCH_SIZE=256
+CACHE_DEPTH=8
 
 # Get the input file name, time, depth and number of threads
 INPUT_FILE=$1
@@ -68,4 +69,4 @@ INDEX_FILE=$COMMON_INDEX_FILE
 
 # Benchmark the index with the query set
 echo "Running query benchmark" | tee -a $LOG_FILE
-$FMD_DIR/fmd query find -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v -m $MATCHES_REPORTED 2>> $LOG_FILE
+$FMD_DIR/fmd query find -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -v -c $CACHE_DEPTH >> $LOG_FILE

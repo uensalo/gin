@@ -80,10 +80,10 @@ uint_t fmd_fmi_hash(fmd_fmi_t *fmi);
 int fmd_fmi_comp(fmd_fmi_t *f1, fmd_fmi_t *f2);
 
 static fmd_fstruct_t fmd_fstruct_fmi = {
-    fmd_fmi_comp,
-    fmd_fmi_hash,
-    fmd_fmi_free,
-    fmd_fmi_copy
+        (fcomp)fmd_fmi_comp,
+        (fhash)fmd_fmi_hash,
+        (ffree)fmd_fmi_free,
+        (fcopy)fmd_fmi_copy
 };
 
 #endif //FMD_FMD_FMI_H
