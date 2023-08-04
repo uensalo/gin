@@ -453,6 +453,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             case 'j': {
                 num_threads = (int_t)strtoull(optarg, NULL, 10);
+                #ifdef FMD_OMP
+                omp_set_num_threads((int)num_threads);
+                #endif
                 break;
             }
             case 'v': {
@@ -690,6 +693,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     if(foutput_path) fclose(foutput);
 
     if(verbose) {
+        fprintf(stderr, "[fmd:query] Params: Index file name (-r): %s\n", finput_path);
         fprintf(stderr, "[fmd:query] Params: Read batch size (-b): %lld\n", batch_size);
         fprintf(stderr, "[fmd:query] Params: Threads (-j): %lld\n", num_threads);
         fprintf(stderr, "[fmd:query] Params: Maximum forks tracked (-m): %lld\n", max_forks);
