@@ -56,7 +56,7 @@ fi
 PERMUTATION_FILE=$COMMON_PERMUTATION_FILE
 
 # Check if a common index file already exists, otherwise create one
-COMMON_INDEX_FILE="$COMMON_INDEX_DIR/${BASENAME}_sampling_rate_${INDEX_SAMPLING_RATE}.fmdi"
+COMMON_INDEX_FILE="$COMMON_INDEX_DIR/${BASENAME}_index_time_${TIME}_depth_${DEPTH}_sampling_rate_${INDEX_SAMPLING_RATE}.fmdi"
 if [[ ! -f $COMMON_INDEX_FILE ]]; then
     mkdir -p $COMMON_INDEX_DIR
     # No common index file exists, need to create one
