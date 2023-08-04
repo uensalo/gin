@@ -389,7 +389,7 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
                                                              fork->pos,
                                                              MAIN);
             fmd_vector_t *incoming_sa_intervals;
-            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
+            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
             for (int_t i = 0; i < incoming_sa_intervals->size; i++) {
                 fmd_imt_interval_t *interval = incoming_sa_intervals->data[i];
                 fmd_fork_node_t *new_fork = fmd_fork_node_init(royal_node, V+1+interval->lo, V+2+interval->hi,
@@ -458,7 +458,7 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
         if(more_to_track && c_0_lo < c_0_hi) {
             fmd_fork_node_t *breakpoint;
             fmd_vector_t *incoming_sa_intervals;
-            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
+            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
             int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
             if(no_forks_to_add) {
                 breakpoint = fmd_fork_node_init(fork,
@@ -646,7 +646,7 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
                                                        type);
             bootstrap->data[i] = fork;
         }
-        bootstrap->size = cached_forks->size;
+        bootstrap->size = bootstrap_no_forks;
         forks = bootstrap;
         fmd_string_free(cached_suffix);
     }
@@ -737,6 +737,7 @@ void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *input_matches, 
     for(int_t i = 0; i < input_matches->size; i++) {
         fmd_match_chain_t *match_chain;
         fmd_fork_node_t *fork = input_matches->data[i];
+        //if(!fork) break;
         total_count += fork->sa_hi - fork->sa_lo;
         fmd_fmd_topologise_fork(fork, query, &match_chain);
         fmd_vector_append(matches, match_chain);
@@ -912,7 +913,7 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
         if(c_0_lo < c_0_hi) {
             fmd_fork_node_t *breakpoint;
             fmd_vector_t *incoming_sa_intervals;
-            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, &incoming_sa_intervals);
+            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, -1, &incoming_sa_intervals);
             if(incoming_sa_intervals->size) {
                 breakpoint = fmd_fork_node_init(fork,
                                                 fork->sa_lo, fork->sa_hi,

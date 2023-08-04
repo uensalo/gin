@@ -53,8 +53,8 @@ fmd_imt_t *fmd_imt_copy(fmd_imt_t *i);
 uint_t fmd_imt_hash(fmd_imt_t *i);
 int fmd_imt_comp(fmd_imt_t *i1, fmd_imt_t *i2);
 
-void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, fmd_vector_t **intervals);
-void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, fmd_vector_t *merge_list);
+void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, int_t no_max_intervals, fmd_vector_t **intervals);
+void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, int_t no_max_intervals, fmd_vector_t *merge_list);
 
 void fmd_imt_query_legacy(fmd_imt_t *i, int_t start, int_t end, fmd_vector_t **intervals);
 fmd_vector_t *fmd_imt_query_helper_legacy(fmd_imt_node_t *node, int_t lo, int_t hi);

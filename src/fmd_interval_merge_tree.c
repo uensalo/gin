@@ -156,11 +156,11 @@ int fmd_imt_comp(fmd_imt_t *i1, fmd_imt_t *i2) {
     return fmd_imt_comp_helper(i1->root, i2->root);
 }
 
-void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, fmd_vector_t **intervals) {
+void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, int_t no_max_intervals, fmd_vector_t **intervals) {
     fmd_vector_t *merge_list;
     fmd_vector_init(&merge_list, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
     // gather phase
-    fmd_imt_query_helper(i->root, start, end, merge_list);
+    fmd_imt_query_helper(i->root, start, end, no_max_intervals, merge_list);
 
     // k-way merge phase
     fmd_vector_t *merged = fmd_imt_multiway_merge_intervals(merge_list);
@@ -168,18 +168,26 @@ void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, fmd_vector_t **interval
     *intervals = merged;
 }
 
-void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, fmd_vector_t *merge_list) {
+void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, int_t no_max_intervals, fmd_vector_t *merge_list) {
+    if(no_max_intervals != -1) {
+        int_t cur_no_intervals = 0;
+        for(int_t i = 0; i < merge_list->size; i++) {
+            fmd_vector_t *intervals = merge_list->data[i];
+            cur_no_intervals += intervals->size;
+            if(cur_no_intervals > no_max_intervals) return;
+        }
+    }
     if(node->lo == node->hi) {
         fmd_vector_append(merge_list, node->intervals); // important to return a copy for memory management purposes
     } else {
         int_t split = (node->lo + node->hi) / 2;
         if(hi <= split) {
-            fmd_imt_query_helper((fmd_imt_node_t*)node->left, lo, hi, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t*)node->left, lo, hi, no_max_intervals, merge_list);
         } else if (lo > split) {
-            fmd_imt_query_helper((fmd_imt_node_t*)node->right, lo, hi, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t*)node->right, lo, hi, no_max_intervals, merge_list);
         } else {
-            fmd_imt_query_helper((fmd_imt_node_t *) node->left, lo, split, merge_list);
-            fmd_imt_query_helper((fmd_imt_node_t *) node->right, split + 1, hi, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t *) node->left, lo, split, no_max_intervals, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t *) node->right, split + 1, hi, no_max_intervals, merge_list);
         }
     }
 }
