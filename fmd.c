@@ -594,9 +594,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 #endif
             switch(mode) {
                 case fmd_query_mode_find: {
-                    #pragma omp parallel for default(none) shared(fmd, fmd_cache, i, tasks, num_threads, max_matches)
+                    #pragma omp parallel for default(none) shared(fmd, fmd_cache, i, tasks, num_threads, max_forks)
                     for(int_t k = 0; k < i; k++) {
-                        fmd_fmd_query_find(fmd, fmd_cache, tasks[k].str, max_matches, &tasks[k].exact_matches, &tasks[k].partial_matches);
+                        fmd_fmd_query_find(fmd, fmd_cache, tasks[k].str, max_forks, &tasks[k].exact_matches, &tasks[k].partial_matches);
                     }
                     break;
                 }
