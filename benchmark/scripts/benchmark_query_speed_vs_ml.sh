@@ -92,6 +92,6 @@ do
 
     # Benchmark the index with the query set, redirecting stderr to the log file
     QUERY_FILE="$QUERY_DIR/${BASENAME}_query_length_${LENGTH}.fmdq"
-    $FMD_DIR/fmd query find -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -m $FORK -v 2>> $LOG_FILE
+    $FMD_DIR/fmd query find -r $INDEX_FILE -i $QUERY_FILE -j $QUERY_NUM_THREADS -b $BATCH_SIZE -m $FORK -v 2>> $LOG_FILE
   done
 done
