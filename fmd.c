@@ -614,9 +614,12 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                         for(int_t j = 0; j < i; j++) {
                             if(!tasks[j].str) continue;
                             fmd_vector_t *decoded_matches;
+                            no_matching_forks += tasks[j].exact_matches->size;
+                            no_missing_forks += tasks[j].partial_matches->size;
                             fmd_fmd_decoder_decode_ends(fmd_dec,tasks[j].exact_matches, max_matches, &decoded_matches);
                             for(int_t k = 0; k < decoded_matches->size; k++) {
                                 fmd_vector_t *decoded_matches_for_fork = decoded_matches->data[k];
+                                no_matching_count += decoded_matches_for_fork->size;
                                 for(int_t l = 0; l < decoded_matches_for_fork->size; l++) {
                                     fmd_decoded_match_t *decoded_match = decoded_matches_for_fork->data[l];
                                     fprintf(foutput, "%s:(v:%lld,o:%lld)\n", tasks[j].str->seq, decoded_match->vid, decoded_match->offset);
@@ -687,32 +690,32 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     if(foutput_path) fclose(foutput);
 
     if(verbose) {
-        fprintf(stderr, "[fmd:query] Index parse time in seconds: %lf\n", index_parse_time);
-        fprintf(stderr, "[fmd:query] Total querying time in seconds: %lf\n",query_time);
+        fprintf(stderr, "[fmd:query] Params: Read batch size (-b): %lld\n", batch_size);
+        fprintf(stderr, "[fmd:query] Params: Threads (-j): %lld\n", num_threads);
+        fprintf(stderr, "[fmd:query] Params: Maximum forks tracked (-m): %lld\n", max_forks);
+        fprintf(stderr, "[fmd:query] Params: Maximum matches decoded: (-M): %lld\n", max_matches);
+        fprintf(stderr, "[fmd:query] Params: Cache depth: (-c): %lld\n", cache_depth);
+        fprintf(stderr, "[fmd:query] Index: Index parse time (s): %lf\n", index_parse_time);
         if(cache_depth) {
-            fprintf(stderr, "[fmd:query] Cache build time in seconds: %lf\n",cache_build_time);
-            fprintf(stderr, "[fmd:query] Cache size in MB: %.4lf\n", (double)fmd_cache->cache_size / 1e9);
+            fprintf(stderr, "[fmd:query] Cache: Cache build time in seconds: %lf\n",cache_build_time);
+            fprintf(stderr, "[fmd:query] Cache: Cache size in MB: %.4lf\n", (double)fmd_cache->cache_size / 1e9);
         }
-        if(decode)
-            fprintf(stderr, "[fmd:query] Total decoding time in seconds: %lf\n",query_decoding_time);
-        fprintf(stderr, "[fmd:query] Number of queries processed: %lld\n",queries_processed);
-        if(queries_processed)
-            fprintf(stderr, "[fmd:query] Average time per query: %lf\n",(double)query_time / (double)queries_processed);
+        if(decode) {
+            fprintf(stderr, "[fmd:query] Decode: Total matches decoded: %lld\n", no_matching_count);
+            fprintf(stderr, "[fmd:query] Decode: Total decoding time (s): %lf\n", query_decoding_time);
+            fprintf(stderr, "[fmd:query] Decode: Matches decoded per second: %lf\n", (double)no_matching_count / query_decoding_time);
+            fprintf(stderr, "[fmd:query] Decode: Time per match decode (s): %lf\n", query_decoding_time / (double)no_matching_count);
+        }
+        if(queries_processed) {
+            fprintf(stderr, "[fmd:query] Find: Total queries processed: %lld\n",queries_processed);
+            fprintf(stderr, "[fmd:query] Find: Total querying time (s): %lf\n",query_time);
+            fprintf(stderr, "[fmd:query] Find: Queries per second: %lf\n",(double) queries_processed / (double) query_time);
+            fprintf(stderr, "[fmd:query] Find: Time per query (s): %lf\n",(double) query_time / (double) queries_processed);
+        }
         if((mode == fmd_query_mode_find) && queries_processed && no_matching_forks) {
-            fprintf(stderr, "[fmd:query] Forks:\n");
-            fprintf(stderr, "[fmd:query] Number of matching forks: %lld\n",no_matching_forks);
-            fprintf(stderr, "[fmd:query] Number of partial forks: %lld\n",no_missing_forks);
-            fprintf(stderr, "[fmd:query] Matches:\n");
-            fprintf(stderr, "[fmd:query] Number of matches: %lld\n",no_matching_count);
-            fprintf(stderr, "[fmd:query] Aggregate statistics:\n");
-            fprintf(stderr, "[fmd:query] Average matches per matching fork: %.8lf\n",(double)no_matching_count / (double)no_matching_forks);
-            fprintf(stderr, "[fmd:query] Average matches per fork: %.8lf\n",(double)no_matching_count / ((double)no_matching_forks + (double)no_missing_forks));
-            fprintf(stderr, "[fmd:query] Average forks per query: %.8lf\n",((double)no_matching_forks + (double)no_missing_forks) / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Average matching forks per query: %.8lf\n",((double)no_matching_forks) / (double)queries_processed);
-            fprintf(stderr, "[fmd:query] Aggregate timings:\n");
-            fprintf(stderr, "[fmd:query] Average time per fork: %.8lf\n", (double)query_time / ((double)no_matching_forks + (double)no_missing_forks));
-            fprintf(stderr, "[fmd:query] Average time per matching fork: %.8lf\n", (double)query_time / ((double)no_matching_forks));
-            fprintf(stderr, "[fmd:query] Average time per match: %.8lf\n", (double)query_time / ((double)no_matching_count));
+            fprintf(stderr, "[fmd:query] Find: Number of matching forks: %lld\n",no_matching_forks);
+            fprintf(stderr, "[fmd:query] Find: Number of partial forks: %lld\n",no_missing_forks);
+            fprintf(stderr, "[fmd:query] Find: Number of matches: %lld\n",no_matching_count);
         }
     }
     if(decode) {
@@ -1132,7 +1135,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--batch-size  or -b: Optional parameter. Number of queries to be read and processed at once. Default: 8\n");
             fprintf(stderr, "\t--threads     or -j: Optional parameter. Number of threads to be used for parallel querying. Default: 1\n");
             fprintf(stderr, "\t--verbose     or -v: Optional parameter. Provides more information (time, progress, memory requirements) about the indexing process.\n");
-            fprintf(stderr, "[fmd:help] Example invocation: fmd query enumerate -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -m 5 -M 10 -v\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd query find -r myindex.fmdi -i queries.fastq -f -o results.txt -j 8 -m 5 -M 10 -v\n");
             return_code = 0;
             break;
         }
