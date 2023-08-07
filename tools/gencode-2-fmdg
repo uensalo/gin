@@ -95,7 +95,7 @@ cat <(cat "${GENOME_BASE}.metrics.txt" | awk -F '\t' '
 
 decompress "$GENOME" | FASTools | awk -F '\t' -v GENOME_BASE="$GENOME_BASE" -v ANNOTATION_BASE="$ANNOTATION_BASE" '
   BEGIN {
-    rc="RevCom"
+    rc="RC"
   }
   {
     split($1,s,"[ \t]+")
