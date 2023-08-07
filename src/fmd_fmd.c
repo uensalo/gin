@@ -970,6 +970,63 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     *cache = c;
 }
 
+void fmd_fmd_cache_serialize_to_buffer_helper_ftrav(void *key, void *value, void *params) {
+    fmd_cache_serialize_to_buffer_helper_p_t *p = params;
+    fmd_bs_t *bs = p->bs;
+    fmd_string_t *str = key;
+    fmd_vector_t *forks = value;
+    fmd_fmd_t *fmd = p->fmd;
+    fmd_table_t *c2e = fmd->graph_fmi->c2e;
+    fmd_bs_write_word(bs, p->widx, str->size, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
+    p->widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+    for(int_t i = 0; i < str->size; i++) {
+        char_t ch = str->seq[i];
+        fmd_bs_write_word(bs, p->widx, str->size, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
+        p->widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+        void *_;
+        fmd_table_lookup(c2e, (void*)ch, &_);
+        int_t encoding = (int_t)_;
+        fmd_bs_write_word(bs, p->widx, encoding, fmd->graph_fmi->no_bits_per_char);
+        p->widx += fmd->graph_fmi->no_bits_per_char;
+    }
+    fmd_bs_write_word(bs, p->widx, forks->size, FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH);
+    p->widx += FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH;
+    for(int_t i = 0; i < forks->size; i++) {
+        fmd_fork_node_t *fork = forks->data[i];
+        fmd_bs_write_word(bs, p->widx, fork->sa_lo, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH);
+        p->widx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+        fmd_bs_write_word(bs, p->widx, fork->sa_hi, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH);
+        p->widx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+    }
+}
+
+void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **buf_ret, uint64_t *buf_size_ret) {
+    fmd_bs_t *bs;
+    fmd_bs_init(&bs);
+    uint_t widx = 0;
+    fmd_bs_write_word(bs, widx, cache->depth, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
+    widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+    fmd_bs_write_word(bs, widx, cache->fmd->graph_fmi->no_bits_per_char, FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH);
+    widx += FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH;
+    fmd_cache_serialize_to_buffer_helper_p_t p;
+    p.widx = widx;
+    p.bs = bs;
+    p.fmd = cache->fmd;
+    for(int_t i = 0; i < cache->depth; i++) {
+        fmd_table_traverse(cache->tables[i], &p, fmd_fmd_cache_init_helper_trav);
+    }
+    widx = p.widx;
+    fmd_bs_fit(bs, widx);
+    word_t *buf;
+    uint_t no_words;
+    fmd_bs_detach(bs, &buf, &no_words);
+    fmd_bs_free(bs);
+    *buf_ret = (unsigned char*)buf;
+    *buf_size_ret = no_words * sizeof(word_t);
+}
+
+void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char *buf, uint64_t buf_size);
+
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
     if(!cache) return;
     for(int_t i = 0; i < cache->depth; i++) {
