@@ -1389,7 +1389,6 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, (int_t)no_vertices, kv_pairs);
     fmd->r2r_tree = inverval_merge_tree;
-    kv_pairs->f = &prm_fstruct;
     fmd_vector_free(kv_pairs);
     /**************************************************************************
     * Step 5 - Cleanup and return the reconstructed index

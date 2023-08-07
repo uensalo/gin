@@ -160,34 +160,31 @@ void fmd_imt_query(fmd_imt_t *i, int_t start, int_t end, int_t no_max_intervals,
     fmd_vector_t *merge_list;
     fmd_vector_init(&merge_list, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
     // gather phase
-    fmd_imt_query_helper(i->root, start, end, no_max_intervals, merge_list);
+    int_t no_cur_intervals = 0;
+    fmd_imt_query_helper(i->root, start, end, no_max_intervals, &no_cur_intervals, merge_list);
 
     // k-way merge phase
-    fmd_vector_t *merged = fmd_imt_multiway_merge_intervals(merge_list);
+    fmd_vector_t *merged = fmd_imt_multiway_merge_intervals(merge_list, no_max_intervals);
     fmd_vector_free(merge_list);
     *intervals = merged;
 }
 
-void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, int_t no_max_intervals, fmd_vector_t *merge_list) {
-    if(no_max_intervals != -1) {
-        int_t cur_no_intervals = 0;
-        for(int_t i = 0; i < merge_list->size; i++) {
-            fmd_vector_t *intervals = merge_list->data[i];
-            cur_no_intervals += intervals->size;
-            if(cur_no_intervals > no_max_intervals) return;
-        }
+void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, int_t no_max_intervals, int_t *no_cur_intervals, fmd_vector_t *merge_list) {
+    if(no_max_intervals != -1 && *no_cur_intervals >= no_max_intervals) {
+        return;
     }
-    if(node->lo == node->hi) {
+    if(node->lo == node->hi) { // lo == node->lo && hi == node->hi
         fmd_vector_append(merge_list, node->intervals); // important to return a copy for memory management purposes
+        *no_cur_intervals += node->intervals->size;
     } else {
         int_t split = (node->lo + node->hi) / 2;
         if(hi <= split) {
-            fmd_imt_query_helper((fmd_imt_node_t*)node->left, lo, hi, no_max_intervals, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t*)node->left, lo, hi, no_max_intervals, no_cur_intervals, merge_list);
         } else if (lo > split) {
-            fmd_imt_query_helper((fmd_imt_node_t*)node->right, lo, hi, no_max_intervals, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t*)node->right, lo, hi, no_max_intervals, no_cur_intervals, merge_list);
         } else {
-            fmd_imt_query_helper((fmd_imt_node_t *) node->left, lo, split, no_max_intervals, merge_list);
-            fmd_imt_query_helper((fmd_imt_node_t *) node->right, split + 1, hi, no_max_intervals, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t *) node->left, lo, split, no_max_intervals, no_cur_intervals, merge_list);
+            fmd_imt_query_helper((fmd_imt_node_t *) node->right, split + 1, hi, no_max_intervals, no_cur_intervals, merge_list);
         }
     }
 }
@@ -223,7 +220,54 @@ fmd_vector_t *fmd_imt_query_helper_legacy(fmd_imt_node_t *node, int_t lo, int_t 
     }
 }
 
+void fmd_imt_init_compact_intervals(fmd_vector_t *intervals, fmd_vector_t **compacted) {
+    fmd_vector_sort(intervals);
+    fmd_vector_init(compacted, intervals->size, &fmd_fstruct_imt_interval);
+    if(intervals->size) {
+        fmd_imt_interval_t *cur_interval = fmd_imt_interval_copy(intervals->data[0]);
+        fmd_vector_append(*compacted, cur_interval);
+        for (int_t i = 1; i < intervals->size; i++) {
+            fmd_imt_interval_t *next_interval = intervals->data[i];
+            if(cur_interval->hi + 1 >= next_interval->lo) {
+                cur_interval->hi = next_interval->hi > cur_interval->hi ? next_interval->hi : cur_interval->hi;
+            } else {
+                cur_interval = fmd_imt_interval_copy(next_interval);
+                fmd_vector_append(*compacted, cur_interval);
+            }
+        }
+    }
+    fmd_vector_fit(*compacted);
+}
+
 fmd_imt_node_t *fmd_imt_init_helper(int_t lo, int_t hi, fmd_vector_t *kv_interval_pairs) {
+    fmd_imt_node_t *n = calloc(1, sizeof(fmd_imt_node_t));
+    n->lo = lo;
+    n->hi = hi;
+
+    // compute the pre merged list
+    fmd_vector_init(&n->intervals, hi - lo + 1, &fmd_fstruct_imt_interval);
+    for(int_t i = lo; i <= hi; i++) {
+        fmd_vector_t *value_intervals = (fmd_vector_t*)kv_interval_pairs->data[i];
+        for(int_t j = 0; j < value_intervals->size; j++) {
+            fmd_imt_interval_t *interval = fmd_imt_interval_copy(value_intervals->data[j]);
+            fmd_vector_append(n->intervals, interval);
+        }
+    }
+    //fmd_vector_sort(n->intervals);
+    fmd_vector_t *compacted;
+    fmd_imt_init_compact_intervals(n->intervals, &compacted);
+    fmd_vector_free(n->intervals);
+    n->intervals = compacted;
+
+    if(lo != hi) {
+        int_t split = (lo + hi) / 2;
+        n->left = (struct fmd_imt_node_t*)fmd_imt_init_helper(lo, split, kv_interval_pairs);
+        n->right = (struct fmd_imt_node_t*)fmd_imt_init_helper(split+1, hi, kv_interval_pairs);
+    }
+    return n;
+
+
+    /*
     fmd_imt_node_t *n = calloc(1, sizeof(fmd_imt_node_t));
     n->lo = lo;
     n->hi = hi;
@@ -235,6 +279,7 @@ fmd_imt_node_t *fmd_imt_init_helper(int_t lo, int_t hi, fmd_vector_t *kv_interva
         n->right = (struct fmd_imt_node_t*)fmd_imt_init_helper(split+1, hi, kv_interval_pairs);
     }
     return n;
+    */
 }
 
 void fmd_imt_free_helper(fmd_imt_node_t *node) {
@@ -277,43 +322,53 @@ fmd_vector_t *fmd_imt_merge_intervals(fmd_vector_t *i1, fmd_vector_t *i2) {
     return result;
 }
 
-fmd_vector_t *fmd_imt_multiway_merge_intervals(fmd_vector_t *list_of_intervals) {
+fmd_vector_t *fmd_imt_multiway_merge_intervals(fmd_vector_t *list_of_intervals, int_t no_max_intervals) {
     fmd_vector_t *merged;
     fmd_vector_init(&merged, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_imt_interval);
-    fmd_min_heap_t *pq; // key: intervals, value: index of interval list
-    fmd_min_heap_init(&pq, list_of_intervals->size, &fmd_fstruct_imt_interval, &prm_fstruct);
-
-    int_t *ptrs = calloc(list_of_intervals->size, sizeof(int_t));
-    for(int_t i = 0; i < list_of_intervals->size; i++) {
-        fmd_vector_t *interval_list = list_of_intervals->data[i];
-        if(interval_list->size) {
-            fmd_min_heap_push(pq, interval_list->data[ptrs[i]++], (void*)i);
+    if(list_of_intervals->size == 1) {
+        fmd_vector_t *intervals = list_of_intervals->data[0];
+        int_t bound = no_max_intervals == -1 ? intervals->size : MIN2(no_max_intervals, intervals->size);
+        for(int_t i = 0; i < bound; i++) {
+            fmd_imt_interval_t *interval = fmd_imt_interval_copy(intervals->data[i]);
+            fmd_vector_append(merged,interval);
         }
-    }
+        return merged;
+    } else {
+        fmd_min_heap_t *pq; // key: intervals, value: index of interval list
+        fmd_min_heap_init(&pq, list_of_intervals->size, &fmd_fstruct_imt_interval, &prm_fstruct);
 
-    fmd_imt_interval_t *cur = NULL, *next = NULL;
-    while(pq->size) {
-        int_t idx;
-        fmd_min_heap_pop(pq, &next, &idx);
-        if(!cur) {
-            cur = fmd_imt_interval_copy(next);
-        } else if (cur->hi + 1 >= next->lo) {
-            if (next->hi > cur->hi) {
-                cur->hi = next->hi;
+        int_t *ptrs = calloc(list_of_intervals->size, sizeof(int_t));
+        for (int_t i = 0; i < list_of_intervals->size; i++) {
+            fmd_vector_t *interval_list = list_of_intervals->data[i];
+            if (interval_list->size) {
+                fmd_min_heap_push(pq, interval_list->data[ptrs[i]++], (void *) i);
             }
-        } else {
-            fmd_vector_append(merged,cur);
-            cur = fmd_imt_interval_copy(next);
         }
-        fmd_vector_t *interval_list = list_of_intervals->data[idx];
-        if(ptrs[idx] < interval_list->size) {
-            fmd_min_heap_push(pq, interval_list->data[ptrs[idx]++], (void*)idx);
+
+        fmd_imt_interval_t *cur = NULL, *next = NULL;
+        while (pq->size && !(no_max_intervals != -1 && merged->size >= no_max_intervals)) {
+            int_t idx;
+            fmd_min_heap_pop(pq, &next, &idx);
+            if (!cur) {
+                cur = fmd_imt_interval_copy(next);
+            } else if (cur->hi + 1 >= next->lo) {
+                if (next->hi > cur->hi) {
+                    cur->hi = next->hi;
+                }
+            } else {
+                fmd_vector_append(merged, cur);
+                cur = fmd_imt_interval_copy(next);
+            }
+            fmd_vector_t *interval_list = list_of_intervals->data[idx];
+            if (ptrs[idx] < interval_list->size) {
+                fmd_min_heap_push(pq, interval_list->data[ptrs[idx]++], (void *) idx);
+            }
         }
+        if (cur) {
+            fmd_vector_append(merged, cur);
+        }
+        free(ptrs);
+        fmd_min_heap_free(pq);
+        return merged;
     }
-    if(cur) {
-        fmd_vector_append(merged, cur);
-    }
-    free(ptrs);
-    fmd_min_heap_free(pq);
-    return merged;
 }
