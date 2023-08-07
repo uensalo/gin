@@ -173,7 +173,7 @@ void fmd_imt_query_helper(fmd_imt_node_t *node, int_t lo, int_t hi, int_t no_max
     if(no_max_intervals != -1 && *no_cur_intervals >= no_max_intervals) {
         return;
     }
-    if(node->lo == node->hi) { // lo == node->lo && hi == node->hi
+    if(lo == node->lo && hi == node->hi) {
         fmd_vector_append(merge_list, node->intervals); // important to return a copy for memory management purposes
         *no_cur_intervals += node->intervals->size;
     } else {
