@@ -41,6 +41,9 @@ uint_t fmd_graph_hash(fmd_graph_t *graph);
 int fmd_graph_comp(fmd_graph_t *g1, fmd_graph_t *g2);
 fmd_graph_t *fmd_graph_copy(fmd_graph_t *graph);
 
+void fmd_graph_kmer_spectrum_helper_trav(void *key, void *value, void *params);
+void fmd_graph_kmer_spectrum(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers);
+
 static fmd_fstruct_t fmd_fstruct_graph = {
         (fcomp) fmd_graph_comp,
         (fhash) fmd_graph_hash,
