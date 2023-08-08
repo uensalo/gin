@@ -1,10 +1,10 @@
 #!/bin/bash
-mkdir -r ../bin
-mkdir -r ../log
-mkdir -r ../res
-mkdir -r ../res/index
-mkdir -r ../res/query
-mkdir -r ../res/permutation
-mkdir -r ../res/cache
-mkdir -r ../input
-mkdir -r ../plot
+mkdir -p ../bin
+mkdir -p ../log
+mkdir -p ../res
+mkdir -p ../res/index
+mkdir -p ../res/query
+mkdir -p ../res/permutation
+mkdir -p ../res/cache
+mkdir -p ../input
+mkdir -p ../plot
