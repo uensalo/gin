@@ -106,10 +106,20 @@ do
   for IDX in $(seq "$CACHE_DEPTH_IDX" $(($CACHE_DEPTH_IDX + 3)))
   do
     CACHE_DEPTH=${CACHE_DEPTHS[$IDX]}
-    CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_depth_${CACHE_DEPTH}.fmdc"
-    CACHE_LOG_FILE="$LOG_DIR/cache_log_cache_depth_${CACHE_DEPTH}.txt"
-    if [[ "$CACHE_DEPTH" -ne "0" && ! -f $CACHE_FILE && $IDX -lt ${#CACHE_DEPTHS[@]} ]]; then
-      $FMD_DIR/fmd query cache -r "$INDEX_FILE" -o "$CACHE_FILE" -j 8 -c "$CACHE_DEPTH" -v 2>> "$CACHE_LOG_FILE" &
+    if [[ "$CACHE_DEPTH" -ne "0" && $IDX -lt ${#CACHE_DEPTHS[@]} ]]; then
+      for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
+      do
+        for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
+        do
+          FIRST_SAMPLE_RATE=${SAMPLE_RATES[0]}
+          CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.fmdc"
+          CACHE_LOG_FILE="$LOG_DIR/cache_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.txt"
+          INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${FIRST_SAMPLE_RATE}.fmdi"
+          if [[ ! -f $CACHE_FILE ]]; then
+            $FMD_DIR/fmd query cache -r "$INDEX_FILE" -o "$CACHE_FILE" -j 8 -c "$CACHE_DEPTH" -v 2>> "$CACHE_LOG_FILE" &
+          fi
+        done
+      done
     fi
   done
   wait
