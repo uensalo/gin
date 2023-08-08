@@ -28,6 +28,12 @@
 #define FMD_FMD_IMT_NO_BITS_BIT_LENGTH 64
 #define FMD_FMD_IMT_INTERVAL_LIST_LENGTH_BIT_LENGTH 32
 #define FMD_FMD_IMT_INTERVAL_BOUNDARY_BIT_LENGTH 40
+// bit field lengths for cache
+#define FMD_FMD_CACHE_DEPTH_BIT_LENGTH 16
+#define FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH 64
+#define FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH 16
+#define FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH 40
+#define FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH 40
 
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
@@ -49,21 +55,17 @@ int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
 typedef enum fmd_fork_node_type_{
     ROOT = 0,
     MAIN = 1,
-    BKPT = 2, // breakpoint
-    FALT = 3, // fork indicating alternate path
-    LEAF = 4, // matching leaf
-    DEAD = 5, // partial match
-    CACH = 6, // cached node, prevents free
+    LEAF = 2, // matching leaf
+    DEAD = 3, // partial match
+    CACH = 4, // cached node, prevents free
 } fmd_fork_node_type_t;
 typedef struct fmd_fork_node_{
-    struct fmd_fork_node_t *parent;
     int_t sa_lo;
     int_t sa_hi;
     int_t pos;
     fmd_fork_node_type_t type;
 } fmd_fork_node_t;
-fmd_fork_node_t *fmd_fork_node_init(fmd_fork_node_t *parent,
-                                    int_t sa_lo, int_t sa_hi,
+fmd_fork_node_t *fmd_fork_node_init(int_t sa_lo, int_t sa_hi,
                                     int_t pos,
                                     fmd_fork_node_type_t type);
 void fmd_fork_node_free(fmd_fork_node_t *node);
@@ -90,17 +92,41 @@ typedef struct fmd_fmd_cache_ {
     int_t depth;
     fmd_table_t **tables;
     fmd_fmd_t *fmd;
+    int_t no_entries;
     int_t cache_size; // statistics
 } fmd_fmd_cache_t;
 typedef struct fmd_fmd_cache_helper_p_ {
-    fmd_vector_t *partial_matches;
     fmd_fmd_cache_t *cache;
 } fmd_fmd_cache_helper_p_t;
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches);
 void fmd_fmd_cache_init_helper_trav(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
-void fmd_fmd_cache_init_helper_prune(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
-void fmd_fmd_cache_free_helper_trav(void* key, void* value, void* params);
+
+typedef struct fmd_cache_serialize_to_buffer_helper_p_{
+    uint_t widx;
+    fmd_bs_t *bs;
+    fmd_fmd_cache_t *cache;
+} fmd_cache_serialize_to_buffer_helper_p_t;
+void fmd_fmd_cache_serialize_to_buffer_helper_ftrav(void *key, void *value, void *params);
+/**
+ * Write order to buffer:
+ * - FMD_FMD_CACHE_DEPTH_BIT_LENGTH : cache->depth // Number of bits for the entire data structure
+ * - FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH: fmd->bits_per_char
+ * - for i = 0 to cache->depth:
+ *      - for each (entry,forks) in cache->tables[i]:
+ *          - FMD_FMD_CACHE_DEPTH_BIT_LENGTH: entry->size // length of the string
+ *          - entry->size * no_bits_per_char: entry->seq // sequence of the string
+ *          - FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH:  forks->size // number of forks
+ *          - for each fork in forks:
+ *              - FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH: fork->lo // fork start
+ *              - FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH: fork->hi // fork end
+ *
+ * @param cache
+ * @param buf_ret
+ * @param buf_size_ret
+ */
+void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **buf_ret, uint64_t *buf_size_ret);
+void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, fmd_fmd_t *fmd, unsigned char *buf, uint64_t buf_size);
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
@@ -110,7 +136,6 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
 void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
-void fmd_fmd_query_find_result_free(fmd_vector_t *paths, fmd_vector_t *dead_ends);
 
 // legacy, or for debugging purposes
 void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
@@ -119,10 +144,6 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
 /******************************************************************************
  * Result reporting and decoding
  *****************************************************************************/
-void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain);
-void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *exact_matches, fmd_vector_t **match_lists, int_t *count);
-void fmd_fmd_topologise_forks_free(fmd_vector_t *match_lists);
-
 typedef struct fmd_fmd_decoded_match_ {
     vid_t vid;
     int_t offset;
