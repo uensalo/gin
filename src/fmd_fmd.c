@@ -919,10 +919,17 @@ void fmd_fmd_cache_init_helper_trav(void *key, void *value, void *params) {
         fmd_vector_t *partial_matches;
         fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
         fmd_fmd_cache_init_step(cache->fmd, extension, &ref_forks, &partial_matches);
-        fmd_vector_free(partial_matches);
-        // insert the extension into the cache, and the lists are pointer datatypes.
-        fmd_table_insert(cache->tables[extension->size-1], extension, ref_forks);
-        cache->cache_size += (int_t)ref_forks->size * (int_t)sizeof(fmd_fork_node_t) + (int_t)extension->size * (int_t)sizeof(char_t);
+        fmd_vector_free(partial_matches); // not necessary
+        // insert the extension and its forks into the cache
+        if(ref_forks->size) {
+            fmd_table_insert(cache->tables[extension->size - 1], extension, ref_forks);
+            ++cache->no_entries;
+            cache->cache_size += (int_t) ref_forks->size * (int_t) sizeof(fmd_fork_node_t) +
+                                 (int_t) extension->size * (int_t) sizeof(char_t);
+        } else {
+            fmd_string_free(extension);
+            fmd_vector_free(ref_forks);
+        }
     }
 }
 
@@ -953,20 +960,27 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
                                                    0,
                                                    MAIN);
         fmd_fmd_advance_fork(fmd, root, str);
-        root->pos = 0;
-        fmd_vector_t *forks;
-        fmd_vector_init(&forks, 1, &fmd_fstruct_fork_node);
-        fmd_vector_append(forks, root);
-        fmd_table_insert(c->tables[0], str, forks);
-        c->cache_size += (int_t)str->size * (int_t)sizeof(char_t) + (int_t)sizeof(fmd_fork_node_t);
+        if(root->sa_hi > root->sa_lo) { // only append to the table if the character exists
+            root->pos = 0;
+            fmd_vector_t *forks;
+            fmd_vector_init(&forks, 1, &fmd_fstruct_fork_node);
+            fmd_vector_append(forks, root);
+            fmd_table_insert(c->tables[0], str, forks);
+            ++c->no_entries;
+            c->cache_size += (int_t) str->size * (int_t) sizeof(char_t) + (int_t) sizeof(fmd_fork_node_t);
+        } else {
+            fmd_string_free(str);
+            fmd_fork_node_free(root);
+        }
     }
     // extend each bucket
     c->fmd = fmd;
-    fmd_fmd_cache_helper_p_t helper_params;
-    helper_params.cache = c;
+    fmd_fmd_cache_helper_p_t *helper_params = calloc(1, sizeof(fmd_fmd_cache_helper_p_t));
+    helper_params->cache = c;
     for(int_t i = 0; i < depth-1; i++) {
-        fmd_table_traverse(c->tables[i], &helper_params, fmd_fmd_cache_init_helper_trav);
+        fmd_table_traverse(c->tables[i], helper_params, fmd_fmd_cache_init_helper_trav);
     }
+    free(helper_params);
     *cache = c;
 }
 
@@ -975,14 +989,12 @@ void fmd_fmd_cache_serialize_to_buffer_helper_ftrav(void *key, void *value, void
     fmd_bs_t *bs = p->bs;
     fmd_string_t *str = key;
     fmd_vector_t *forks = value;
-    fmd_fmd_t *fmd = p->fmd;
+    fmd_fmd_t *fmd = p->cache->fmd;
     fmd_table_t *c2e = fmd->graph_fmi->c2e;
     fmd_bs_write_word(bs, p->widx, str->size, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
     p->widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
     for(int_t i = 0; i < str->size; i++) {
         char_t ch = str->seq[i];
-        fmd_bs_write_word(bs, p->widx, str->size, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
-        p->widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
         void *_;
         fmd_table_lookup(c2e, (void*)ch, &_);
         int_t encoding = (int_t)_;
@@ -1006,26 +1018,93 @@ void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **b
     uint_t widx = 0;
     fmd_bs_write_word(bs, widx, cache->depth, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
     widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+    fmd_bs_write_word(bs, widx, cache->no_entries, FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH);
+    widx += FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH;
     fmd_bs_write_word(bs, widx, cache->fmd->graph_fmi->no_bits_per_char, FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH);
     widx += FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH;
-    fmd_cache_serialize_to_buffer_helper_p_t p;
-    p.widx = widx;
-    p.bs = bs;
-    p.fmd = cache->fmd;
+    fmd_cache_serialize_to_buffer_helper_p_t *p = calloc(1, sizeof(fmd_cache_serialize_to_buffer_helper_p_t));
+    p->widx = widx;
+    p->bs = bs;
+    p->cache = cache;
     for(int_t i = 0; i < cache->depth; i++) {
-        fmd_table_traverse(cache->tables[i], &p, fmd_fmd_cache_init_helper_trav);
+        fmd_table_traverse(cache->tables[i], p, fmd_fmd_cache_serialize_to_buffer_helper_ftrav);
     }
-    widx = p.widx;
+    widx = p->widx;
     fmd_bs_fit(bs, widx);
     word_t *buf;
     uint_t no_words;
     fmd_bs_detach(bs, &buf, &no_words);
     fmd_bs_free(bs);
+    free(p);
     *buf_ret = (unsigned char*)buf;
     *buf_size_ret = no_words * sizeof(word_t);
 }
 
-void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char *buf, uint64_t buf_size);
+void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, fmd_fmd_t *fmd, unsigned char *buf, uint64_t buf_size) {
+    fmd_bs_t *bs;
+    uint_t ridx = 0;
+    fmd_fmd_cache_t *cache;
+    fmd_bs_init_from_buffer(buf, (size_t)buf_size, &bs);
+    cache = calloc(1, sizeof(fmd_fmd_cache_t));
+    // read the depth
+    uint_t cache_depth;
+    fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_DEPTH_BIT_LENGTH, &cache_depth);
+    cache->depth = (int_t)cache_depth;
+    ridx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+    // read the number of entries
+    uint_t no_entries;
+    fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH, &no_entries);
+    cache->no_entries = (int_t)no_entries;
+    ridx += FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH;
+    // read the number of bits per symbol
+    uint_t no_bits_per_symbol;
+    fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH, &no_bits_per_symbol);
+    ridx += FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH;
+    // init cache tables
+    cache->tables = calloc(cache_depth, sizeof(fmd_table_t*));
+    for(int_t i = 0; i < cache_depth; i++) {
+        fmd_table_init(&cache->tables[i], FMD_HT_INIT_SIZE, &fmd_fstruct_string, &fmd_fstruct_vector);
+    }
+
+    // read and register all entries to the cache
+    fmd_table_t *e2c = fmd->graph_fmi->e2c;
+    for(int_t i = 0; i < (int_t)no_entries; i++) {
+        uint_t string_len;
+        fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_DEPTH_BIT_LENGTH, &string_len);
+        ridx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+        fmd_string_t *string;
+        fmd_string_init(&string, (int_t)string_len);
+        for(int_t j = 0; j < (int_t)string_len; j++) {
+            void *_;
+            uint_t encoding;
+            fmd_bs_read_word(bs, ridx, no_bits_per_symbol, &encoding);
+            ridx += no_bits_per_symbol;
+            fmd_table_lookup(e2c, (void*)encoding, &_);
+            char_t ch = (char_t)_;
+            fmd_string_append(string, ch);
+        }
+        // read the number of forks associated and insert them into a list
+        uint_t no_forks;
+        fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH, &no_forks);
+        ridx += FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH;
+        fmd_vector_t *forks;
+        fmd_vector_init(&forks, (int_t)no_forks, &fmd_fstruct_fork_node);
+        for(int_t j = 0; j < (int_t)no_forks; j++) {
+            uint_t lo,hi;
+            fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH, &lo);
+            ridx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+            fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH, &hi);
+            ridx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+            fmd_fork_node_t *fork = fmd_fork_node_init((int_t)lo, (int_t)hi, 0, CACH);
+            fmd_vector_append(forks, fork);
+        }
+        // parsing done, add the string and the forks to the appropriate table
+        fmd_table_insert(cache->tables[string->size-1], string, forks);
+        cache->cache_size += string->size * (int_t)sizeof(char_t) + forks->size * (int_t)sizeof(fmd_fork_node_t);
+    }
+    fmd_bs_free(bs);
+    *cachew = cache;
+}
 
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
     if(!cache) return;
