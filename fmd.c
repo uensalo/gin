@@ -10,8 +10,8 @@
 #include <omp.h>
 #endif
 
-#define FMD_MAIN_ISA_SAMPLE_RATE_DEFAULT 256
-#define FMD_MAIN_RANK_SAMPLE_RATE_DEFAULT 256
+#define FMD_MAIN_ISA_SAMPLE_RATE_DEFAULT 32
+#define FMD_MAIN_RANK_SAMPLE_RATE_DEFAULT 32
 #define to_sec(t1,t2) (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9
 #define FMD_MAIN_BUF_READ_SIZE 1024
 
@@ -1231,8 +1231,8 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--rgfa             or -g: Optional flag.      Indicates that the input file is an rGFA file. Default: false\n");
             fprintf(stderr, "\t--output           or -o: Optional parameter. Path to the output file, produced in binary fmdi format. Default: stdout\n");
             fprintf(stderr, "\t--permutation      or -p: Optional parameter. Path to the permutation file. See fmd permutation for more help. Default = Identity permutation\n");
-            fprintf(stderr, "\t--isa-sample-rate  or -s: Optional parameter. Sampling rate of the suffix array. Reducing this parameter increases query speeds at the cost of larger index files. Default = 256\n");
-            fprintf(stderr, "\t--rank-sample-rate or -r: Optional parameter. Frequency of rank caches. Reducing this parameter increases query speeds at the cost of larger index files. Default = 256\n");
+            fprintf(stderr, "\t--isa-sample-rate  or -s: Optional parameter. Sampling rate of the suffix array. Reducing this parameter increases query speeds at the cost of larger index files. Default = 32\n");
+            fprintf(stderr, "\t--rank-sample-rate or -r: Optional parameter. Frequency of rank caches. Reducing this parameter increases query speeds at the cost of larger index files. Default = 32\n");
             fprintf(stderr, "\t--verbose          or -v: Optional flag.      Provides more information (time, progress, memory requirements) about the indexing process.\n");
             fprintf(stderr, "[fmd:help] Example invocation: fmd index -i mygraph.rgfa -g -o mygraph.fmdi -p myperm -s 64 -r 64 -v\n");
             return_code = 0;

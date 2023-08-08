@@ -1,4 +1,4 @@
 ./bootstrap.sh
-./build_benchmark.sh
-./benchmark_all.sh
+./build_bin.sh
+./benchmark.sh
 #python3 plot_logs.py
