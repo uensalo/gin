@@ -138,7 +138,7 @@ do
         CACHE_FLAG=""
         if [[ "$CACHE_DEPTH" -ne "0" ]]; then
           CACHE_FLAG="-C"
-          CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_depth_${CACHE_DEPTH}.fmdc"
+          CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.fmdc"
         fi
 
         # Iterate over the rest of the parameters

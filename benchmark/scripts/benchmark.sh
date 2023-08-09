@@ -12,7 +12,8 @@
 -j "1" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "4"
+-p "4" \
+-d
 
 # query length grouped by matches returned
 ./fmd_run.sh ../input/gencode.v40.fmdg \
@@ -24,7 +25,8 @@
 -j "1" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "4"
+-p "4" \
+-d
 
 # query length grouped by permutation depth
 ./fmd_run.sh ../input/gencode.v40.fmdg \
@@ -36,7 +38,8 @@
 -j "1" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "2 4 6 8"
+-p "2 4 6 8" \
+-d
 
 # query length grouped by sampling rate & threads
 ./fmd_run.sh ../input/gencode.v40.fmdg \
@@ -48,7 +51,8 @@
 -j "1 4 8 16 32" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "4"
+-p "4" \
+-d
 
 #########################################################
 # Pangenomics
@@ -63,7 +67,8 @@
 -j "1" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "4"
+-p "4" \
+-d
 
 # query length grouped by matches returned
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
@@ -75,7 +80,8 @@
 -j "1" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "4"
+-p "4" \
+-d
 
 # query length grouped by permutation depth
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
@@ -87,7 +93,8 @@
 -j "1" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "2 4 6 8"
+-p "2 4 6 8" \
+-d
 
 # query length grouped by sampling rate & threads
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
@@ -99,4 +106,5 @@
 -j "1 4 8 16 32" \
 -l "10 30 100 300 1000" \
 -t "3600" \
--p "4"
+-p "4" \
+-d

@@ -618,6 +618,11 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             }
             if(fcache_path) {
                 fcache = fopen(fcache_path, "r");
+                if(!fcache) {
+                    fprintf(stderr, "[fmd:query] Error encountered while parsing cache. Quitting.\n");
+                    return_code = -1;
+                    return return_code;
+                }
                 if(verbose) {
                     fprintf(stderr, "[fmd:query] Parsing cache from %s.\n", fcache_path);
                 }
