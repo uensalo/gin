@@ -1229,10 +1229,21 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
             fmd_vector_t *spectrum;
             fmd_table_t *spectrum_table;
             fmd_graph_kmer_locations(graph, kmer, &spectrum, &spectrum_table);
+            fmd_graph_free(graph);
             if(verbose) {
                 fprintf(stderr, "[fmd:convert] Spectrum contains %lld %lld-mers. Sorting ocurrences.\n", spectrum_table->size, kmer);
             }
             fmd_vector_sort(spectrum);
+            if(foutput_path) {
+                foutput = fopen(foutput_path, "w");
+                if(!foutput) {
+                    fprintf(stderr, "[fmd:convert] Can't open output path %s\n", foutput_path);
+                    fmd_vector_free_disown(spectrum);
+                    fmd_table_free(spectrum_table);
+                    return_code = -1;
+                    return return_code;
+                }
+            }
             for(int_t i = 0; i < spectrum->size; i++) {
                 fmd_kmer_kv_t *kv = spectrum->data[i];
                 fprintf(foutput, "%s:(v:%lld,o:%lld)\n", kv->str->seq, kv->vid, kv->offset);
@@ -1240,7 +1251,6 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
             if(foutput_path) {
                 fclose(foutput);
             }
-            fmd_graph_free(graph);
             fmd_vector_free_disown(spectrum);
             fmd_table_free(spectrum_table);
             break;
