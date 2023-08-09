@@ -38,12 +38,13 @@ typedef enum fmd_query_mode_ {
     fmd_query_mode_no_modes=2,
 } fmd_query_mode_t;
 
-char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query"};
+char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query", "spectrum"};
 
 typedef enum fmd_convert_mode_ {
     fmd_convert_mode_rgfa2fmdg=0,
     fmd_convert_mode_fastq2query=1,
-    fmd_convert_mode_no_modes=2,
+    fmd_convert_mode_spectrum=2,
+    fmd_convert_mode_no_modes=3,
 } fmd_convert_mode_t;
 
 int fmd_main_index(int argc, char **argv);
@@ -1102,15 +1103,18 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
     double convert_time = 0.0;
     double write_time = 0.0;
 
+    int_t kmer = 64;
+
     int return_code = 0;
     static struct option options[] = {
-            {"input",       required_argument, NULL, 'i'},
-            {"output",      required_argument, NULL, 'o'},
-            {"verbose",     no_argument,       NULL, 'v'},
+            {"input",   required_argument, NULL, 'i'},
+            {"output",  required_argument, NULL, 'o'},
+            {"kmer",    required_argument, NULL, 'k'},
+            {"verbose", no_argument,       NULL, 'v'},
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "i:o:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "i:o:k:v", options, &optindex)) != -1) {
         switch(c) {
             case 'i': {
                 finput_path = optarg;
@@ -1124,6 +1128,10 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
             }
             case 'o': {
                 foutput_path = optarg;
+                break;
+            }
+            case 'k': {
+                kmer = strtoll(optarg, NULL, 10);
                 break;
             }
             case 'v': {
@@ -1198,6 +1206,43 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
         case fmd_convert_mode_fastq2query: {
             fprintf(stderr, "[fmd:convert] fasta2query not implemented yet. Quitting.\n");
             return_code = -1;
+            break;
+        }
+        case fmd_convert_mode_spectrum: {
+            if(verbose) {
+                fprintf(stderr, "[fmd:convert] Parsing fmdg file %s\n", finput_path);
+            }
+            graph = fmdg_parse(finput);
+            if(!graph) {
+                if (finput_path) fclose(finput);
+                if (foutput_path) fclose(foutput);
+                fprintf(stderr, "[fmd:convert] Malformed fmdg file, quitting.\n");
+                return_code = -1;
+                return return_code;
+            }
+            if(finput_path) {
+                fclose(finput);
+            }
+            if(verbose) {
+                fprintf(stderr, "[fmd:convert] fmdg file parsed, computing %lld-mer spectrum.\n", kmer);
+            }
+            fmd_vector_t *spectrum;
+            fmd_table_t *spectrum_table;
+            fmd_graph_kmer_locations(graph, kmer, &spectrum, &spectrum_table);
+            if(verbose) {
+                fprintf(stderr, "[fmd:convert] Spectrum contains %lld %lld-mers. Sorting ocurrences.\n", spectrum_table->size, kmer);
+            }
+            fmd_vector_sort(spectrum);
+            for(int_t i = 0; i < spectrum->size; i++) {
+                fmd_kmer_kv_t *kv = spectrum->data[i];
+                fprintf(foutput, "%s:(v:%lld,o:%lld)\n", kv->str->seq, kv->vid, kv->offset);
+            }
+            if(foutput_path) {
+                fclose(foutput);
+            }
+            fmd_graph_free(graph);
+            fmd_vector_free_disown(spectrum);
+            fmd_table_free(spectrum_table);
             break;
         }
         default: {
@@ -1292,15 +1337,17 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
         }
         case fmd_mode_convert: {
             fprintf(stderr, "[fmd:help] ---------- fmd:convert ----------\n");
-            fprintf(stderr, "[fmd:help] fmd convert converts rgfa and FASTQ files to fmdg files and fmd query files.\n");
-            fprintf(stderr, "[fmd:help] fmd convert supports two conversion modes, which are described below:\n");
+            fprintf(stderr, "[fmd:help] fmd convert converts rgfa and FASTQ files to fmdg files and fmd query files, and may also be used to extract the k-mer spectrum of an fmdg file.\n");
+            fprintf(stderr, "[fmd:help] fmd convert supports three modes, which are described below:\n");
             fprintf(stderr, "\trgfa2fmdg:   Converts an rGFA into an fmdg file. Throws away naming conventions and stable sequences. Everything is assumed to be on the forward strand.\n");
             fprintf(stderr, "\tfastq2query: Extracts the sequence in every read and returns one sequence per line.\n");
+            fprintf(stderr, "\tspectrum:    Extracts the k-mer spectrum of an input fmdg file.\n");
             fprintf(stderr, "[fmd:help] Parameters\n");
             fprintf(stderr, "\t--input   or -i: Optional parameter. Path to the input file in rGFA or FASTQ format. Default: stdin\n");
             fprintf(stderr, "\t--output  or -o: Optional parameter. Path to the input file in rGFA or FASTQ format. Default: stdout\n");
             fprintf(stderr, "\t--verbose or -v: Optional flag.      Provides more information about the conversion process. Default: false\n");
-            fprintf(stderr, "[fmd:help] Example invocation: fmd convert -i mygraph.rgfa -o -mygraph.fmdg -v\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd convert rgfa2fmdg -i mygraph.rgfa -o mygraph.fmdg -v\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd convert spectrum -i mygraph.rgfa -o -spectrum.txt -v\n");
             return_code = -1;
             break;
         }

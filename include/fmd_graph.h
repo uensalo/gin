@@ -40,15 +40,31 @@ void fmd_graph_insert_edge(fmd_graph_t *graph, vid_t source, vid_t destination);
 uint_t fmd_graph_hash(fmd_graph_t *graph);
 int fmd_graph_comp(fmd_graph_t *g1, fmd_graph_t *g2);
 fmd_graph_t *fmd_graph_copy(fmd_graph_t *graph);
-
-void fmd_graph_kmer_spectrum_helper_trav(void *key, void *value, void *params);
-void fmd_graph_kmer_spectrum(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers);
-
 static fmd_fstruct_t fmd_fstruct_graph = {
         (fcomp) fmd_graph_comp,
         (fhash) fmd_graph_hash,
         (ffree) fmd_graph_free,
         (fcopy) fmd_graph_copy
+};
+
+typedef struct fmd_kmer_kv_ {
+    fmd_string_t *str;
+    vid_t vid;
+    int_t offset;
+} fmd_kmer_kv_t;
+int fmd_kmer_kv_comp(fmd_kmer_kv_t *k1, fmd_kmer_kv_t *k2);
+uint_t fmd_kmer_kv_hash(fmd_kmer_kv_t *k);
+void fmd_kmer_kv_free(fmd_kmer_kv_t *k);
+fmd_kmer_kv_t *fmd_kmer_kv_copy(fmd_kmer_kv_t *k);
+
+void fmd_graph_kmer_locations_helper_trav(void *key, void *value, void *params);
+void fmd_graph_kmer_locations(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers, fmd_table_t **table);
+
+static fmd_fstruct_t fmd_fstruct_kmer_kv = {
+        (fcomp) fmd_kmer_kv_comp,
+        (fhash) fmd_kmer_kv_hash,
+        (ffree) fmd_kmer_kv_free,
+        (fcopy) fmd_kmer_kv_copy
 };
 
 #endif //FMD_FMD_GRAPH_H

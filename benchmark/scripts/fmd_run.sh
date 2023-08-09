@@ -136,6 +136,7 @@ do
       do
         # Handle the cache flag if CACHE_DEPTH is 0
         CACHE_FLAG=""
+        CACHE_FILE=""
         if [[ "$CACHE_DEPTH" -ne "0" ]]; then
           CACHE_FLAG="-C"
           CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.fmdc"

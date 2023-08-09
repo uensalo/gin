@@ -106,43 +106,95 @@ fmd_graph_t *fmd_graph_copy(fmd_graph_t *graph) {
     return copy;
 }
 
-void fmd_graph_kmer_spectrum_helper_trav(void *key, void *value, void *params) {
-    fmd_vector_t *v = (fmd_vector_t*)params;
-    fmd_vector_append(v, key);
+int fmd_kmer_kv_comp(fmd_kmer_kv_t *k1, fmd_kmer_kv_t *k2) {
+    int strcmpval = fmd_string_comp(k1->str, k2->str);
+    return strcmpval ? strcmpval : (int)(k1->vid - k2->vid ?  k1->vid - k2->vid : k1->offset - k2->offset);
 }
 
-void fmd_graph_kmer_spectrum(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers) {
+uint_t fmd_kmer_kv_hash(fmd_kmer_kv_t *k) {
+    return prm_hash_f((void*)k->vid) ^ prm_hash_f((void*)k->offset) ^ fmd_string_hash(k->str);
+}
+
+void fmd_kmer_kv_free(fmd_kmer_kv_t *k) {
+    if(k) {
+        free(k);
+    }
+}
+
+fmd_kmer_kv_t *fmd_kmer_kv_copy(fmd_kmer_kv_t *k) {
+    fmd_kmer_kv_t *retval = NULL;
+    if(k) {
+        retval = calloc(1, sizeof(fmd_kmer_kv_t));
+        retval->str = fmd_string_copy(k->str);
+        retval->vid = k->vid;
+        retval->offset = k->offset;
+    }
+    return retval;
+}
+
+void fmd_graph_kmer_locations_helper_trav(void *key, void *value, void *params) {
+    fmd_vector_t *v = (fmd_vector_t*)params;
+    fmd_vector_t *k = value;
+    for(int_t i = 0; i < k->size; i++) {
+        fmd_kmer_kv_t *kv = k->data[i];
+        kv->str = key;
+        fmd_vector_append(v, kv);
+    }
+}
+
+void fmd_graph_kmer_locations(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers, fmd_table_t **kmer_table) {
     int_t V = graph->vertex_list->size;
-    fmd_tree_t *set;
-    fmd_tree_init(&set, &fmd_fstruct_string, &prm_fstruct);
+    fmd_table_t *set;
+    fmd_table_init(&set, FMD_HT_INIT_SIZE, &fmd_fstruct_string, &fmd_fstruct_vector);
     for(int_t i = 0; i < V; i++) {
         fmd_vertex_t *vertex = graph->vertex_list->data[i];
-        for(int_t j = 0; j < vertex->label->size - k; j++) {
+        for(int_t j = 0; j < vertex->label->size - k + 1; j++) {
             fmd_string_t *kmer;
             fmd_string_substring(vertex->label, j, j + k, &kmer);
-            bool inserted = fmd_tree_insert(set, kmer, NULL);
-            if(!inserted) fmd_string_free(kmer);
+            fmd_kmer_kv_t *loc = calloc(1, sizeof(fmd_kmer_kv_t));
+            loc->vid = i;
+            loc->offset = j;
+            fmd_vector_t *locs;
+            void *_;
+            bool exists = fmd_table_lookup(set, kmer, &_);
+            if(!exists) {
+                fmd_vector_init(&locs, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_kmer_kv);
+                fmd_vector_append(locs, loc);
+                fmd_string_t *set_kmer = fmd_string_copy(kmer);
+                fmd_table_insert(set, set_kmer, locs);
+            } else {
+                locs = (fmd_vector_t*)_;
+                fmd_vector_append(locs, loc);
+            }
+            fmd_string_free(kmer);
         }
+
+        // check the outgoing neighbors
         fmd_vector_t *outgoing;
         fmd_table_lookup(graph->outgoing_neighbors, (void*)vertex->id, &outgoing);
         typedef struct kmer_dfs_ {
             fmd_vertex_t *v;
             fmd_string_t *str;
             int_t remaining;
+            vid_t source_vid;
+            int_t source_offset;
         } kmer_dfs_t;
         fmd_vector_t *stack;
         fmd_vector_init(&stack, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
         // seed the stack
         for(int_t j = 0; j < outgoing->size; j++) {
             fmd_vertex_t *nvertex = graph->vertex_list->data[(int_t)outgoing->data[j]];
-            for(int_t q = 1; q < k; q++) {
+            int_t bound = MIN2(k-1, vertex->label->size);
+            for(int_t q = 1; q <= bound; q++) {
                 fmd_string_t *suf;
-                fmd_string_substring(vertex->label, vertex->label->size-q, vertex->label->size,&suf);
+                fmd_string_substring(vertex->label, vertex->label->size-q, vertex->label->size, &suf);
                 int_t remaining = k - q;
                 kmer_dfs_t *rec = calloc(1, sizeof(kmer_dfs_t));
                 rec->remaining = remaining;
                 rec->str = suf;
                 rec->v = nvertex;
+                rec->source_vid = i;
+                rec->source_offset = vertex->label->size-q;
                 fmd_vector_append(stack, rec);
             }
         }
@@ -157,8 +209,24 @@ void fmd_graph_kmer_spectrum(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers) 
             fmd_string_concat_mut(rec->str, prefix);
             fmd_string_free(prefix);
             if(n_traversable == rec->remaining) {
-                bool inserted = fmd_tree_insert(set, rec->str, NULL);
-                if(!inserted) fmd_string_free(rec->str);
+                fmd_kmer_kv_t *loc = calloc(1,sizeof(fmd_kmer_kv_t));
+                loc->vid = rec->source_vid;
+                loc->offset = rec->source_offset;
+                bool exists = fmd_table_lookup(set, rec->str, &_);
+                fmd_vector_t *locs;
+                if(exists) {
+                    locs = _;
+                    fmd_vector_append(locs,loc);
+                } else {
+                    fmd_vector_init(&locs, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_kmer_kv);
+                    fmd_vector_append(locs, loc);
+                    fmd_string_t *set_kmer = fmd_string_copy(rec->str);
+                    if(!set_kmer->seq[0]) {
+                        printf("wtf\n");
+                    }
+                    fmd_table_insert(set, set_kmer, locs);
+                }
+                fmd_string_free(rec->str);
                 free(rec);
             } else {
                 int_t remaining = rec->remaining - n_traversable;
@@ -167,11 +235,13 @@ void fmd_graph_kmer_spectrum(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers) 
                 outgoingv = _;
                 if(outgoingv->size) {
                     for (int_t j = 0; j < outgoingv->size; j++) {
-                        fmd_vertex_t *nvertex = graph->vertex_list->data[(int_t) outgoing->data[j]];
+                        fmd_vertex_t *nvertex = graph->vertex_list->data[(int_t)outgoingv->data[j]];
                         kmer_dfs_t *nrec = calloc(1, sizeof(kmer_dfs_t));
                         nrec->v = nvertex;
                         nrec->str = fmd_string_copy(rec->str);
                         nrec->remaining = remaining;
+                        nrec->source_vid = rec->source_vid;
+                        nrec->source_offset = rec->source_offset;
                         fmd_vector_append(stack, nrec);
                     }
                 } else { // no outgoing vertices
@@ -184,10 +254,8 @@ void fmd_graph_kmer_spectrum(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers) 
     }
     // gather all strings into a vector and sort
     fmd_vector_t *kmer_vec;
-    fmd_vector_init(&kmer_vec, set->no_items, &fmd_fstruct_string);
-    fmd_tree_preorder(set, kmer_vec, fmd_graph_kmer_spectrum_helper_trav);
-    set->key_f = &prm_fstruct;
-    fmd_tree_free(set);
-    fmd_vector_sort(kmer_vec);
+    fmd_vector_init(&kmer_vec, set->size, &fmd_fstruct_kmer_kv);
+    fmd_table_traverse(set, kmer_vec, fmd_graph_kmer_locations_helper_trav);
     *kmers = kmer_vec;
+    *kmer_table = set;
 }
