@@ -383,7 +383,7 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 i = (int_t)(fmi->char_counts[encoding] + rank - 1);
             } else {
                 // sa entry is present, interpolate and compute entry in next range
-                word_t popcnt, _, sa_entry;
+                word_t popcnt, _, sa_entry = 0;
                 // read the popcount of the sa occupancy bitvector at the position
                 int_t block_base = fmi->sa_bv_start_offset + (div << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE);
                 fmd_bs_read_word(fmi->bits,
@@ -393,12 +393,14 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 int_t no_words_before_pos = rem >> WORD_LOG_BITS;
                 int_t no_slack_bits = rem & (int_t)WORD_LOG_MASK;
                 for(int_t k = 0; k < no_words_before_pos; k++) {
+                    _ = 0;
                     fmd_bs_read_word(fmi->bits,
                                      block_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH + k * WORD_NUM_BITS,
                                      WORD_NUM_BITS,
                                      &_);
                     popcnt += fmd_popcount64(_);
                 }
+                _ = 0;
                 fmd_bs_read_word(fmi->bits,
                                  block_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH + no_words_before_pos * WORD_NUM_BITS,
                                  no_slack_bits,
@@ -406,7 +408,7 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 popcnt += fmd_popcount64(_);
                 // read the SA entry at index popcnt
                 fmd_bs_read_word(fmi->bits,
-                                 fmi->sa_start_offset + (popcnt-1) * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
+                                 fmi->sa_start_offset + (popcnt) * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
                                  FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
                                  &sa_entry);
 
