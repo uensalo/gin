@@ -1277,24 +1277,30 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
         fmd_table_insert(graph_fmi->c2e, (void*)alphabet_char, (void*)encoding);
         fmd_table_insert(graph_fmi->e2c, (void*)encoding, (void*)alphabet_char);
     }
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=(1+((ridx-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS;
     /******************************************************
-    * Step 3c - Read the suffix array samples
+    * Step 3c - Copy the bits field, then set pointers to
+    * suffix array entries and occupancy bitvector
     ******************************************************/
-    fmd_table_init(&graph_fmi->isa, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    word_t sa_idx;
-    for(int_t i = 0; i < graph_fmi->no_chars / graph_fmi->isa_sample_rate; i++) {
-        int_t sa_val = i * graph_fmi->isa_sample_rate;
-        fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &sa_idx);
-        ridx+=FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
-        fmd_table_insert(graph_fmi->isa, (void*)sa_idx, (void*)sa_val);
-    }
-    /******************************************************
-    * Step 3d - Copy the bits field and the rest
-    ******************************************************/
-    graph_fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
     fmd_bs_t *fmi_bits;
     fmd_bs_init(&fmi_bits);
     fmd_bs_fit(fmi_bits, fmi_no_bits);
+    graph_fmi->sa_start_offset = (int_t)ridx;
+    ridx += (graph_fmi->no_chars / graph_fmi->isa_sample_rate) * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+    graph_fmi->sa_bv_start_offset = (int_t)ridx;
+    int_t sa_bv_occ_size = (1+(graph_fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
+    ridx += sa_bv_occ_size;
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=(1+((ridx-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS;
+    /******************************************************
+    * Step 3d - Copy the actual bitvector and the caches
+    ******************************************************/
+    graph_fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
     for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
         word_t read_bits;
         uint_t offset = i * WORD_NUM_BITS;
@@ -1309,8 +1315,6 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     ******************************************************/
     graph_fmi->char_counts = calloc(graph_fmi->alphabet_size, sizeof(count_t));
     count_t cum = 0;
-    //uint_t block_idx = graph_fmi->no_chars / graph_fmi->no_chars_per_block;
-    //uint_t block_size = (graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH + graph_fmi->no_bits_per_char * graph_fmi->no_chars_per_block);
     uint_t rank_cache_idx = graph_fmi->no_bits - graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
     for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
         word_t count;

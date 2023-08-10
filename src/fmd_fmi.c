@@ -96,8 +96,9 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     /**************************************************************************
     * Step 2 - Compute the suffix array and the BWT of the input and sample
     *************************************************************************/
-    fmd_table_init(&f->isa, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    if(!f->isa) {
+    fmd_table_t *isa;
+    fmd_table_init(isa, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    if(isa) {
         fmd_vector_free(f->alphabet);
         fmd_table_free(f->c2e);
         fmd_table_free(f->e2c);
@@ -105,19 +106,16 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
         *fmi = NULL;
         return;
     }
-    //int64_t *sa = calloc(string->size+1, sizeof(uint64_t));
-    //divsufsort64((sauchar_t*)string->seq, (saidx64_t*)sa, string->size+1);
     fmd_string_t *bwt;
     fmd_string_init(&bwt, (int_t)f->no_chars);
     for(int_t i = 0; i < (int_t)f->no_chars; i++) {
         int64_t sa_val = sa[i];
         bwt->seq[i] = sa_val ? string->seq[sa_val-1] : FMD_STRING_TERMINATOR;
         if((sa_val % f->isa_sample_rate) == 0) {
-            fmd_table_insert(f->isa, (void*)i, (void*)sa_val);
+            fmd_table_insert(isa, (void*)i, (void*)sa_val);
         }
     }
     bwt->size = string->size+1;
-    //free(sa);
     /**************************************************************************
     * Step 3 - Encode everything into the bitvector (blocks, ranks, sa, abc)
     *************************************************************************/
@@ -155,17 +153,62 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
         fmd_bs_write_word(bits, widx, encoding, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH);
         widx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
     }
+    /****************************
+    * Align to word boundary
+    ****************************/
+    widx= (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /******************************************************
-    * Step 3c - Write suffix array samples
+    * Step 3c - Write the sampled suffix array entries
     ******************************************************/
+    // first write the suffix array entries
     fmd_fmi_init_isa_write_p_t write_p;
     write_p.bits = bits;
     write_p.base_bit_idx = widx;
     write_p.isa_sampling_rate = f->isa_sample_rate;
-    fmd_table_traverse(f->isa, &write_p, fmd_fmi_init_isa_write);
+    fmd_table_traverse(isa, &write_p, fmd_fmi_init_isa_write);
+    int_t sa_ridx = widx;
+    f->sa_start_offset = widx;
     widx+=FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH*(f->no_chars/f->isa_sample_rate);
+    int_t sa_bv_base = widx; // this should be aligned to 64 bit boundary
+    fmd_table_free(isa);
     /******************************************************
-    * Step 3d - Write rank caches and payloads
+    * Step 3d - Write the suffix array occupancy bitvector
+    ******************************************************/
+    // write the suffix array occupancy bitvector in N/7 bytes
+    // each block is 64 bytes arranged in the following way: 8 byte popcount (64 bits) - 56 byte payload (448 bits)
+    int_t sa_occ_bv_base = sa_bv_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH;
+    f->sa_bv_start_offset = sa_occ_bv_base;
+    while(sa_ridx < sa_bv_base) {
+        word_t sa_rank;
+        fmd_bs_read_word(bits, sa_ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &sa_rank);
+        sa_ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+        uint_t div = sa_rank / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+        uint_t rem = sa_rank % FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+        word_t sa_occ_bv_write_offset = (div << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE) + rem + sa_occ_bv_base;
+        fmd_bs_write_word(bits, sa_occ_bv_write_offset, 1, 1);
+    }
+    // compute the popcounts and cache them in the bitvector
+    int_t sa_bv_no_blocks  = 1 + (f->no_chars - 1) / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+    uint_t sa_bv_cur_popcnt = 0;
+    int_t no_words_per_block = FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH >> WORD_LOG_BITS;
+    for(int_t i = 0; i < sa_bv_no_blocks; i++) {
+        fmd_bs_write_word(bits, sa_ridx, sa_bv_cur_popcnt, FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH);
+        sa_ridx += FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH;
+        for(int_t j = 0; j < no_words_per_block; j++) {
+            word_t payload;
+            fmd_bs_read_word(bits, sa_ridx, WORD_NUM_BITS, &payload);
+            sa_ridx += WORD_NUM_BITS;
+            sa_bv_cur_popcnt += fmd_popcount64(payload);
+        }
+    }
+    int_t sa_bv_occ_size = sa_bv_no_blocks << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
+    widx+=sa_bv_occ_size;
+    /****************************
+    * Align to word boundary
+    ****************************/
+    widx= (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /******************************************************
+    * Step 3e - Write rank caches and payloads
     ******************************************************/
     f->bv_start_offset = widx;
     int_t no_blocks = 1 + (bwt->size - 1) / f->no_chars_per_block;
@@ -190,7 +233,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
         }
     }
     /******************************************************
-    * Step 3e - Compute a cumulative sum of char counts
+    * Step 3f - Compute a cumulative sum of char counts
     ******************************************************/
     count_t cum = 0;
     f->char_counts = calloc(f->alphabet_size, sizeof(count_t));
@@ -314,9 +357,13 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
         count_t count = 0;
         int_t i = j;
         while(1) {
-            count_t sa_entry = -1;
-            bool found = fmd_table_lookup(fmi->isa, (void*)i, &sa_entry);
-            if(!found) {
+            // compute physical index of the SA entry in the bv
+            int_t div = i / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+            int_t rem = i % FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+            int_t sa_idx = fmi->sa_bv_start_offset + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH + (div << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE) + rem;
+            word_t sampled;
+            fmd_bs_read_word(fmi->bits, sa_idx, 1, &sampled);
+            if(!sampled) {
                 // sa sample not found, traverse bwt
                 count++;
                 // get rank of char at index i of the bwt
@@ -327,6 +374,33 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 i = (int_t)(fmi->char_counts[encoding] + rank - 1);
             } else {
                 // sa entry is present, interpolate and compute entry in next range
+                word_t popcnt, _, sa_entry;
+                // read the popcount of the sa occupancy bitvector at the position
+                int_t block_base = fmi->sa_bv_start_offset + (div << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE);
+                fmd_bs_read_word(fmi->bits,
+                                 block_base,
+                                 FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH,
+                                 &popcnt);
+                int_t no_words_before_pos = rem >> WORD_LOG_BITS;
+                int_t no_slack_bits = rem & (int_t)WORD_LOG_MASK;
+                for(int_t k = 0; k < no_words_before_pos; k++) {
+                    fmd_bs_read_word(fmi->bits,
+                                     block_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH + k * WORD_NUM_BITS,
+                                     WORD_NUM_BITS,
+                                     &_);
+                    popcnt += fmd_popcount64(_);
+                }
+                fmd_bs_read_word(fmi->bits,
+                                 block_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH + no_words_before_pos * WORD_NUM_BITS,
+                                 no_slack_bits,
+                                 &_);
+                popcnt += fmd_popcount64(_);
+                // read the SA entry at index popcnt
+                fmd_bs_read_word(fmi->bits,
+                                 fmi->sa_start_offset + popcnt * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
+                                 FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
+                                 &sa_entry);
+
                 rval->data[j - qr->lo] = (void*)(sa_entry + count);
                 break;
             }
@@ -358,7 +432,6 @@ fmd_fmi_t* fmd_fmi_copy(fmd_fmi_t* fmi) {
     f->e2c = fmd_table_copy(fmi->e2c);
     f->char_counts = calloc(f->alphabet_size, sizeof(count_t));
     memcpy(f->char_counts, fmi->char_counts, sizeof(count_t)*f->alphabet_size);
-    f->isa = fmd_table_copy(fmi->isa);
     f->bv_start_offset = fmi->bv_start_offset;
     f->bits = fmd_bs_copy(fmi->bits);
     f->no_bits = fmi->no_bits;
@@ -371,7 +444,6 @@ void fmd_fmi_free(fmd_fmi_t *fmi) {
         fmd_table_free(fmi->c2e);
         fmd_table_free(fmi->e2c);
         free(fmi->char_counts);
-        fmd_table_free(fmi->isa);
         fmd_bs_free(fmi->bits);
         free(fmi);
     }
