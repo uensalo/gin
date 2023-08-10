@@ -71,7 +71,9 @@ void fmd_fmi_init_charset_flatten(void *key, void *value, void *params); //(*ftr
 typedef struct fmd_fmi_init_isa_write_p_ {
     fmd_bs_t *bits;
     word_t isa_sampling_rate;
-    uint_t base_bit_idx;
+    int_t sa_start_offset;
+    int_t sa_bv_start_offset;
+    int_t no_traversed;
 } fmd_fmi_init_isa_write_p_t;
 void fmd_fmi_init_isa_write(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
 bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr);

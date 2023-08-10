@@ -96,9 +96,9 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     /**************************************************************************
     * Step 2 - Compute the suffix array and the BWT of the input and sample
     *************************************************************************/
-    fmd_table_t *isa;
-    fmd_table_init(&isa, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    if(!isa) {
+    fmd_tree_t *sa_tree;
+    fmd_tree_init(&sa_tree, &prm_fstruct, &prm_fstruct); // tree sort
+    if(!sa_tree) {
         fmd_vector_free(f->alphabet);
         fmd_table_free(f->c2e);
         fmd_table_free(f->e2c);
@@ -112,7 +112,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
         int64_t sa_val = sa[i];
         bwt->seq[i] = sa_val ? string->seq[sa_val-1] : FMD_STRING_TERMINATOR;
         if((sa_val % f->isa_sample_rate) == 0) {
-            fmd_table_insert(isa, (void*)i, (void*)sa_val);
+            fmd_tree_insert(sa_tree, (void*)i, (void*)sa_val);
         }
     }
     bwt->size = string->size+1;
@@ -160,35 +160,25 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     /******************************************************
     * Step 3c - Write the sampled suffix array entries
     ******************************************************/
-    // first write the suffix array entries
-    fmd_fmi_init_isa_write_p_t write_p;
-    write_p.bits = bits;
-    write_p.base_bit_idx = widx;
-    write_p.isa_sampling_rate = f->isa_sample_rate;
-    fmd_table_traverse(isa, &write_p, fmd_fmi_init_isa_write);
-    int_t sa_ridx = widx;
-    f->sa_start_offset = widx;
-    widx+=FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH*(f->no_chars/f->isa_sample_rate);
-    int_t sa_bv_base = widx; // this should be aligned to 64 bit boundary
-    fmd_table_free(isa);
     /******************************************************
     * Step 3d - Write the suffix array occupancy bitvector
     ******************************************************/
-    // write the suffix array occupancy bitvector in N/7 bytes
-    // each block is 64 bytes arranged in the following way: 8 byte popcount (64 bits) - 56 byte payload (448 bits)
-    int_t sa_occ_bv_base = sa_bv_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH;
-    f->sa_bv_start_offset = sa_bv_base;
-    while(sa_ridx < sa_bv_base) {
-        word_t sa_rank;
-        fmd_bs_read_word(bits, sa_ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &sa_rank);
-        sa_ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
-        uint_t div = sa_rank / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
-        uint_t rem = sa_rank % FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
-        word_t sa_occ_bv_write_offset = (div << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE) + rem + sa_occ_bv_base;
-        fmd_bs_write_word(bits, sa_occ_bv_write_offset, 1, 1);
-    }
-    // compute the popcounts and cache them in the bitvector
-    int_t sa_bv_no_blocks  = 1 + (f->no_chars - 1) / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+    // first write the suffix array entries
+    f->sa_start_offset = widx;
+    widx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH*(f->no_chars/f->isa_sample_rate);
+    f->sa_bv_start_offset = widx;
+    fmd_fmi_init_isa_write_p_t write_p;
+    write_p.bits = bits;
+    write_p.sa_start_offset = f->sa_start_offset;
+    write_p.sa_bv_start_offset = f->sa_bv_start_offset;
+    write_p.isa_sampling_rate = f->isa_sample_rate;
+    write_p.no_traversed = 0;
+    fmd_tree_inorder(sa_tree, &write_p, fmd_fmi_init_isa_write);
+    fmd_tree_free(sa_tree);
+
+    // write the popcounts
+    int_t sa_ridx = f->sa_bv_start_offset;
+    int_t sa_bv_no_blocks  =(1 + (f->no_chars - 1) / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH);
     uint_t sa_bv_cur_popcnt = 0;
     int_t no_words_per_block = FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH >> WORD_LOG_BITS;
     for(int_t i = 0; i < sa_bv_no_blocks; i++) {
@@ -203,6 +193,17 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     }
     int_t sa_bv_occ_size = sa_bv_no_blocks << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
     widx+=sa_bv_occ_size;
+
+    //DEBUG
+    /*
+    for(int_t i = 0; i < sa_bv_occ_size; i++) {
+        word_t bit;
+        fmd_bs_read_word(bits, f->sa_bv_start_offset + i, 1, &bit);
+        printf("%llu",bit);
+    }
+    printf("\n");
+     */
+    // END DEBUG
     /****************************
     * Align to word boundary
     ****************************/
@@ -285,10 +286,18 @@ void fmd_fmi_init_charset_flatten(void *key, void *value, void *params) {
 }
 
 void fmd_fmi_init_isa_write(void *key, void *value, void *params) {
+    // key: rank, value: offset
+    int_t rank = (int_t)key;
+    int_t offset = (int_t)value;
     fmd_fmi_init_isa_write_p_t *p = (fmd_fmi_init_isa_write_p_t*)params;
-    uint_t widx = (uint_t) value / (uint_t) p->isa_sampling_rate;
-    uint_t bit_offset = widx * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH + p->base_bit_idx;
-    fmd_bs_write_word(p->bits, bit_offset, (word_t)key, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH);
+    uint_t offset_widx = p->no_traversed * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH + p->sa_start_offset;
+    fmd_bs_write_word(p->bits, offset_widx, offset/p->isa_sampling_rate, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH);
+
+    int_t div = rank / FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH; // div is the index of the block
+    int_t rem = rank % FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH;
+    uint_t sa_occ_widx = p->sa_bv_start_offset + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH + (div << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE) + rem;//p->no_traversed * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH + p->sa_start_offset;
+    fmd_bs_write_word(p->bits, sa_occ_widx, 0b1, 1);
+    p->no_traversed++;
 }
 
 bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
@@ -397,11 +406,11 @@ fmd_vector_t *fmd_fmi_sa(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
                 popcnt += fmd_popcount64(_);
                 // read the SA entry at index popcnt
                 fmd_bs_read_word(fmi->bits,
-                                 fmi->sa_start_offset + popcnt * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
+                                 fmi->sa_start_offset + (popcnt-1) * FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
                                  FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH,
                                  &sa_entry);
 
-                rval->data[j - qr->lo] = (void*)(sa_entry + count);
+                rval->data[j - qr->lo] = (void*)(sa_entry*fmi->isa_sample_rate + count);
                 break;
             }
         }
