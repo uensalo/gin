@@ -97,8 +97,8 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     * Step 2 - Compute the suffix array and the BWT of the input and sample
     *************************************************************************/
     fmd_table_t *isa;
-    fmd_table_init(isa, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    if(isa) {
+    fmd_table_init(&isa, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    if(!isa) {
         fmd_vector_free(f->alphabet);
         fmd_table_free(f->c2e);
         fmd_table_free(f->e2c);
@@ -177,7 +177,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     // write the suffix array occupancy bitvector in N/7 bytes
     // each block is 64 bytes arranged in the following way: 8 byte popcount (64 bits) - 56 byte payload (448 bits)
     int_t sa_occ_bv_base = sa_bv_base + FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH;
-    f->sa_bv_start_offset = sa_occ_bv_base;
+    f->sa_bv_start_offset = sa_bv_base;
     while(sa_ridx < sa_bv_base) {
         word_t sa_rank;
         fmd_bs_read_word(bits, sa_ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &sa_rank);
@@ -206,7 +206,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     /****************************
     * Align to word boundary
     ****************************/
-    widx= (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    widx=(1+((widx-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS;
     /******************************************************
     * Step 3e - Write rank caches and payloads
     ******************************************************/
