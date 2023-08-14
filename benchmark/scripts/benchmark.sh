@@ -3,7 +3,7 @@
 # Transcriptomics
 #########################################################
 # query length grouped by cache depth
-./fmd_run.sh ../input/gencode.v40.fmdg\
+./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_c_l" \
 -c "0 2 4 6 8 10" \
 -r "16" \
@@ -15,7 +15,7 @@
 -p "4"
 
 # query length grouped by matches returned
-./fmd_run.sh ../input/gencode.v40.fmdg\
+./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_m_l" \
 -c "10" \
 -r "16" \
@@ -27,7 +27,7 @@
 -p "4"
 
 # query length grouped by permutation depth
-./fmd_run.sh ../input/gencode.v40.fmdg\
+./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_p_l" \
 -c "10" \
 -r "16" \
@@ -39,7 +39,7 @@
 -p "2 4 6 8"
 
 # query length grouped by sampling rate & threads
-./fmd_run.sh ../input/gencode.v40.fmdg\
+./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_r_l" \
 -c "10" \
 -r "16 32 64" \
@@ -51,7 +51,7 @@
 -p "4"
 
 # decoding speed benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg\
+./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_decode" \
 -c "10" \
 -r "16" \
@@ -67,7 +67,7 @@
 # Pangenomics
 #########################################################
 # query length grouped by cache depth
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg\
+./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_c_l" \
 -c "0 2 4 6 8 10" \
 -r "16" \
@@ -79,7 +79,7 @@
 -p "4"
 
 # query length grouped by matches returned
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg\
+./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_m_l" \
 -c "10" \
 -r "16" \
@@ -91,7 +91,7 @@
 -p "4"
 
 # query length grouped by permutation depth
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg\
+./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_p_l" \
 -c "10" \
 -r "16" \
@@ -103,7 +103,7 @@
 -p "2 4 6 8"
 
 # query length grouped by sampling rate & threads
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg\
+./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_r_l" \
 -c "10" \
 -r "16 32 64" \
@@ -115,7 +115,7 @@
 -p "4"
 
 # decoding speed benchmark
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg\
+./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_decode" \
 -c "10" \
 -r "16" \
