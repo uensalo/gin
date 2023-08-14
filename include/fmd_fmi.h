@@ -14,8 +14,12 @@ typedef uint64_t count_t;
 #define FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH 40
 #define FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH 40
 #define FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH 40
-#define FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH 40
+#define FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH 64 // 64 is better than 40 due to word alignment
 #define FMD_FMI_CHAR_COUNT_BIT_LENGTH 40
+
+#define FMD_FMI_SA_OCC_BV_POPCOUNT_BIT_LENGTH 64 // has to be word aligned
+#define FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH 448 // has to be word aligned
+#define FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE 9
 
 typedef struct fmd_fmi_ {
     int_t no_chars;            // number of total characters encoded by the FMI
@@ -27,9 +31,11 @@ typedef struct fmd_fmi_ {
     fmd_table_t *c2e;          // char to encoding
     fmd_table_t *e2c;          // encoding to char
     count_t *char_counts;      // the array storing cumulative character count for FMI querying
-    fmd_table_t *isa;          // inverse suffix array sample
-    int_t bv_start_offset;     // start of [counts]-[block_payload] chain in the bitvector
     fmd_bs_t *bits;            // buffer storing everything, including the members of this struct for serializability
+    // not stored in bits, helper fields
+    int_t sa_start_offset;     // number of bits into the bitstream indicating the starting index of the suffix array entries
+    int_t sa_bv_start_offset;  // number of bits into the bitstream indicating the starting index of the SA occupancy bv
+    int_t bv_start_offset;     // start of [counts]-[block_payload] chain in the bitvector
     int_t no_bits;             // number of bits written to the bitstream, possibly used for serialization
 } fmd_fmi_t;
 
@@ -65,7 +71,9 @@ void fmd_fmi_init_charset_flatten(void *key, void *value, void *params); //(*ftr
 typedef struct fmd_fmi_init_isa_write_p_ {
     fmd_bs_t *bits;
     word_t isa_sampling_rate;
-    uint_t base_bit_idx;
+    int_t sa_start_offset;
+    int_t sa_bv_start_offset;
+    int_t no_traversed;
 } fmd_fmi_init_isa_write_p_t;
 void fmd_fmi_init_isa_write(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
 bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr);
@@ -76,6 +84,7 @@ word_t fmd_fmi_get(fmd_fmi_t *fmi, int_t pos);
 
 fmd_fmi_t* fmd_fmi_copy(fmd_fmi_t* fmi);
 void fmd_fmi_free(fmd_fmi_t *fmi);
+void fmd_fmi_free_disown(fmd_fmi_t *fmi);
 uint_t fmd_fmi_hash(fmd_fmi_t *fmi);
 int fmd_fmi_comp(fmd_fmi_t *f1, fmd_fmi_t *f2);
 

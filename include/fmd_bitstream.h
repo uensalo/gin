@@ -156,6 +156,7 @@ void fmd_bs_write_word(fmd_bs_t *bs, uint_t bit_idx, word_t write_val, uint_t wr
 void fmd_bs_fit(fmd_bs_t *bs, uint_t bit_idx);
 void fmd_bs_detach(fmd_bs_t *bs, word_t **words, uint_t *no_words);
 void fmd_bs_free(fmd_bs_t *bs);
+void fmd_bs_free_disown(fmd_bs_t *bs);
 // functions to wrap into an fstruct
 fmd_bs_t *fmd_bs_copy(fmd_bs_t *bs);
 int fmd_bs_comp(fmd_bs_t *bs1, fmd_bs_t *bs2);

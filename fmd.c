@@ -543,7 +543,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
 
             if(verbose) {
                 fprintf(stderr, "[fmd:query] Cache contains %lld strings.\n", cache->no_entries);
-                fprintf(stderr, "[fmd:query] Dumping cache of size %.4lf MB to output.\n", (double)cache->cache_size / 1e6);
+                fprintf(stderr, "[fmd:query] Dumping cache of size %.4lf MB to output.\n", fmd_fmd_cache_size(cache) / 1e6);
             }
 
             clock_gettime(CLOCK_REALTIME, &t1);
@@ -645,11 +645,11 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 fmd_cache_buf = realloc(fmd_cache_buf, fmd_cache_buf_size*sizeof(uint8_t));
                 free(cache_read_buf);
                 fclose(fcache);
-                fmd_fmd_cache_serialize_from_buffer(&fmd_cache, fmd, fmd_cache_buf, fmd_cache_buf_size);
+                fmd_fmd_cache_serialize_from_buffer(&fmd_cache, fmd_cache_buf, fmd_cache_buf_size);
                 clock_gettime(CLOCK_REALTIME, &t2);
                 cache_build_time += to_sec(t1,t2);
                 if(verbose) {
-                    fprintf(stderr, "[fmd:query] Cache of depth %lld parsed.\n", cache_depth, (double)fmd_cache->cache_size / 1e6);
+                    fprintf(stderr, "[fmd:query] Cache of depth %lld parsed.\n", fmd_cache->depth, (double)fmd_fmd_cache_size(fmd_cache) / 1e6);
                 }
             }
             /**************************************************************************
@@ -816,7 +816,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 fprintf(stderr, "[fmd:query] Index: Index parse time (s): %lf\n", index_parse_time);
                 if(fcache_path) {
                     fprintf(stderr, "[fmd:query] Cache: Cache parse time in seconds: %lf\n",cache_build_time);
-                    fprintf(stderr, "[fmd:query] Cache: Cache size in memory (MB): %.4lf\n", (double)fmd_cache->cache_size / 1e6);
+                    fprintf(stderr, "[fmd:query] Cache: Cache size in memory (MB): %.4lf\n", (double)fmd_fmd_cache_size(fmd_cache) / 1e6);
                 }
                 if(decode) {
                     fprintf(stderr, "[fmd:query] Decode: Total matches decoded: %lld\n", no_matching_count);
