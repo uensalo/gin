@@ -29,11 +29,14 @@
 #define FMD_FMD_IMT_INTERVAL_LIST_LENGTH_BIT_LENGTH 32
 #define FMD_FMD_IMT_INTERVAL_BOUNDARY_BIT_LENGTH 40
 // bit field lengths for cache
-#define FMD_FMD_CACHE_DEPTH_BIT_LENGTH 16
+#define FMD_FMD_CACHE_DEPTH_BIT_LENGTH 64
 #define FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH 64
-#define FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH 16
-#define FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH 40
-#define FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH 40
+#define FMD_FMD_CACHE_FMI_SIZE_BIT_LENGTH 64
+#define FMD_FMD_CACHE_VALUE_SIZE_BIT_LENGTH 64
+#define FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH 64
+#define FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH 64
+#define FMD_FMD_CACHE_FMI_DEFAULT_RANK_RATE 64
+
 
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
@@ -88,45 +91,51 @@ static fmd_fstruct_t fmd_fstruct_fork_node_exact = {
         (fcopy) fmd_fork_node_copy,
 };
 
-typedef struct fmd_fmd_cache_ {
+typedef struct fmd_fmd_cache_ { // implements an "FM-table"
+    // header entries:
     int_t depth;
-    fmd_table_t **tables;
-    fmd_fmd_t *fmd;
     int_t no_entries;
-    int_t cache_size; // statistics
+    int_t key_fmi_size_in_bits; // word aligned
+    int_t value_buffer_size_in_bits; // word aligned
+    word_t *item_offsets;
+    // payload:
+    fmd_fmi_t *key_fmi;
+    word_t *items;
+    // not stored, derived
+    unsigned char *disk_buffer;
 } fmd_fmd_cache_t;
 typedef struct fmd_fmd_cache_helper_p_ {
     fmd_fmd_cache_t *cache;
+    fmd_table_t **cache_tables;
+    fmd_fmd_t *fmd;
 } fmd_fmd_cache_helper_p_t;
+typedef struct fmd_fmd_cache_encode_p_ {
+    fmd_table_t **cache_tables;
+    fmd_string_t *key_encoding; // the resulting encoding will be written here
+    fmd_vector_t *values;       // the values will be written here
+} fmd_fmd_cache_encode_p_t;
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches);
-void fmd_fmd_cache_init_helper_trav(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
+void fmd_fmd_cache_init_helper_trav1(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
+void fmd_fmd_cache_init_helper_trav2(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
+void fmd_fmd_cache_lookup(fmd_fmd_cache_t *cache, fmd_string_t *string, int_t start_pos, int_t max_forks, fmd_vector_t **cached_forks);
+int_t fmd_fmd_cache_size(fmd_fmd_cache_t *cache);
 
-typedef struct fmd_cache_serialize_to_buffer_helper_p_{
-    uint_t widx;
-    fmd_bs_t *bs;
-    fmd_fmd_cache_t *cache;
-} fmd_cache_serialize_to_buffer_helper_p_t;
-void fmd_fmd_cache_serialize_to_buffer_helper_ftrav(void *key, void *value, void *params);
 /**
  * Write order to buffer:
  * - FMD_FMD_CACHE_DEPTH_BIT_LENGTH : cache->depth // Number of bits for the entire data structure
- * - FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH: fmd->bits_per_char
- * - for i = 0 to cache->depth:
- *      - for each (entry,forks) in cache->tables[i]:
- *          - FMD_FMD_CACHE_DEPTH_BIT_LENGTH: entry->size // length of the string
- *          - entry->size * no_bits_per_char: entry->seq // sequence of the string
- *          - FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH:  forks->size // number of forks
- *          - for each fork in forks:
- *              - FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH: fork->lo // fork start
- *              - FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH: fork->hi // fork end
+ * - FMD_FMD_NO_ENTRIES_BIT_LENGTH: cache->no_entries // Number of <key,value> pairs stored in the cache
+ * - for i = 0 to cache->no_entries:
+ * -    FMD_FMD_BYTE_OFFSET_BIT_LENGTH: cache->item_offsets[i] // byte offset lookup table into items
+ * - cache->key_fmi // FM-index over a special encoding of the keys
+ * - cache->items // Item buffer, user interpreted
  *
  * @param cache
  * @param buf_ret
  * @param buf_size_ret
  */
 void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **buf_ret, uint64_t *buf_size_ret);
-void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, fmd_fmd_t *fmd, unsigned char *buf, uint64_t buf_size);
+void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char *buf, uint64_t buf_size);
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);

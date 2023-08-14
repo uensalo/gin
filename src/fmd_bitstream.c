@@ -120,6 +120,12 @@ void fmd_bs_free(fmd_bs_t *bs) {
     }
 }
 
+void fmd_bs_free_disown(fmd_bs_t *bs) {
+    if(bs) {
+        free(bs);
+    }
+}
+
 fmd_bs_t *fmd_bs_copy(fmd_bs_t *bs) {
     fmd_bs_t *cpy;
     fmd_bs_init_reserve(&cpy, bs->cap_in_words);

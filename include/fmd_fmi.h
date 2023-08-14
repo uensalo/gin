@@ -84,6 +84,7 @@ word_t fmd_fmi_get(fmd_fmi_t *fmi, int_t pos);
 
 fmd_fmi_t* fmd_fmi_copy(fmd_fmi_t* fmi);
 void fmd_fmi_free(fmd_fmi_t *fmi);
+void fmd_fmi_free_disown(fmd_fmi_t *fmi);
 uint_t fmd_fmi_hash(fmd_fmi_t *fmi);
 int fmd_fmi_comp(fmd_fmi_t *f1, fmd_fmi_t *f2);
 

@@ -577,28 +577,13 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
     } else {
         // cache lookup to get a bootstrap
         fmd_vector_t *bootstrap;
-        void *lookup;
         int_t cached_suffix_start = string->size <= cache->depth ? 0 : string->size - cache->depth;
         fmd_string_t *cached_suffix;
         fmd_string_substring(string, cached_suffix_start, string->size, &cached_suffix);
         bootstrap_depth = cached_suffix_start;
-        fmd_table_lookup(cache->tables[cached_suffix->size-1], cached_suffix, &lookup);
-        fmd_vector_t *cached_forks = lookup;
-        fmd_vector_init(&bootstrap, cached_forks->size, &fmd_fstruct_fork_node);
-        int_t bootstrap_no_forks = max_forks == -1 ? cached_forks->size : (max_forks < cached_forks->size ? max_forks : cached_forks->size);
-        #pragma omp parallel for default(none) shared(cached_forks, bootstrap, bootstrap_depth, bootstrap_no_forks)
-        for(int_t i = 0; i < bootstrap_no_forks; i++) {
-            fmd_fork_node_t *cached_fork = cached_forks->data[i];
-            fmd_fork_node_type_t type = bootstrap_depth ? MAIN : LEAF;
-            fmd_fork_node_t *fork = fmd_fork_node_init(cached_fork->sa_lo,
-                                                       cached_fork->sa_hi,
-                                                       bootstrap_depth-1,
-                                                       type);
-            bootstrap->data[i] = fork;
-        }
-        bootstrap->size = bootstrap_no_forks;
-        forks = bootstrap;
+        fmd_fmd_cache_lookup(cache, cached_suffix, bootstrap_depth-1, max_forks, &bootstrap);
         fmd_string_free(cached_suffix);
+        forks = bootstrap;
     }
     fmd_fmd_query_find_bootstrapped(fmd, forks, bootstrap_depth, string, max_forks, paths, dead_ends);
 }
@@ -890,12 +875,14 @@ void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t 
     *cur_forks = next_iter_forks;
 }
 
-void fmd_fmd_cache_init_helper_trav(void *key, void *value, void *params) {
+void fmd_fmd_cache_init_helper_trav1(void *key, void *value, void *params) {
     fmd_fmd_cache_helper_p_t *p = params;
     fmd_fmd_cache_t *cache = p->cache;
+    fmd_fmd_t *fmd = p->fmd;
+    fmd_table_t **cache_tables = p->cache_tables;
     fmd_string_t *base = (fmd_string_t*)key;
     fmd_vector_t *matching_forks = (fmd_vector_t*)value;
-    fmd_vector_t *alphabet = cache->fmd->graph_fmi->alphabet;
+    fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
     // for all extensions, advance the forks once
     // set functions of the original list to copy only the references
     for(int i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet->size; i++) {
@@ -918,14 +905,12 @@ void fmd_fmd_cache_init_helper_trav(void *key, void *value, void *params) {
         // advance all forks once
         fmd_vector_t *partial_matches;
         fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-        fmd_fmd_cache_init_step(cache->fmd, extension, &ref_forks, &partial_matches);
+        fmd_fmd_cache_init_step(fmd, extension, &ref_forks, &partial_matches);
         fmd_vector_free(partial_matches); // not necessary
         // insert the extension and its forks into the cache
         if(ref_forks->size) {
-            fmd_table_insert(cache->tables[extension->size - 1], extension, ref_forks);
+            fmd_table_insert(cache_tables[extension->size - 1], extension, ref_forks);
             ++cache->no_entries;
-            cache->cache_size += (int_t) ref_forks->size * (int_t) sizeof(fmd_fork_node_t) +
-                                 (int_t) extension->size * (int_t) sizeof(char_t);
         } else {
             fmd_string_free(extension);
             fmd_vector_free(ref_forks);
@@ -933,21 +918,32 @@ void fmd_fmd_cache_init_helper_trav(void *key, void *value, void *params) {
     }
 }
 
+void fmd_fmd_cache_init_helper_trav2(void* key, void* value, void* params) { //(*ftrav_kv)(void *key, void *value, void *p);
+    fmd_fmd_cache_encode_p_t *p = params;
+    fmd_string_t *encoding = p->key_encoding;
+    fmd_vector_t *values = p->values;
+    fmd_string_append(encoding, FMD_FMD_DEFAULT_c_0);
+    fmd_string_concat_mut(encoding, (fmd_string_t*)key);
+    fmd_vector_append(values, (fmd_vector_t*)value);
+}
+
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
+    /**********************************************************************
+    * Step 0 - Initialize the main and helper data structures
+    **********************************************************************/
     fmd_fmd_cache_t *c = calloc(1, sizeof(fmd_fmd_cache_t));
     if(!c) {
         *cache = NULL;
         return;
     }
-    c->cache_size = 0;
-    c->tables = calloc(depth, sizeof(fmd_table_t*));
+    fmd_table_t **cache_tables = calloc(depth, sizeof(fmd_table_t*));
     c->depth = depth;
-    c->fmd = fmd;
-    // initialize the cache
     for(int_t i = 0; i < depth; i++) {
-        fmd_table_init(&c->tables[i], FMD_HT_INIT_SIZE, &fmd_fstruct_string, &fmd_fstruct_vector);
+        fmd_table_init(&cache_tables[i], FMD_HT_INIT_SIZE, &fmd_fstruct_string, &fmd_fstruct_vector);
     }
-    // populate the cache
+    /**********************************************************************
+    * Step 1 - Seed the cache with length 1 queries
+    **********************************************************************/
     int_t init_lo = 0;
     int_t init_hi = fmd->graph_fmi->no_chars;
     fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
@@ -965,88 +961,238 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
             fmd_vector_t *forks;
             fmd_vector_init(&forks, 1, &fmd_fstruct_fork_node);
             fmd_vector_append(forks, root);
-            fmd_table_insert(c->tables[0], str, forks);
+            fmd_table_insert(cache_tables[0], str, forks);
             ++c->no_entries;
-            c->cache_size += (int_t) str->size * (int_t) sizeof(char_t) + (int_t) sizeof(fmd_fork_node_t);
         } else {
             fmd_string_free(str);
             fmd_fork_node_free(root);
         }
     }
-    // extend each bucket
-    c->fmd = fmd;
-    fmd_fmd_cache_helper_p_t *helper_params = calloc(1, sizeof(fmd_fmd_cache_helper_p_t));
-    helper_params->cache = c;
+    /**********************************************************************
+    * Step 2 - Extend each seed recursively to matches until depth k
+    **********************************************************************/
+    fmd_fmd_cache_helper_p_t helper_params;
+    helper_params.cache = c;
+    helper_params.cache_tables = cache_tables;
+    helper_params.fmd = fmd;
+    // populate the tables of the cache
     for(int_t i = 0; i < depth-1; i++) {
-        fmd_table_traverse(c->tables[i], helper_params, fmd_fmd_cache_init_helper_trav);
+        fmd_table_traverse(cache_tables[i], &helper_params, fmd_fmd_cache_init_helper_trav1);
     }
-    free(helper_params);
+    /**********************************************************************
+    * Step 3 - Collapse table entries into a single string encoding with
+    * the special character c_0
+    **********************************************************************/
+    fmd_fmd_cache_encode_p_t encode_params;
+    encode_params.cache_tables = cache_tables;
+    fmd_string_init(&encode_params.key_encoding, FMD_STRING_INIT_SIZE);
+    fmd_vector_init(&encode_params.values, c->no_entries, &prm_fstruct); // stores pointers
+    for(int_t i = 0; i < depth; i++) {
+        fmd_table_traverse(cache_tables[i], &encode_params, fmd_fmd_cache_init_helper_trav2);
+    }
+    /**********************************************************************
+    * Step 4 - Construct the FM-Index over the special encoding and
+    * rearrange the value list to match the ranks of the special character
+    * c_0
+    **********************************************************************/
+    // first construct the suffix array
+    int64_t *sa = calloc(encode_params.key_encoding->size+1, sizeof(uint64_t));
+    divsufsort64((sauchar_t*)encode_params.key_encoding->seq, (saidx64_t*)sa, encode_params.key_encoding->size+1);
+    // then construct the FM-index
+    fmd_fmi_t *key_fmi;
+    fmd_fmi_init_with_sa(&key_fmi,
+                         encode_params.key_encoding,
+                         sa,
+                         FMD_FMD_CACHE_FMI_DEFAULT_RANK_RATE,
+                         encode_params.key_encoding->size+1);
+    fmd_string_free(encode_params.key_encoding);
+    // now rearrange the items
+    fmd_vector_t *rearranged_values, *args;
+    fmd_vector_init(&rearranged_values, c->no_entries, &prm_fstruct);
+    for(int_t i = 1; i <= c->no_entries; i++) {
+        rearranged_values->data[i-1] = (void*)sa[i];
+    }
+    rearranged_values->size = c->no_entries;
+    free(sa);
+    fmd_vector_argsort(&args, rearranged_values);
+    // invert the argsort
+    int_t no_value_bytes = 0;
+    for(int_t i = 0; i < c->no_entries; i++) {
+        fmd_vector_t *interval_list = encode_params.values->data[i];
+        rearranged_values->data[(int_t)args->data[i]] = interval_list;
+
+        no_value_bytes += (FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH >> 3) +
+                           interval_list->size * (FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH >> 2);
+    }
+    fmd_vector_free(args);
+    /**********************************************************************
+    * Step 4 - Write the value list and calculate byte offsets into the
+    * buffer to read from
+    **********************************************************************/
+    fmd_bs_t* value_bits;
+    fmd_bs_init_reserve(&value_bits, no_value_bytes / sizeof(word_t));
+    word_t *word_offsets = calloc(c->no_entries, sizeof(word_t));
+    int_t pos = 0;
+    for(int_t i = 0; i < c->no_entries; i++) {
+        word_offsets[i] = pos >> WORD_LOG_BITS;
+        fmd_vector_t *interval_list = rearranged_values->data[i];
+        fmd_bs_write_word(value_bits,
+                          pos,
+                          interval_list->size,
+                          FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH);
+        pos += FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH;
+        for(int_t j = 0; j < interval_list->size; j++) {
+            fmd_fork_node_t *fork = interval_list->data[j];
+            fmd_bs_write_word(value_bits,
+                              pos,
+                              fork->sa_lo,
+                              FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH);
+            pos += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+            fmd_bs_write_word(value_bits,
+                              pos,
+                              fork->sa_hi,
+                              FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH);
+            pos += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+        }
+    }
+    /**********************************************************************
+    * Step 5 - Set values and clean up the data structures used
+    **********************************************************************/
+    fmd_vector_free_disown(rearranged_values);
+    for(int_t i = 0; i < depth; i++) {
+        fmd_table_free(cache_tables[i]);
+    }
+    free(cache_tables);
+    uint_t no_words_value_bits;
+    fmd_bs_fit(value_bits, pos);
+    fmd_bs_detach(value_bits, &c->items, &no_words_value_bits);
+    fmd_bs_free(value_bits);
+    fmd_vector_free(encode_params.values);
+    c->key_fmi = key_fmi;
+    c->item_offsets = word_offsets;
+    c->key_fmi_size_in_bits = key_fmi->no_bits;
+    c->value_buffer_size_in_bits = (int_t)no_words_value_bits << WORD_LOG_BITS;
+    c->disk_buffer = NULL;
     *cache = c;
 }
 
-void fmd_fmd_cache_serialize_to_buffer_helper_ftrav(void *key, void *value, void *params) {
-    fmd_cache_serialize_to_buffer_helper_p_t *p = params;
-    fmd_bs_t *bs = p->bs;
-    fmd_string_t *str = key;
-    fmd_vector_t *forks = value;
-    fmd_fmd_t *fmd = p->cache->fmd;
-    fmd_table_t *c2e = fmd->graph_fmi->c2e;
-    fmd_bs_write_word(bs, p->widx, str->size, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
-    p->widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
-    for(int_t i = 0; i < str->size; i++) {
-        char_t ch = str->seq[i];
-        void *_;
-        fmd_table_lookup(c2e, (void*)ch, &_);
-        int_t encoding = (int_t)_;
-        fmd_bs_write_word(bs, p->widx, encoding, fmd->graph_fmi->no_bits_per_char);
-        p->widx += fmd->graph_fmi->no_bits_per_char;
+void fmd_fmd_cache_lookup(fmd_fmd_cache_t *cache, fmd_string_t *string, int_t start_pos, int_t max_forks, fmd_vector_t **cached_forks) {
+    fmd_vector_t *forks;
+    fmd_fmi_qr_t query;
+    query.lo = 0;
+    query.hi = cache->key_fmi->no_chars+1;
+    query.pos = string->size-1;
+    query.pattern = string;
+    while(query.pos > -1) {
+        bool non_empty = fmd_fmi_advance_query(cache->key_fmi, &query);
+        if(!non_empty) {
+            fmd_vector_init(&forks, 0, &fmd_fstruct_fork_node);
+            *cached_forks = forks;
+            return;
+        }
     }
-    fmd_bs_write_word(bs, p->widx, forks->size, FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH);
-    p->widx += FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH;
-    for(int_t i = 0; i < forks->size; i++) {
-        fmd_fork_node_t *fork = forks->data[i];
-        fmd_bs_write_word(bs, p->widx, fork->sa_lo, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH);
-        p->widx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
-        fmd_bs_write_word(bs, p->widx, fork->sa_hi, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH);
-        p->widx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
+    int_t lo, hi;
+    fmd_fmi_query_precedence_range(cache->key_fmi, &query, FMD_FMD_DEFAULT_c_0, &lo, &hi);
+    if(lo + 1 != hi) {
+        fmd_vector_init(&forks, 0, &fmd_fstruct_fork_node);
+        *cached_forks = forks;
+        return;
     }
+    word_t start_offset = cache->item_offsets[lo-1];
+    word_t *list = cache->items + start_offset + 1;
+    word_t list_size = (int_t)cache->items[start_offset];
+    word_t no_forks = max_forks == -1 ? list_size : (max_forks < list_size ? max_forks : list_size);
+    fmd_vector_init(&forks, (int_t)no_forks, &fmd_fstruct_fork_node);
+    forks->size = (int_t)no_forks;
+    for(int_t i = 0; i < no_forks; i++) {
+        int_t read_pos = i << 1;
+        fmd_fork_node_t *fork = fmd_fork_node_init((int_t)list[read_pos],
+                                                   (int_t)list[read_pos+1],
+                                                   start_pos,
+                                                   (start_pos == -1 ? LEAF : MAIN));
+        forks->data[i] = fork;
+    }
+    *cached_forks = forks;
+}
+
+int_t fmd_fmd_cache_size(fmd_fmd_cache_t *cache) {
+    if(!cache) return 0;
+    int_t size = 0;
+    size += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
+    size += FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH;
+    size += FMD_FMD_CACHE_FMI_SIZE_BIT_LENGTH;
+    size += FMD_FMD_CACHE_VALUE_SIZE_BIT_LENGTH;
+    size += WORD_NUM_BITS * cache->no_entries;
+    size += cache->key_fmi_size_in_bits;
+    size += cache->value_buffer_size_in_bits;
+    return (1 + ((size-1) >> 3));
 }
 
 void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **buf_ret, uint64_t *buf_size_ret) {
     fmd_bs_t *bs;
     fmd_bs_init(&bs);
     uint_t widx = 0;
+    /**************************************************************************
+    * Step 0 - Write the header
+    **************************************************************************/
     fmd_bs_write_word(bs, widx, cache->depth, FMD_FMD_CACHE_DEPTH_BIT_LENGTH);
     widx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
     fmd_bs_write_word(bs, widx, cache->no_entries, FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH);
     widx += FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH;
-    fmd_bs_write_word(bs, widx, cache->fmd->graph_fmi->no_bits_per_char, FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH);
-    widx += FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH;
-    fmd_cache_serialize_to_buffer_helper_p_t *p = calloc(1, sizeof(fmd_cache_serialize_to_buffer_helper_p_t));
-    p->widx = widx;
-    p->bs = bs;
-    p->cache = cache;
-    for(int_t i = 0; i < cache->depth; i++) {
-        fmd_table_traverse(cache->tables[i], p, fmd_fmd_cache_serialize_to_buffer_helper_ftrav);
+    fmd_bs_write_word(bs, widx, cache->key_fmi_size_in_bits, FMD_FMD_CACHE_FMI_SIZE_BIT_LENGTH);
+    widx += FMD_FMD_CACHE_FMI_SIZE_BIT_LENGTH;
+    fmd_bs_write_word(bs, widx, cache->value_buffer_size_in_bits, FMD_FMD_CACHE_VALUE_SIZE_BIT_LENGTH);
+    widx += FMD_FMD_CACHE_VALUE_SIZE_BIT_LENGTH;
+    // word align
+    widx  = (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /**************************************************************************
+    * Step 1 - Write item offsets
+    **************************************************************************/
+    for(int_t i = 0; i < cache->no_entries; i++) {
+        fmd_bs_write_word(bs, widx, cache->item_offsets[i], WORD_NUM_BITS);
+        widx += WORD_NUM_BITS;
     }
-    widx = p->widx;
+    // word align
+    widx  = (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /**************************************************************************
+    * Step 2 - Write the FMI bitstream
+    **************************************************************************/
+    int_t fmi_no_words = (int_t)(1 +((cache->key_fmi_size_in_bits-1)>>WORD_LOG_BITS)); // word align
+    for(int_t i = 0; i < fmi_no_words; i++) {
+        fmd_bs_write_word(bs, widx, (word_t)cache->key_fmi->bits->words[i], WORD_NUM_BITS);
+        widx += WORD_NUM_BITS;
+    }
+    // word align
+    widx  = (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /**************************************************************************
+    * Step 3 - Write the item buffer
+    **************************************************************************/
+    int_t values_no_words = (int_t)(1 + ((cache->value_buffer_size_in_bits-1)>>WORD_LOG_BITS));
+    for(int_t i = 0; i < values_no_words; i++) {
+        fmd_bs_write_word(bs, widx, (word_t)cache->items[i], WORD_NUM_BITS);
+        widx += WORD_NUM_BITS;
+    }
+    /**************************************************************************
+    * Step 4 - Return the buffer and free the other stuff
+    **************************************************************************/
+    word_t* buf;
+    uint64_t no_words;
     fmd_bs_fit(bs, widx);
-    word_t *buf;
-    uint_t no_words;
     fmd_bs_detach(bs, &buf, &no_words);
     fmd_bs_free(bs);
-    free(p);
     *buf_ret = (unsigned char*)buf;
     *buf_size_ret = no_words * sizeof(word_t);
 }
 
-void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, fmd_fmd_t *fmd, unsigned char *buf, uint64_t buf_size) {
+void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char *buf, uint64_t buf_size) {
     fmd_bs_t *bs;
     uint_t ridx = 0;
     fmd_fmd_cache_t *cache;
     fmd_bs_init_from_buffer(buf, (size_t)buf_size, &bs);
     cache = calloc(1, sizeof(fmd_fmd_cache_t));
-    // read the depth
+    /**************************************************************************
+    * Step 0 - Parse the header
+    **************************************************************************/
     uint_t cache_depth;
     fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_DEPTH_BIT_LENGTH, &cache_depth);
     cache->depth = (int_t)cache_depth;
@@ -1056,62 +1202,145 @@ void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, fmd_fmd_t *fm
     fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH, &no_entries);
     cache->no_entries = (int_t)no_entries;
     ridx += FMD_FMD_CACHE_NO_ENTRIES_BIT_LENGTH;
-    // read the number of bits per symbol
-    uint_t no_bits_per_symbol;
-    fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH, &no_bits_per_symbol);
-    ridx += FMD_FMD_CACHE_CHAR_ENCODING_BIT_LENGTH;
-    // init cache tables
-    cache->tables = calloc(cache_depth, sizeof(fmd_table_t*));
-    for(int_t i = 0; i < cache_depth; i++) {
-        fmd_table_init(&cache->tables[i], FMD_HT_INIT_SIZE, &fmd_fstruct_string, &fmd_fstruct_vector);
-    }
+    // fmi size in bytes
+    uint_t key_fmi_size_in_bits;
+    fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FMI_SIZE_BIT_LENGTH, &key_fmi_size_in_bits);
+    cache->key_fmi_size_in_bits = (int_t)key_fmi_size_in_bits;
+    ridx += FMD_FMD_CACHE_FMI_SIZE_BIT_LENGTH;
+    // value buffer size in bytes
+    uint_t value_buffer_size_in_bits;
+    fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_VALUE_SIZE_BIT_LENGTH, &value_buffer_size_in_bits);
+    cache->value_buffer_size_in_bits = (int_t)value_buffer_size_in_bits;
+    ridx += FMD_FMD_CACHE_VALUE_SIZE_BIT_LENGTH;
+    // word align
+    ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /**************************************************************************
+    * Step 1 - Parse item word offsets
+    **************************************************************************/
+    cache->item_offsets = bs->words + (ridx >> WORD_LOG_BITS);
+    ridx += no_entries * WORD_NUM_BITS;
+    // word align
+    ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /**************************************************************************
+    * Step 2 - Parse FMI bitstream
+    **************************************************************************/
+    fmd_fmi_t *fmi = calloc(1, sizeof(fmd_fmi_t));
+    int_t fmi_no_words = (int_t)(1 +((cache->key_fmi_size_in_bits-1)>>WORD_LOG_BITS)); // word align
+    uint_t fmi_ridx_start = ridx;
 
-    // read and register all entries to the cache
-    fmd_table_t *e2c = fmd->graph_fmi->e2c;
-    for(int_t i = 0; i < (int_t)no_entries; i++) {
-        uint_t string_len;
-        fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_DEPTH_BIT_LENGTH, &string_len);
-        ridx += FMD_FMD_CACHE_DEPTH_BIT_LENGTH;
-        fmd_string_t *string;
-        fmd_string_init(&string, (int_t)string_len);
-        for(int_t j = 0; j < (int_t)string_len; j++) {
-            void *_;
-            uint_t encoding;
-            fmd_bs_read_word(bs, ridx, no_bits_per_symbol, &encoding);
-            ridx += no_bits_per_symbol;
-            fmd_table_lookup(e2c, (void*)encoding, &_);
-            char_t ch = (char_t)_;
-            fmd_string_append(string, ch);
-        }
-        // read the number of forks associated and insert them into a list
-        uint_t no_forks;
-        fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH, &no_forks);
-        ridx += FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH;
-        fmd_vector_t *forks;
-        fmd_vector_init(&forks, (int_t)no_forks, &fmd_fstruct_fork_node);
-        for(int_t j = 0; j < (int_t)no_forks; j++) {
-            uint_t lo,hi;
-            fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH, &lo);
-            ridx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
-            fmd_bs_read_word(bs, ridx, FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH, &hi);
-            ridx += FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH;
-            fmd_fork_node_t *fork = fmd_fork_node_init((int_t)lo, (int_t)hi, 0, CACH);
-            fmd_vector_append(forks, fork);
-        }
-        // parsing done, add the string and the forks to the appropriate table
-        fmd_table_insert(cache->tables[string->size-1], string, forks);
-        cache->cache_size += string->size * (int_t)sizeof(char_t) + forks->size * (int_t)sizeof(fmd_fork_node_t);
+    fmd_bs_t *fmi_bits = calloc(1, sizeof(fmd_bs_t));
+    fmi_bits->cap_in_words = fmi_no_words;
+    fmi_bits->words = bs->words + (ridx >> WORD_LOG_BITS);
+    fmi->bits = fmi_bits;
+    // word align
+    ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
+    /******************************************************
+    * Step 2a - Read the FMI header
+    ******************************************************/
+    word_t no_chars, no_chars_per_block, isa_sample_rate, alphabet_size;
+    fmd_bs_read_word(bs, ridx, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &no_chars);
+    ridx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH, &no_chars_per_block);
+    ridx += FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &isa_sample_rate);
+    ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_SIZE_BIT_LENGTH, &alphabet_size);
+    ridx += FMD_FMI_ALPHABET_SIZE_BIT_LENGTH;
+
+    fmi->no_chars = (int_t)no_chars;
+    fmi->no_chars_per_block = (int_t)no_chars_per_block;
+    fmi->isa_sample_rate = (int_t)isa_sample_rate;
+    fmi->alphabet_size = (int_t)alphabet_size;
+    fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
+    /******************************************************
+    * Step 2b - Read the alphabet
+    ******************************************************/
+    fmd_vector_init(&fmi->alphabet, fmi->alphabet_size, &prm_fstruct);
+    fmd_table_init(&fmi->e2c, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    fmd_table_init(&fmi->c2e, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    for(int_t i = 0; i < fmi->alphabet_size; i++) {
+        word_t alphabet_char, encoding;
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
+        ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
+        fmd_vector_append(fmi->alphabet, (void*)alphabet_char);
+
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
+        ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
+
+        fmd_table_insert(fmi->c2e, (void*)alphabet_char, (void*)encoding);
+        fmd_table_insert(fmi->e2c, (void*)encoding, (void*)alphabet_char);
     }
-    fmd_bs_free(bs);
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 2c - Copy the bits field, then set pointers to
+    * suffix array entries and occupancy bitvector
+    ******************************************************/
+    fmi->sa_start_offset = (int_t)(ridx) - (int_t)fmi_ridx_start;
+    ridx += (1+fmi->no_chars/fmi->isa_sample_rate)*FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+    fmi->sa_bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    int_t sa_bv_occ_size = (1+(fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
+    ridx += sa_bv_occ_size;
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 2d - Copy the actual bitvector and the caches
+    ******************************************************/
+    fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
+        word_t read_bits;
+        uint_t offset = i * WORD_NUM_BITS;
+        fmd_bs_read_word(bs, fmi_ridx_start + offset, WORD_NUM_BITS, &read_bits);
+        fmd_bs_write_word(fmi_bits, offset, read_bits, WORD_NUM_BITS);
+    }
+    fmi->no_bits = (int_t)cache->key_fmi_size_in_bits;
+    /******************************************************
+    * Step 2e - Compute the cumulative sum from last block
+    ******************************************************/
+    fmi->char_counts = calloc(fmi->alphabet_size, sizeof(count_t));
+    count_t cum = 0;
+    uint_t rank_cache_idx = fmi->no_bits - fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+    for(int_t i = 0; i < fmi->alphabet_size; i++) {
+        word_t count = 0;
+        fmi->char_counts[i] = cum;
+        fmd_bs_read_word(fmi->bits, rank_cache_idx + i * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &count);
+        cum += (count_t)count;
+    }
+    /******************************************************
+    * Step 2f - Finalize reading the FMI
+    ******************************************************/
+    /* Don't forget to set ridx accordingly */
+    ridx = fmi_ridx_start + fmi_bits->cap_in_words * WORD_NUM_BITS;
+    /******************************************************
+    * Step 3 - Parse the values
+    ******************************************************/
+    cache->key_fmi = fmi;
+    cache->items = bs->words + (ridx >> WORD_LOG_BITS);
+    cache->disk_buffer = (unsigned char*)bs->words;
+    /******************************************************
+    * Step 4 - Cleanup
+    ******************************************************/
+    fmd_bs_free_disown(bs);
     *cachew = cache;
 }
 
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
     if(!cache) return;
-    for(int_t i = 0; i < cache->depth; i++) {
-        fmd_table_free(cache->tables[i]);
+    if(cache->disk_buffer) {
+        fmd_fmi_free_disown(cache->key_fmi);
+        free(cache->disk_buffer);
+    } else {
+        fmd_fmi_free(cache->key_fmi);
+        free(cache->items);
+        free(cache->item_offsets);
     }
-    free(cache->tables);
     free(cache);
 }
 

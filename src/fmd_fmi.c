@@ -466,6 +466,17 @@ void fmd_fmi_free(fmd_fmi_t *fmi) {
     }
 }
 
+void fmd_fmi_free_disown(fmd_fmi_t *fmi) {
+    if(fmi) {
+        fmd_vector_free(fmi->alphabet);
+        fmd_table_free(fmi->c2e);
+        fmd_table_free(fmi->e2c);
+        free(fmi->char_counts);
+        fmd_bs_free_disown(fmi->bits);
+        free(fmi);
+    }
+}
+
 uint_t fmd_fmi_hash(fmd_fmi_t *fmi) {
     return fmd_bs_hash(fmi->bits);
 }
