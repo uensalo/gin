@@ -26,26 +26,14 @@
 -t "3600" \
 -p "4"
 
-# query length grouped by permutation depth
-#./fmd_run.sh ../input/gencode.v40.fmdg \
-#-L "gencode.v40.fmdg_p_l" \
-#-c "10" \
-#-r "16" \
-#-m "-1" \
-#-M "-1" \
-#-j "1" \
-#-l "10 30 100 300 1000" \
-#-t "3600" \
-#-p "2 4 6 8"
-
-# query length grouped by sampling rate & threads
+# thread benchmark
 ./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_r_l" \
+-L "gencode.v40.fmdg_j_l" \
 -c "10" \
--r "16 32 64" \
+-r "16" \
 -m "-1" \
 -M "-1" \
--j "1 4 8 16 32" \
+-j "1 2 4 8 16 32" \
 -l "10 30 100 300 1000" \
 -t "3600" \
 -p "4"
@@ -54,7 +42,7 @@
 ./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_decode" \
 -c "10" \
--r "16" \
+-r "16 32 64" \
 -m "-1" \
 -M "65536" \
 -j "1" \
@@ -102,26 +90,14 @@
 -t "3600" \
 -p "4"
 
-# query length grouped by permutation depth
-#./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
-#-L "GRCh38-20-0.10b.fmdg_p_l" \
-#-c "10" \
-#-r "16" \
-#-m "-1" \
-#-M "-1" \
-#-j "1" \
-#-l "10 30 100 300 1000" \
-#-t "3600" \
-#-p "2 4 6 8"
-
-# query length grouped by sampling rate & threads
+# thread benchmark
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_r_l" \
+-L "GRCh38-20-0.10b.fmdg_j_l" \
 -c "10" \
--r "16 32 64" \
+-r "16" \
 -m "-1" \
 -M "-1" \
--j "1 4 8 16 32" \
+-j "1 2 4 8 16 32" \
 -l "10 30 100 300 1000" \
 -t "3600" \
 -p "4"
@@ -130,7 +106,7 @@
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_decode" \
 -c "10" \
--r "16" \
+-r "16 32 64" \
 -m "-1" \
 -M "65536" \
 -j "1" \
