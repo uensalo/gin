@@ -185,13 +185,10 @@ def plot_m_l(directory_name, output_filename):
     for name, group in grouped:
         # Find the total matches for m=-1
         total_matches = group[group['max_forks_tracked'] == -1]['number_of_matches'].values[0]
-
         # Sort the group by max_forks_tracked and filter out m=-1
         sorted_group = group[group['max_forks_tracked'] != -1].sort_values(by='max_forks_tracked')
-
         # Calculate the percentage of matches
         sorted_group['percentage_matches'] = 100 * sorted_group['number_of_matches'] / total_matches
-
         plt.plot(sorted_group['max_forks_tracked'], sorted_group['percentage_matches'], label=f'Length {name}', marker='o')
 
     plt.xscale('log', base=2)
@@ -209,7 +206,101 @@ def plot_m_l(directory_name, output_filename):
 
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
-    plt.show()
+    plt.close()
+
+
+def plot_p_f(directory_name, output_filename):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Create a new column for total forks
+    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
+
+    plt.figure(figsize=(10, 6))
+
+    # For each unique cache size
+    for cache in sorted(find_df['cache'].unique()):
+        subset = find_df[find_df['cache'] == cache]
+
+        # Sort this subset by query length
+        subset = subset.sort_values(by='length')
+
+        plt.plot(subset['length'], subset['total_forks'], label=f'Cache Size: {cache}', marker='o')
+
+    plt.xlabel('Query Length')
+    plt.ylabel('Total Forks')
+    plt.title(f"Query Length vs Total Forks for {os.path.basename(directory_name)}")
+    plt.legend()
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
+
+def plot_p_c(directory_name, output_filename):
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Create a new column for total forks
+    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
+
+    # Compute average forks per query
+    find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
+
+    plt.figure(figsize=(12, 8))
+
+    # First plot the data grouped by cache
+    caches = sorted(find_df['cache'].unique())
+    cache_handles = []
+    for cache in caches:
+        subset = find_df[find_df['cache'] == cache]
+        subset = subset.sort_values(by='length')
+
+        line, = plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], marker='o')
+        cache_handles.append(line)
+
+    # Create a color map for the different query lengths, using a colormap that trends towards darker colors
+    unique_lengths = sorted(find_df['length'].unique())
+    cmap = plt.get_cmap('Dark2', len(unique_lengths))
+
+    # Draw dashed lines connecting points of the same query length across cache groups
+    lines_for_legend = []  # This will store handles for the legend
+    for idx, qlength in enumerate(unique_lengths):
+        line_added_to_legend = False  # Track if we added the line to the legend yet
+
+        for i in range(len(caches) - 1):  # We subtract 1 because we'll be using i and i+1 as indices
+            subset1 = find_df[(find_df['cache'] == caches[i]) & (find_df['length'] == qlength)]
+            subset2 = find_df[(find_df['cache'] == caches[i+1]) & (find_df['length'] == qlength)]
+
+            # Ensure there's a point in both caches to connect
+            if not subset1.empty and not subset2.empty:
+                line, = plt.plot([subset1['avg_forks_per_query'].values[0], subset2['avg_forks_per_query'].values[0]],
+                                 [subset1['queries_per_second'].values[0], subset2['queries_per_second'].values[0]],
+                                 '--',
+                                 color=cmap(idx))
+
+                # Add line to the legend only once per query length
+                if not line_added_to_legend:
+                    lines_for_legend.append(line)
+                    line_added_to_legend = True
+
+    # Create the legends with explicit positioning
+    legend1 = plt.legend(cache_handles, [str(c) for c in caches], loc='upper right', title="Cache Size", bbox_to_anchor=(1, 1))
+    legend2 = plt.legend(lines_for_legend, unique_lengths, loc='upper right', bbox_to_anchor=(1, 0.75), title="Query Length")
+
+    plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
+
+    plt.xlabel('Average Forks per Query (log scale)')
+    plt.ylabel('Queries per Second (log scale)')
+    plt.title(f"Average Forks per Query vs Queries per Second for {os.path.basename(directory_name)} (log-log scale)")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
 
 
 if __name__ == '__main__':
@@ -218,3 +309,9 @@ if __name__ == '__main__':
 
     plot_m_l('../log/gencode.v40.fmdg_m_l', '../plot/gencode.v40.fmdg_m_l.png')
     plot_m_l('../log/GRCh38-20-0.10b.fmdg_m_l', '../plot/GRCh38-20-0.10b.fmdg_m_l.png')
+
+    plot_p_f('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_f.png')
+    plot_p_f('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_f.png')
+
+    plot_p_c('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_c.png')
+    plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_c.png')
