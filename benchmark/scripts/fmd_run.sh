@@ -12,7 +12,7 @@ PERMUTATION_DIR=../res/permutation
 CACHE_DIR=../res/cache
 
 # Hard-coded parameters
-NO_QUERIES=10000
+NO_QUERIES=65536
 SEED=420
 TEMPERATURE=1e2
 COOLING=0.99
