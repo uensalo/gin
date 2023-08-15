@@ -5,7 +5,7 @@
 # query length grouped by cache depth
 ./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_c_l" \
--c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
+-c "0 2 4 6 8 10 12" \
 -r "16" \
 -m "-1" \
 -M "-1" \
@@ -57,7 +57,7 @@
 # query length grouped by cache depth
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_c_l" \
--c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
+-c "0 2 4 6 8 10 12" \
 -r "16" \
 -m "-1" \
 -M "-1" \
@@ -118,7 +118,6 @@
 -l "2 4 8 16 32 64 128 256 512 1024" \
 -t "3600" \
 -p "4"
-
 
 # partial match benchmark
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
