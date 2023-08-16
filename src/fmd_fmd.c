@@ -1093,7 +1093,7 @@ void fmd_fmd_cache_lookup(fmd_fmd_cache_t *cache, fmd_string_t *string, int_t st
     }
     int_t lo, hi;
     fmd_fmi_query_precedence_range(cache->key_fmi, &query, FMD_FMD_DEFAULT_c_0, &lo, &hi);
-    if(lo + 1 != hi) {
+    if(lo >= hi) {
         fmd_vector_init(&forks, 0, &fmd_fstruct_fork_node);
         *cached_forks = forks;
         return;
