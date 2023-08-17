@@ -42,28 +42,35 @@ my @vertex_keys = keys %vertices;
 
 open(my $ofh, '>', $output_file) or die "Can't open $output_file: $!";
 for (1 .. $num_samples) {
+    my @history_stack;
+    my $string = '';
+
+    # Start with a random vertex
+    push @history_stack, { vertex => $vertex_keys[int(rand(@vertex_keys))], idx => -1 };
+
     while (1) {
-        my $vertex = $vertex_keys[int(rand(@vertex_keys))];
-        my $position = int(rand(length($vertices{$vertex})));
-        my $first_offset = $position;
+        my $current_data = $history_stack[-1]; # Look at the last element in the stack
+        $current_data->{idx}++; # Move to the next adjacent vertex
 
-        # Use array to collect substrings
-        my @segments;
-        push @segments, substr($vertices{$vertex}, $position, $length);
-
-        while (length($segments[-1]) < $length) {
-            last unless exists $adjacency_list{$vertex};
-            $vertex = $adjacency_list{$vertex}[rand @{$adjacency_list{$vertex}}];
-            push @segments, substr($vertices{$vertex}, 0, $length - length($segments[-1]));
+        # If all adjacent vertices have been tried, backtrack
+        if (!exists $adjacency_list{$current_data->{vertex}} || $current_data->{idx} >= @{$adjacency_list{$current_data->{vertex}}}) {
+            pop @history_stack;
+            $string = substr($string, 0, -$length); # Remove the last segment from the string
+            next;
         }
 
-        # Join the substrings to form the final string
-        my $string = join('', @segments);
+        my $next_vertex = $adjacency_list{$current_data->{vertex}}[$current_data->{idx}];
+        my $segment = substr($vertices{$next_vertex}, 0, $length - length($string));
+        $string .= $segment;
 
         if (length($string) == $length && $string !~ /N/) {
-            print $ofh join("\t", $vertex), ",$first_offset\t$length\n";
+            my $starting_vertex = $history_stack[0]{vertex};
+            my $starting_offset = int(rand(length($vertices{$starting_vertex})));
+            print $ofh join("\t", $starting_vertex), ",$starting_offset\t$length\n";
             print "$string\n";
             last;
+        } elsif (length($string) < $length) {
+            push @history_stack, { vertex => $next_vertex, idx => -1 }; # Push the next vertex onto the stack and continue
         }
     }
 }
