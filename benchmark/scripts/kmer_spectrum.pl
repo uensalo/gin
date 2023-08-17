@@ -3,17 +3,20 @@
 use strict;
 use warnings;
 use Getopt::Long;
+use threads;
+use threads::shared;
 
-my @graph;  # List of lists representation
+my @graph;
 my @labels;
-my %vertex_to_index;  # Map from vertex ID to index
-my ($input_file, $query_length);
-my %memo;  # For memoization
+my %vertex_to_index;
+my ($input_file, $query_length, $num_cores);
+my %memo;
 
 # Parse command-line arguments
 GetOptions(
     'i=s' => \$input_file,
-    'q=i' => \$query_length
+    'q=i' => \$query_length,
+    'j=i' => \$num_cores
 ) or die("Error in command line arguments\n");
 
 # Read the graph from the input file
@@ -63,24 +66,30 @@ sub generate_substring {
     return \@results;
 }
 
-# Generate all possible substrings of length q
-sub generate_all_substrings {
-    my ($q) = @_;
-    my %unique_strings;
+my %all_unique_strings :shared;
 
-    for my $vertex_index (0..$#labels) {
+my @threads;
+for my $vertex_index (0..$#labels) {
+    push @threads, threads->create(sub {
+        my %local_unique_strings;
         for my $offset (0..length($labels[$vertex_index]) - 1) {
-            my $substrings = generate_substring($vertex_index, $offset, $q, "");
+            my $substrings = generate_substring($vertex_index, $offset, $query_length, "");
             for my $substring (@$substrings) {
-                $unique_strings{$substring} = 1 if length($substring) == $q;
+                $local_unique_strings{$substring} = 1 if length($substring) == $query_length;
             }
         }
-    }
 
-    return keys %unique_strings;
+        # Merge local results into the shared hash
+        {
+            lock(%all_unique_strings);
+            @all_unique_strings{keys %local_unique_strings} = values %local_unique_strings;
+        }
+    });
 }
 
-my @all_unique_strings = generate_all_substrings($query_length);
-foreach my $string (sort @all_unique_strings) {
+# Wait for all threads to complete
+$_->join() for @threads;
+
+foreach my $string (sort keys %all_unique_strings) {
     print "$string\n";
 }
