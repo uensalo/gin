@@ -46,7 +46,12 @@ for (1 .. $num_samples) {
     my $string = '';
 
     # Start with a random vertex
-    push @history_stack, { vertex => $vertex_keys[int(rand(@vertex_keys))], idx => -1 };
+    my $initial_vertex;
+    while (1) {
+        $initial_vertex = $vertex_keys[int(rand(@vertex_keys))];
+        last if exists $adjacency_list{$initial_vertex};
+    }
+    push @history_stack, { vertex => $initial_vertex, idx => -1 };
 
     while (1) {
         my $current_data = $history_stack[-1]; # Look at the last element in the stack
