@@ -46,42 +46,36 @@ for (1 .. $num_samples) {
     my $string = '';
 
     # Start with a random vertex
-    my $initial_vertex;
-    while (1) {
-        $initial_vertex = $vertex_keys[int(rand(@vertex_keys))];
-        last if exists $adjacency_list{$initial_vertex};
-    }
+    my $initial_vertex = $vertex_keys[int(rand(@vertex_keys))];
     push @history_stack, { vertex => $initial_vertex, idx => -1 };
 
     while (1) {
-        my $current_data = $history_stack[-1]; # Look at the last element in the stack
+        my $current_data = $history_stack[-1]; # Look at the top of the stack
         $current_data->{idx}++; # Move to the next adjacent vertex
 
-        # If the current vertex has no adjacency or we've tried all adjacent vertices, backtrack
-        if (!exists $adjacency_list{$current_data->{vertex}} || $current_data->{idx} >= @{$adjacency_list{$current_data->{vertex}}}) {
+        # If we've tried all adjacent vertices, backtrack
+        if ($current_data->{idx} >= (exists $adjacency_list{$current_data->{vertex}} ? @{$adjacency_list{$current_data->{vertex}}} : 0)) {
             pop @history_stack;
             $string = substr($string, 0, -$length); # Remove the last segment from the string
-            next;
+            next if @history_stack; # Continue with the next vertex in the stack
+            last; # Exit if the stack is empty
         }
 
-        # Ensure that the current vertex exists in the adjacency list and that the index is within bounds
-        if (exists $adjacency_list{$current_data->{vertex}} && defined $adjacency_list{$current_data->{vertex}}[$current_data->{idx}]) {
-            my $next_vertex = $adjacency_list{$current_data->{vertex}}[$current_data->{idx}];
-            my $segment = substr($vertices{$next_vertex}, 0, $length - length($string));
-            $string .= $segment;
+        # Extract a segment from the current vertex data
+        my $next_vertex = $adjacency_list{$current_data->{vertex}}[$current_data->{idx}];
+        my $segment = substr($vertices{$next_vertex}, 0, $length - length($string));
+        $string .= $segment;
 
-            # If the generated string is of the required length and doesn't contain 'N', finish this sample
-            if (length($string) == $length && $string !~ /N/) {
-                my $starting_vertex = $history_stack[0]{vertex};
-                my $starting_offset = int(rand(length($vertices{$starting_vertex})));
-                print $ofh join("\t", $starting_vertex), ",$starting_offset\t$length\n";
-                print "$string\n";
-                last;
-            } elsif (length($string) < $length) {
-                push @history_stack, { vertex => $next_vertex, idx => -1 }; # Push the next vertex onto the stack and continue
-            }
+        # Check the length and content of the generated string
+        if (length($string) == $length && $string !~ /N/) {
+            print $ofh join("\t", $initial_vertex), "\t$string\n";
+            last;
+        } elsif (length($string) < $length) {
+            # If the string is shorter than required, continue building it
+            push @history_stack, { vertex => $next_vertex, idx => -1 };
         }
     }
 }
+
 print "exit();\n";
 close $ofh;
