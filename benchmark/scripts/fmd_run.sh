@@ -56,9 +56,8 @@ mkdir -p $LOG_DIR
 for LENGTH in "${LENGTHS[@]}"
 do
   QUERY_FILE="$QUERY_DIR/${BASENAME}_query_length_${LENGTH}.fmdq"
-  QUERY_FILE_GT="$QUERY_DIR/_${BASENAME}_query_length_${LENGTH}.fmdq"
   if [[ ! -f $QUERY_FILE ]]; then
-    ./$QUERY_SCRIPT --input_file "$INPUT_FILE" --length "$LENGTH" --num_samples $NO_QUERIES --output_file "$QUERY_FILE_GT" --seed $SEED > "$QUERY_FILE" &
+    ./$QUERY_SCRIPT -i "$INPUT_FILE" -q "$LENGTH" -N $NO_QUERIES -s $SEED > "$QUERY_FILE" &
   fi
 done
 wait
