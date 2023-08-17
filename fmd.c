@@ -807,7 +807,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             if(foutput_path) fclose(foutput);
 
             if(verbose) {
-                fprintf(stderr, "[fmd:query] Params: Index file name (-r): %s\n", finput_path);
+                fprintf(stderr, "[fmd:query] Params: Index file name (-r): %s\n", fref_path);
+                if(finput_path) {
+                    fprintf(stderr, "[fmd:query] Params: Query file name (-i): %s\n", finput_path);
+                }
                 fprintf(stderr, "[fmd:query] Params: Read batch size (-b): %lld\n", batch_size);
                 fprintf(stderr, "[fmd:query] Params: Threads (-j): %lld\n", num_threads);
                 fprintf(stderr, "[fmd:query] Params: Maximum forks tracked (-m): %lld\n", max_forks);
