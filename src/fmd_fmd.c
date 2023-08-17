@@ -539,15 +539,13 @@ void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, in
     while(forks->size && t > 0) {
         fmd_fmd_query_find_step(fmd, string, max_forks, &t, &forks, &partial_matches);
     }
-
     /* experimental */
     // compact forks one more time to prevent the reporting of duplicate matches
-    fmd_vector_t *compacted;
-    fmd_fmd_compact_forks(fmd, forks, &compacted);
-    fmd_vector_free(forks);
-    forks = compacted;
+    //fmd_vector_t *compacted;
+    //fmd_fmd_compact_forks(fmd, forks, &compacted);
+    //fmd_vector_free(forks);
+    //forks = compacted;
     /* experimental */
-
     *paths = forks;
     *dead_ends = partial_matches;
 }
@@ -918,6 +916,13 @@ void fmd_fmd_cache_init_helper_trav1(void *key, void *value, void *params) {
         fmd_vector_free(partial_matches); // not necessary
         // insert the extension and its forks into the cache
         if(ref_forks->size) {
+            /* experimental */
+            // compact forks before inserting them into the table
+            fmd_vector_t *compacted;
+            fmd_fmd_compact_forks(fmd, ref_forks, &compacted);
+            fmd_vector_free(ref_forks);
+            ref_forks = compacted;
+            /* experimental */
             fmd_table_insert(cache_tables[extension->size - 1], extension, ref_forks);
             ++cache->no_entries;
         } else {
