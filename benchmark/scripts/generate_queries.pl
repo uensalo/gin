@@ -64,6 +64,8 @@ for (1 .. $num_samples) {
             next;
         }
 
+        next unless exists $adjacency_list{$current_data->{vertex}} && defined $adjacency_list{$current_data->{vertex}}[$current_data->{idx}];
+
         my $next_vertex = $adjacency_list{$current_data->{vertex}}[$current_data->{idx}];
         my $segment = substr($vertices{$next_vertex}, 0, $length - length($string));
         $string .= $segment;
