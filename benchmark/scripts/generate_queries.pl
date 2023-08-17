@@ -127,3 +127,5 @@ sub sample_substrings {
 }
 
 sample_substrings($no_queries, $query_length);
+
+print "exit();\n"
