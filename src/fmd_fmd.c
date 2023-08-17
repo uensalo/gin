@@ -539,6 +539,15 @@ void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, in
     while(forks->size && t > 0) {
         fmd_fmd_query_find_step(fmd, string, max_forks, &t, &forks, &partial_matches);
     }
+
+    /* experimental */
+    // compact forks one more time to prevent the reporting of duplicate matches
+    fmd_vector_t *compacted;
+    fmd_fmd_compact_forks(fmd, forks, &compacted);
+    fmd_vector_free(forks);
+    forks = compacted;
+    /* experimental */
+
     *paths = forks;
     *dead_ends = partial_matches;
 }
