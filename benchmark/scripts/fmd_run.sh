@@ -2,7 +2,7 @@
 
 # Executables
 FMD_DIR=../bin
-QUERY_SCRIPT=generate_queries.py
+QUERY_SCRIPT=generate_queries.pl
 
 # Set the hard-coded directories
 LOG_DIR=../log
@@ -57,7 +57,7 @@ for LENGTH in "${LENGTHS[@]}"
 do
   QUERY_FILE="$QUERY_DIR/${BASENAME}_query_length_${LENGTH}.fmdq"
   if [[ ! -f $QUERY_FILE ]]; then
-    python3 $QUERY_SCRIPT "$INPUT_FILE" "$LENGTH" $NO_QUERIES "$QUERY_DIR/_" $SEED > "$QUERY_FILE" &
+    ./$QUERY_SCRIPT --input_file "$INPUT_FILE" --length "$LENGTH" --num_samples $NO_QUERIES --output_file "$QUERY_DIR/_" --seed $SEED > "$QUERY_FILE" &
   fi
 done
 wait
