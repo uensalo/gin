@@ -42,45 +42,41 @@ my @vertex_keys = keys %vertices;
 
 open(my $ofh, '>', $output_file) or die "Can't open $output_file: $!";
 for (1 .. $num_samples) {
-    my @history_stack;
+    my @stack;
     my $string = '';
+    my $vertex = $vertex_keys[int(rand(@vertex_keys))];
+    my $position = int(rand(length($vertices{$vertex})));
 
-    # Start with a random vertex and an initial substring
-    my $initial_vertex = $vertex_keys[int(rand(@vertex_keys))];
-    my $starting_offset = int(rand(length($vertices{$initial_vertex}) - $length + 1));
-    $string = substr($vertices{$initial_vertex}, $starting_offset, $length);
+    while (length($string) < $length) {
+        my $remaining = $length - length($string);
+        my $segment = substr($vertices{$vertex}, $position, $remaining);
+        $string .= $segment;
+        push @stack, $vertex;
 
-    # If the starting string is already of the desired length and has no 'N', write and continue
-    if (length($string) == $length && $string !~ /N/) {
-        print $ofh join("\t", $initial_vertex), ",$starting_offset\t$length\n";
-        print $ofh "$string\n";
-        next;
+        if (length($string) == $length) {
+            last if $string =~ /N/;
+            # Pop the last vertex and backtrack if the string contains 'N'
+            $string = substr($string, 0, length($string) - length($segment));
+            pop @stack;
+        }
+
+        # Choose the next vertex from the adjacency list
+        if (exists $adjacency_list{$vertex}) {
+            $vertex = $adjacency_list{$vertex}[rand @{$adjacency_list{$vertex}}];
+            $position = 0;
+        } else {
+            # If no next vertex, backtrack
+            $string = substr($string, 0, length($string) - length($segment));
+            pop @stack;
+            last unless @stack;
+            $vertex = $stack[-1];
+        }
     }
 
-    push @history_stack, { vertex => $initial_vertex, idx => -1 };
-
-    while (1) {
-        my $current_data = $history_stack[-1];
-        $current_data->{idx}++;
-
-        if ($current_data->{idx} >= (exists $adjacency_list{$current_data->{vertex}} ? @{$adjacency_list{$current_data->{vertex}}} : 0)) {
-            pop @history_stack;
-            $string = substr($string, 0, -$length);
-            next if @history_stack;
-            last;
-        }
-
-        my $next_vertex = $adjacency_list{$current_data->{vertex}}[$current_data->{idx}];
-        my $segment = substr($vertices{$next_vertex}, 0, $length - length($string));
-        $string .= $segment;
-
-        if (length($string) == $length && $string !~ /N/) {
-            print $ofh join("\t", $initial_vertex), ",$starting_offset\t$length\n";
-            print $ofh "$string\n";
-            last;
-        } elsif (length($string) < $length) {
-            push @history_stack, { vertex => $next_vertex, idx => -1 };
-        }
+    if (length($string) == $length) {
+        my $start_vertex = $stack[0];
+        print $ofh join("\t", $start_vertex, $position, $length), "\n";
+        print $ofh "$string\n";
     }
 }
 
