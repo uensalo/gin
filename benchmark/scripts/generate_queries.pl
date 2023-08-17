@@ -37,24 +37,31 @@ while (<$fh>) {
 }
 close $fh;
 
+# Pre-calculate vertex keys
+my @vertex_keys = keys %vertices;
+
 open(my $ofh, '>', $output_file) or die "Can't open $output_file: $!";
 for (1 .. $num_samples) {
     while (1) {
-        my $vertex = (keys %vertices)[rand keys %vertices];
+        my $vertex = $vertex_keys[int(rand(@vertex_keys))];
         my $position = int(rand(length($vertices{$vertex})));
         my $first_offset = $position;
-        my $string = substr($vertices{$vertex}, $position, $length);
-        my $needed = $length - length($string);
 
-        while (length($string) < $length) {
+        # Use array to collect substrings
+        my @segments;
+        push @segments, substr($vertices{$vertex}, $position, $length);
+
+        while (length($segments[-1]) < $length) {
             last unless exists $adjacency_list{$vertex};
             $vertex = $adjacency_list{$vertex}[rand @{$adjacency_list{$vertex}}];
-            $needed = $length - length($string);
-            $string .= substr($vertices{$vertex}, 0, $needed);
+            push @segments, substr($vertices{$vertex}, 0, $length - length($segments[-1]));
         }
 
+        # Join the substrings to form the final string
+        my $string = join('', @segments);
+
         if (length($string) == $length && $string !~ /N/) {
-            print $ofh join("\t", $vertex), ",$first_offset\t$needed\n";
+            print $ofh join("\t", $vertex), ",$first_offset\t$length\n";
             print "$string\n";
             last;
         }
