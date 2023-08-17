@@ -9,22 +9,34 @@ def sample_strings(input_file, length, num_samples, output_file, seed=None):
 
     vertices = {}
     adjacency_list = defaultdict(list)
+    total_label_length = 0
+    reciprocals_sum = 0
+
     with open(input_file, 'r') as f:
         for line in f:
             type, id, data = line.strip().split('\t')
             id = int(id)
             if type == 'V':
                 vertices[id] = data
+                total_label_length += len(data)
+                reciprocals_sum += 1 / len(data)
             elif type == 'E':
                 _, from_vertex, to_vertex = line.strip().split('\t')
                 adjacency_list[int(from_vertex)].append(int(to_vertex))
 
+    probabilities = {k: len(v) / total_label_length for k, v in vertices.items()}
+    inverse_probabilities = {k: (1 / len(v)) / reciprocals_sum for k, v in vertices.items()}
+
     with open(output_file, 'w') as f:
-        for _ in range(num_samples):
+        for i in range(num_samples):
+            if i < num_samples / 2:
+                vertex = random.choices(list(vertices.keys()), weights=probabilities.values(), k=1)[0]
+            else:
+                vertex = random.choices(list(vertices.keys()), weights=inverse_probabilities.values(), k=1)[0]
+
             while True:
-                vertex = random.choice(list(vertices.keys()))
                 path = [vertex]
-                position = random.randint(0, len(vertices[vertex])-1)
+                position = random.randint(0, len(vertices[vertex]) - 1)
                 first_offset = position
                 string = vertices[vertex][position:position + length]
                 needed = length - len(string)
@@ -38,6 +50,10 @@ def sample_strings(input_file, length, num_samples, output_file, seed=None):
                     string += vertices[vertex][:needed]
 
                 last_offset = needed - 1 if needed > 0 else len(vertices[path[-1]]) - 1
+
+                # Check if the string contains the letter 'N'
+                if 'N' in string:
+                    continue
 
                 if len(string) == length:
                     f.write("{} ,{}\t{}\n".format('\t'.join(map(str, path)), first_offset, last_offset))
