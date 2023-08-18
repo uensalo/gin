@@ -19,13 +19,13 @@
 #define FMD_MAIN_QUERY_EXIT_PROMPT "exit();"
 
 char *fmd_version = "1.0";
-char* fmd_mode_names[] = {"index","query","permutation","convert","help"};
+char* fmd_mode_names[] = {"index","query","permutation","utils","help"};
 
 typedef enum fmd_mode_ {
     fmd_mode_index=0,
     fmd_mode_query=1,
     fmd_mode_permutation=2,
-    fmd_mode_convert=3,
+    fmd_mode_utils=3,
     fmd_mode_help=4,
     fmd_mode_no_modes=5
 } fmd_mode_t;
@@ -40,17 +40,18 @@ typedef enum fmd_query_mode_ {
 
 char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query", "spectrum"};
 
-typedef enum fmd_convert_mode_ {
-    fmd_convert_mode_rgfa2fmdg=0,
-    fmd_convert_mode_fastq2query=1,
-    fmd_convert_mode_spectrum=2,
-    fmd_convert_mode_no_modes=3,
-} fmd_convert_mode_t;
+typedef enum fmd_utils_mode_ {
+    fmd_utils_mode_rgfa2fmdg=0,
+    fmd_utils_mode_fastq2query=1,
+    fmd_utils_mode_spectrum=2,
+    fmd_utils_mode_find=3,
+    fmd_utils_mode_no_modes=4,
+} fmd_utils_mode_t;
 
 int fmd_main_index(int argc, char **argv);
 int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode);
 int fmd_main_permutation(int argc, char **argv);
-int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode);
+int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode);
 int fmd_main_help(fmd_mode_t progmode, char *progname);
 
 fmd_mode_t fmd_string_to_mode(char *str) {
@@ -77,12 +78,12 @@ fmd_query_mode_t fmd_string_to_qmode(char *str) {
     return progmode;
 }
 
-fmd_convert_mode_t fmd_string_to_cmode(char *str) {
-    if(!str) return fmd_convert_mode_no_modes;
-    fmd_convert_mode_t progmode = fmd_convert_mode_no_modes;
-    for(int i = 0; i < fmd_convert_mode_no_modes; i++) {
+fmd_utils_mode_t fmd_string_to_cmode(char *str) {
+    if(!str) return fmd_utils_mode_no_modes;
+    fmd_utils_mode_t progmode = fmd_utils_mode_no_modes;
+    for(int i = 0; i < fmd_utils_mode_no_modes; i++) {
         if(strcmp(str,fmd_convert_mode_names[i]) == 0) {
-            progmode = (fmd_convert_mode_t)i;
+            progmode = (fmd_utils_mode_t)i;
             break;
         }
     }
@@ -111,10 +112,10 @@ int main(int argc, char *argv[]) {
             return_code = fmd_main_permutation(argcp, argvp);
             break;
         }
-        case fmd_mode_convert: {
-            char *convert_mode_name = argcp > 1 ? argvp[1] : NULL;
-            fmd_convert_mode_t convert_mode = fmd_string_to_cmode(convert_mode_name);
-            return_code = fmd_main_convert(argcp, argvp,convert_mode);
+        case fmd_mode_utils: {
+            char *utils_mode_name = argcp > 1 ? argvp[1] : NULL;
+            fmd_utils_mode_t utils_mode = fmd_string_to_cmode(utils_mode_name);
+            return_code = fmd_main_utils(argcp, argvp, utils_mode);
             break;
         }
         case fmd_mode_help: {
@@ -1088,11 +1089,13 @@ int fmd_main_permutation(int argc, char **argv) {
     return return_code;
 }
 
-int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
+int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode) {
     char *finput_path = NULL;
     char *foutput_path = NULL;
+    char *fref_path = NULL;
     FILE *finput = stdin;
     FILE *foutput = stdout;
+    FILE *fref = NULL;
 
     bool verbose = false;
 
@@ -1102,8 +1105,14 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
     double parse_time = 0.0;
     double convert_time = 0.0;
     double write_time = 0.0;
+    double utils_find_time = 0.0;
+
+    int_t utils_queries_processed = 0;
+    int_t utils_no_matches = 0;
 
     int_t kmer = 64;
+    int_t num_threads = 1;
+    int_t batch_size = 8;
 
     int return_code = 0;
     static struct option options[] = {
@@ -1114,24 +1123,29 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
     };
     opterr = 0;
     int optindex,c;
-    while((c = getopt_long(argc, argv, "i:o:k:v", options, &optindex)) != -1) {
+    while((c = getopt_long(argc, argv, "i:o:r:k:j:v", options, &optindex)) != -1) {
         switch(c) {
             case 'i': {
                 finput_path = optarg;
-                finput = fopen(finput_path, "r");
-                if(!finput) {
-                    fprintf(stderr, "[fmd:convert] Input path %s could not be opened, quitting.\n", finput_path);
-                    return_code = -1;
-                    return return_code;
-                }
                 break;
             }
             case 'o': {
                 foutput_path = optarg;
                 break;
             }
+            case 'r': {
+                fref_path = optarg;
+                break;
+            }
             case 'k': {
                 kmer = strtoll(optarg, NULL, 10);
+                break;
+            }
+            case 'j': {
+                num_threads = strtoll(optarg, NULL, 10);
+                #ifdef FMD_OMP
+                omp_set_num_threads((int)num_threads);
+                #endif
                 break;
             }
             case 'v': {
@@ -1139,7 +1153,7 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
                 break;
             }
             default: {
-                fprintf(stderr, "[fmd:convert] Option %s not recognized, please see fmd help convert for more.\n",optarg);
+                fprintf(stderr, "[fmd:utils] Option %s not recognized, please see fmd help convert for more.\n",optarg);
                 return_code = -1;
                 break;
             }
@@ -1147,24 +1161,30 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
     }
     fmd_graph_t *graph = NULL;
     switch (mode) {
-        case fmd_convert_mode_rgfa2fmdg: {
+        case fmd_utils_mode_rgfa2fmdg: {
+            finput = fopen(finput_path, "r");
+            if(!finput) {
+                fprintf(stderr, "[fmd:utils] Input path %s could not be opened, quitting.\n", finput_path);
+                return_code = -1;
+                return return_code;
+            }
             // first parse the graph
             clock_gettime(CLOCK_REALTIME, &t1);
             if(verbose) {
-                if(finput_path) fprintf(stderr, "[fmd:convert] Parsing input file %s\n", finput_path);
-                else fprintf(stderr, "[fmd:convert] Parsing input from stdin.\n");
+                if(finput_path) fprintf(stderr, "[fmd:utils] Parsing input file %s\n", finput_path);
+                else fprintf(stderr, "[fmd:utils] Parsing input from stdin.\n");
             }
             rgfa_t *rgfa = rgfa_parse(finput);
             clock_gettime(CLOCK_REALTIME, &t2);
             parse_time = to_sec(t1,t2);
             if(finput_path) fclose(finput);
             if(!rgfa) {
-                fprintf(stderr, "[fmd:convert] Failed to parse rgfa file quitting.\n");
+                fprintf(stderr, "[fmd:utils] Failed to parse rgfa file quitting.\n");
                 return_code = -1;
                 return return_code;
             }
             if(verbose) {
-                if(finput_path) fprintf(stderr, "[fmd:convert] Converting to fmdg format.\n");
+                if(finput_path) fprintf(stderr, "[fmd:utils] Converting to fmdg format.\n");
             }
             clock_gettime(CLOCK_REALTIME, &t1);
             graph = rgfa_to_fmd_graph(rgfa);
@@ -1172,22 +1192,22 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
             convert_time = to_sec(t1,t2);
             rgfa_free(rgfa);
             if(!graph) {
-                fprintf(stderr, "[fmd:convert] Failed to convert rgfa_t to fmd_graph_t. Quitting.\n");
+                fprintf(stderr, "[fmd:utils] Failed to convert rgfa_t to fmd_graph_t. Quitting.\n");
                 return_code = -1;
                 return return_code;
             }
             if(foutput_path) {
                 foutput = fopen(foutput_path, "w");
                 if(!foutput) {
-                    fprintf(stderr, "[fmd:convert] Failed to open output path %s, quitting\n", foutput_path);
+                    fprintf(stderr, "[fmd:utils] Failed to open output path %s, quitting\n", foutput_path);
                     fmd_graph_free(graph);
                     return_code = -1;
                     return return_code;
                 }
             }
             if(verbose) {
-                if(foutput_path) fprintf(stderr, "[fmd:convert] Writing converted graph to %s.\n", foutput_path);
-                else fprintf(stderr, "[fmd:convert] Writing converted graph to stdout.\n");
+                if(foutput_path) fprintf(stderr, "[fmd:utils] Writing converted graph to %s.\n", foutput_path);
+                else fprintf(stderr, "[fmd:utils] Writing converted graph to stdout.\n");
             }
             clock_gettime(CLOCK_REALTIME, &t1);
             fmdg_write(foutput, graph);
@@ -1195,28 +1215,33 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
             write_time = to_sec(t1,t2);
             if(foutput_path) fclose(foutput);
             if(verbose) {
-                fprintf(stderr, "[fmd:convert] Timings in seconds: \n");
+                fprintf(stderr, "[fmd:utils] Timings in seconds: \n");
                 fprintf(stderr, "\t Parsing:    %.3lf\n", parse_time);
                 fprintf(stderr, "\t Converting: %.3lf\n", convert_time);
                 fprintf(stderr, "\t Writing:    %.3lf\n", write_time);
-                fprintf(stderr, "[fmd:index] Total relevant runtime: %lf seconds.\n", parse_time + convert_time + write_time);
+                fprintf(stderr, "[fmd:utils] Total relevant runtime: %lf seconds.\n", parse_time + convert_time + write_time);
             }
             break;
         }
-        case fmd_convert_mode_fastq2query: {
-            fprintf(stderr, "[fmd:convert] fasta2query not implemented yet. Quitting.\n");
+        case fmd_utils_mode_fastq2query: {
+            fprintf(stderr, "[fmd:utils] fasta2query not implemented yet. Quitting.\n");
             return_code = -1;
             break;
         }
-        case fmd_convert_mode_spectrum: {
+        case fmd_utils_mode_spectrum: {
+            finput = fopen(finput_path, "r");
+            if(!finput) {
+                fprintf(stderr, "[fmd:utils] Input path %s could not be opened, quitting.\n", finput_path);
+                return_code = -1;
+                return return_code;
+            }
             if(verbose) {
-                fprintf(stderr, "[fmd:convert] Parsing fmdg file %s\n", finput_path);
+                fprintf(stderr, "[fmd:utils] Parsing fmdg file %s\n", finput_path);
             }
             graph = fmdg_parse(finput);
             if(!graph) {
                 if (finput_path) fclose(finput);
-                if (foutput_path) fclose(foutput);
-                fprintf(stderr, "[fmd:convert] Malformed fmdg file, quitting.\n");
+                fprintf(stderr, "[fmd:utils] Malformed fmdg file, quitting.\n");
                 return_code = -1;
                 return return_code;
             }
@@ -1224,20 +1249,20 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
                 fclose(finput);
             }
             if(verbose) {
-                fprintf(stderr, "[fmd:convert] fmdg file parsed, computing %lld-mer spectrum.\n", kmer);
+                fprintf(stderr, "[fmd:utils] fmdg file parsed, computing %lld-mer spectrum.\n", kmer);
             }
             fmd_vector_t *spectrum;
             fmd_table_t *spectrum_table;
             fmd_graph_kmer_locations(graph, kmer, &spectrum, &spectrum_table);
             fmd_graph_free(graph);
             if(verbose) {
-                fprintf(stderr, "[fmd:convert] Spectrum contains %lld %lld-mers. Sorting ocurrences.\n", spectrum_table->size, kmer);
+                fprintf(stderr, "[fmd:utils] Spectrum contains %lld %lld-mers. Sorting ocurrences.\n", spectrum_table->size, kmer);
             }
             fmd_vector_sort(spectrum);
             if(foutput_path) {
                 foutput = fopen(foutput_path, "w");
                 if(!foutput) {
-                    fprintf(stderr, "[fmd:convert] Can't open output path %s\n", foutput_path);
+                    fprintf(stderr, "[fmd:utils] Can't open output path %s\n", foutput_path);
                     fmd_vector_free_disown(spectrum);
                     fmd_table_free(spectrum_table);
                     return_code = -1;
@@ -1255,8 +1280,105 @@ int fmd_main_convert(int argc, char **argv, fmd_convert_mode_t mode) {
             fmd_table_free(spectrum_table);
             break;
         }
+        case fmd_utils_mode_find: {
+            if(verbose) {
+                fprintf(stderr, "[fmd:utils] Parsing fmdg file %s\n", fref_path);
+            }
+            fref = fopen(fref_path, "r");
+            if(!fref) {
+                fprintf(stderr, "[fmd:utils] Reference path %s could not be opened, quitting.\n", fref);
+                return_code = -1;
+                return return_code;
+            }
+            graph = fmdg_parse(fref);
+            if(!graph) {
+                if (fref_path) fclose(fref);
+                fprintf(stderr, "[fmd:utils] Malformed fmdg file, quitting.\n");
+                return_code = -1;
+                return return_code;
+            }
+            if(verbose) {
+                fprintf(stderr, "[fmd:utils] Graph file parsed.\n", fref_path);
+            }
+
+
+            if(verbose) {
+                fprintf(stderr, "[fmd:utils] Parsing and launching queries with %d threads\n", (int)num_threads);
+            }
+            if(finput_path) {
+                finput = fopen(finput_path, "r");
+                if(!finput) {
+                    fprintf(stderr,"[fmd:utils] Can't open input file %s, quitting.\n", finput_path);
+                    return_code = -1;
+                    return return_code;
+                }
+            }
+            if(foutput_path) {
+                foutput = fopen(foutput_path, "w");
+                if(!foutput) {
+                    fprintf(stderr, "[fmd:utils] Can't open output file %s, quitting.\n", foutput_path);
+                    return_code = -1;
+                    return return_code;
+                }
+            }
+            int_t i;
+            char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char*));
+            typedef struct utils_find_task_ {
+                fmd_string_t *str;
+                uint64_t count;
+                fmd_vector_t *matches;
+            } utils_find_task_t;
+            #ifdef FMD_OMP
+            omp_set_num_threads((int)num_threads);
+            #endif
+            utils_find_task_t *tasks = calloc(batch_size, sizeof(utils_find_task_t));
+            bool exit_flag = false;
+
+            while(true) {
+                i = 0;
+                while (i < batch_size && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
+                    int_t len = (int_t)strlen(buf);
+                    if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
+                    if(!strcmp(buf,FMD_MAIN_QUERY_EXIT_PROMPT)) {
+                        exit_flag = true;
+                        break;
+                    }
+                    fmd_string_init_cstr(&tasks[i].str, buf);
+                    utils_queries_processed++;
+                    i++;
+                }
+
+                clock_gettime(CLOCK_REALTIME, &t1);
+                #ifdef FMD_OMP
+                omp_set_num_threads((int)num_threads);
+                #endif
+                #pragma omp parallel for default(none) shared(graph, i, tasks, num_threads)
+                for(int_t k = 0; k < i; k++) {
+                    fmd_graph_find(graph, tasks[k].str, &tasks[k].matches);
+                }
+                clock_gettime(CLOCK_REALTIME, &t2);
+                utils_find_time += to_sec(t1, t2);
+
+                for(int_t j = 0; j < i; j++) {
+                    if(!tasks[j].str) continue;
+                    fmd_vector_t *decoded_matches = tasks[j].matches;
+                    utils_no_matches += decoded_matches->size;
+                    for(int_t k = 0; k < decoded_matches->size; k++) {
+                        fmd_kmer_kv_t *decoded_match = decoded_matches->data[k];
+                        fprintf(foutput, "%s:(v:%lld,o:%lld)\n", decoded_match->str->seq, decoded_match->vid, decoded_match->offset);
+                    }
+                    fmd_vector_free(decoded_matches);
+                    fmd_string_free(tasks[j].str);
+                }
+                if(exit_flag)
+                    break;
+            }
+            free(buf);
+            free(tasks);
+            break;
+        }
         default: {
-            fprintf(stderr, "[fmd:convert] Unrecognized conversion mode, please see fmd help convert. Quitting.\n");
+            fprintf(stderr, "[fmd:utils] Unrecognized utils mode, please see fmd help convert. Quitting.\n");
             return_code = -1;
             break;
         }
@@ -1345,19 +1467,23 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             return_code = 0;
             break;
         }
-        case fmd_mode_convert: {
-            fprintf(stderr, "[fmd:help] ---------- fmd:convert ----------\n");
-            fprintf(stderr, "[fmd:help] fmd convert converts rgfa and FASTQ files to fmdg files and fmd query files, and may also be used to extract the k-mer spectrum of an fmdg file.\n");
-            fprintf(stderr, "[fmd:help] fmd convert supports three modes, which are described below:\n");
+        case fmd_mode_utils: {
+            fprintf(stderr, "[fmd:help] ---------- fmd:utils ----------\n");
+            fprintf(stderr, "[fmd:help] fmd utils converts rgfa and FASTQ files to fmdg files and fmd query files, and may also be used to extract the k-mer spectrum of an fmdg file or find brute force matches.\n");
+            fprintf(stderr, "[fmd:help] fmd utils supports four modes, which are described below:\n");
             fprintf(stderr, "\trgfa2fmdg:   Converts an rGFA into an fmdg file. Throws away naming conventions and stable sequences. Everything is assumed to be on the forward strand.\n");
             fprintf(stderr, "\tfastq2query: Extracts the sequence in every read and returns one sequence per line.\n");
             fprintf(stderr, "\tspectrum:    Extracts the k-mer spectrum of an input fmdg file.\n");
+            fprintf(stderr, "\tfind:        Finds (vid,offset) pairs of query matches similar to fmd:query, but uses a brute-force approach.\n");
             fprintf(stderr, "[fmd:help] Parameters\n");
-            fprintf(stderr, "\t--input   or -i: Optional parameter. Path to the input file in rGFA or FASTQ format. Default: stdin\n");
-            fprintf(stderr, "\t--output  or -o: Optional parameter. Path to the input file in rGFA or FASTQ format. Default: stdout\n");
-            fprintf(stderr, "\t--verbose or -v: Optional flag.      Provides more information about the conversion process. Default: false\n");
-            fprintf(stderr, "[fmd:help] Example invocation: fmd convert rgfa2fmdg -i mygraph.rgfa -o mygraph.fmdg -v\n");
-            fprintf(stderr, "[fmd:help] Example invocation: fmd convert spectrum -i mygraph.rgfa -o -spectrum.txt -v\n");
+            fprintf(stderr, "\t--input     or -i: Optional parameter (rgfa2fmdg, fastq2query, find).          Path to the input file in rGFA (rgfa2fmdg) or FASTQ (fastq2query) or query (find) format. Default: stdin\n");
+            fprintf(stderr, "\t--output    or -o: Optional parameter (rgfa2fmdg, fastq2query, convert, find). Path to the output file. Default: stdout\n");
+            fprintf(stderr, "\t--reference or -r: Requried parameter (find).                                  Path to the input graph file in fmdg format. Default: stdin\n");
+            fprintf(stderr, "\t--threads   or -j: Optional parameter (find).                                  Number of threads.\n") ;
+            fprintf(stderr, "\t--verbose   or -v: Optional flag.      Provides more information about the conversion process. Default: false\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd utils rgfa2fmdg -i mygraph.rgfa -o mygraph.fmdg -v\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd utils spectrum -i mygraph.rgfa -o spectrum.txt -v\n");
+            fprintf(stderr, "[fmd:help] Example invocation: fmd utils find -i mygraph.fmdi -o matches.txt -v -j4 \n");
             return_code = -1;
             break;
         }

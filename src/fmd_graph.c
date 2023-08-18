@@ -259,3 +259,111 @@ void fmd_graph_kmer_locations(fmd_graph_t *graph, int_t k, fmd_vector_t **kmers,
     *kmers = kmer_vec;
     *kmer_table = set;
 }
+
+void fmd_graph_find(fmd_graph_t *graph, fmd_string_t *string, fmd_vector_t **origins) {
+    int_t V = graph->vertex_list->size;
+    // "compile" the string pattern once
+    int_t *lps;
+    fmd_string_kmp_lps(string, &lps);
+    fmd_vector_t **vertex_hits = calloc(V, sizeof(fmd_vector_t*));
+    // first, compute matches without vertex extensions
+    #pragma omp parallel for default(none) shared(V,graph,vertex_hits,prm_fstruct,lps,string)
+    for(int_t i = 0; i < V; i++) {
+        fmd_vertex_t *vertex = graph->vertex_list->data[i];
+        fmd_vector_init(&vertex_hits[i], FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+        if(vertex->label->size >= string->size) {
+            int_t *offsets;
+            int_t no_offsets;
+            fmd_string_kmp_search(vertex->label, string, lps, &offsets, &no_offsets);
+            for (int_t j = 0; j < no_offsets; j++) {
+                fmd_vector_append(vertex_hits[i], (void*)offsets[j]);
+            }
+            free(offsets);
+        }
+    }
+    free(lps);
+    // then, compute matches only with vertex extensions
+    typedef struct graph_find_dfs_ {
+        fmd_vertex_t *v;
+        int_t pos;
+    } graph_find_dfs_t;
+    #pragma omp parallel for default(none) shared(V,graph,vertex_hits,prm_fstruct,string)
+    for(int_t i = 0; i < V; i++) {
+        fmd_vertex_t *vertex = graph->vertex_list->data[i];
+        // find the location of a match of the prefix of the pattern to a suffix of the label
+        // the suffix of the label is shorter by construction
+        int_t query_prefix_match_length = 0;
+        for (int_t j = MAX2(0, vertex->label->size - string->size + 1); j < vertex->label->size; j++) {
+            int_t m = 0;
+            while (j + m < vertex->label->size && m < string->size && vertex->label->seq[j + m] == string->seq[m]) {
+                m++;
+            }
+            if (j + m == vertex->label->size) {
+                query_prefix_match_length = m;
+                break;
+            }
+        }
+        if(!query_prefix_match_length) continue;
+        int_t pos = query_prefix_match_length; // position on the current match
+        fmd_vector_t *stack;
+        fmd_vector_init(&stack, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
+        // add all the outgoing neighbors;
+        fmd_vector_t *n;
+        fmd_table_lookup(graph->outgoing_neighbors, (void*)vertex->id, &n);
+        for(int_t j = 0; j < n->size; j++) {
+            graph_find_dfs_t *rec = malloc(sizeof(graph_find_dfs_t));
+            rec->v = graph->vertex_list->data[(int_t)n->data[j]];
+            rec->pos = pos;
+            fmd_vector_append(stack, rec);
+        }
+        while(stack->size) {
+            void* item;
+            fmd_vector_pop(stack, &item);
+            graph_find_dfs_t *rec = item;
+            int_t n_traversable = MIN2(rec->v->label->size, string->size-rec->pos);
+            bool matched = true;
+            for(int_t j = 0; j < n_traversable; j++) {
+                if(string->seq[j+pos] != rec->v->label->seq[j]) {
+                    free(rec);
+                    matched = false;
+                    break;
+                }
+            }
+            if(matched) {
+                if(pos + n_traversable == string->size) { // match exhausted
+                    fmd_vector_append(vertex_hits[i], (void*)(vertex->label->size - query_prefix_match_length - 1));
+                    free(rec);
+                } else { // match needs to be extended
+                    fmd_table_lookup(graph->outgoing_neighbors, (void*)rec->v->id, &n);
+                    for(int_t j = 0; j < n->size; j++) {
+                        graph_find_dfs_t *rec = malloc(sizeof(graph_find_dfs_t));
+                        rec->v = graph->vertex_list->data[(int_t)n->data[j]];
+                        rec->pos = pos + n_traversable;
+                        fmd_vector_append(stack, rec);
+                    }
+                }
+            }
+        }
+        fmd_vector_free(stack);
+    }
+
+    fmd_vector_init(origins, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_kmer_kv);
+    // cleanup and return
+
+    #pragma omp parallel for default(none) shared(V,vertex_hits)
+    for(int_t i = 0; i < V; i++) {
+        fmd_vector_sort(vertex_hits[i]);
+    }
+
+    for(int_t i = 0; i < V; i++) {
+        for(int_t j = 0; j < vertex_hits[i]->size; j++) {
+            fmd_kmer_kv_t *kv = malloc(sizeof(fmd_kmer_kv_t));
+            kv->str = string;
+            kv->vid = i;
+            kv->offset = (int_t)vertex_hits[i]->data[j];
+            fmd_vector_append(*origins, kv);
+        }
+        fmd_vector_free(vertex_hits[i]);
+    }
+    free(vertex_hits);
+}

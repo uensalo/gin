@@ -39,6 +39,9 @@ uint_t fmd_string_hash(fmd_string_t *s);
 void fmd_string_concat(fmd_string_t **concat, fmd_string_t *s1, fmd_string_t *s2);
 void fmd_string_concat_mut(fmd_string_t *s1, fmd_string_t *s2);
 
+void fmd_string_kmp_lps(fmd_string_t *pattern, int_t **lps);
+void fmd_string_kmp_search(fmd_string_t *text, fmd_string_t *pattern, int_t *lps, int_t **pos, int_t *num_occ);
+
 static fmd_fstruct_t fmd_fstruct_string = {
         (fcomp) fmd_string_comp,
         (fhash) fmd_string_hash,

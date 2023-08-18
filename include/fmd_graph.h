@@ -67,4 +67,6 @@ static fmd_fstruct_t fmd_fstruct_kmer_kv = {
         (fcopy) fmd_kmer_kv_copy
 };
 
+void fmd_graph_find(fmd_graph_t *graph, fmd_string_t *string, fmd_vector_t **origins);
+
 #endif //FMD_FMD_GRAPH_H

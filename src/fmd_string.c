@@ -246,6 +246,7 @@ fmd_string_t *fmd_string_copy(fmd_string_t *str) {
 }
 
 int fmd_string_comp(fmd_string_t *s1, fmd_string_t *s2) {
+    if(!s1 && !s2) return 0;
     int_t min_len = s1->size > s2->size ? s2->size : s1->size;
     int_t i;
     for(i = 0; i < min_len; i++) {
@@ -293,3 +294,64 @@ void fmd_string_concat_mut(fmd_string_t *s1, fmd_string_t *s2) {
     s1->size = total_size;
     s1->seq[total_size] = FMD_STRING_TERMINATOR;
 }
+
+void fmd_string_kmp_lps(fmd_string_t *pattern, int_t **lps_rval) {
+    int_t *lps = calloc(pattern->size, sizeof(int_t));
+    int_t length = 0; // length of the previous longest prefix suffix
+    lps[0] = 0; // lps[0] is always 0
+
+    for (int_t i = 1; i < pattern->size; i++) {
+        while (length > 0 && pattern->seq[i] != pattern->seq[length]) {
+            length = lps[length-1];
+        }
+        if (pattern->seq[i] == pattern->seq[length]) {
+            length++;
+        }
+        lps[i] = length;
+    }
+    *lps_rval = lps;
+}
+
+void fmd_string_kmp_search(fmd_string_t *text, fmd_string_t *pattern, int_t *lps_in, int_t **pos_rval, int_t *occ_rval) {
+    int_t *lps;
+    if(!lps_in) {
+        fmd_string_kmp_lps(pattern, &lps);
+    } else {
+        lps = lps_in;
+    }
+    int_t occ = 0;
+    int_t cap = 8;
+    int_t *pos = malloc(cap*sizeof(int_t));
+
+    if (pattern->size == 0 || text->size == 0) {
+        *pos_rval = NULL;
+        *occ_rval = 0;
+    }
+
+    int_t i = 0; // text index
+    int_t j = 0; // pattern index
+
+    while (i < text->size) {
+        if (pattern->seq[j] == text->seq[i]) {
+            j++;
+            i++;
+        }
+        if (j == pattern->size) {
+            if(occ == cap) {
+                pos = realloc(pos, (cap *= 2) * sizeof(int_t));
+            }
+            pos[occ++] = i - j;
+            j = lps[j - 1]; // reset j to find rest of the matches
+        } else if (i < text->size && pattern->seq[j] != text->seq[i]) {
+            if (j != 0) {
+                j = lps[j-1];
+            } else {
+                i++;
+            }
+        }
+    }
+    *pos_rval = realloc(pos,occ*sizeof(int_t));
+    *occ_rval = occ;
+    if(!lps_in) free(lps);
+}
+
