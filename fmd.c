@@ -38,7 +38,7 @@ typedef enum fmd_query_mode_ {
     fmd_query_mode_no_modes=2,
 } fmd_query_mode_t;
 
-char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query", "spectrum"};
+char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query", "spectrum", "find"};
 
 typedef enum fmd_utils_mode_ {
     fmd_utils_mode_rgfa2fmdg=0,
@@ -1404,7 +1404,7 @@ int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode) {
             break;
         }
         default: {
-            fprintf(stderr, "[fmd:utils] Unrecognized utils mode, please see fmd help convert. Quitting.\n");
+            fprintf(stderr, "[fmd:utils] Unrecognized utils mode, please see fmd help utils. Quitting.\n");
             return_code = -1;
             break;
         }

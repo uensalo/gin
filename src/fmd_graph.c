@@ -323,23 +323,23 @@ void fmd_graph_find(fmd_graph_t *graph, fmd_string_t *string, fmd_vector_t **ori
             int_t n_traversable = MIN2(rec->v->label->size, string->size-rec->pos);
             bool matched = true;
             for(int_t j = 0; j < n_traversable; j++) {
-                if(string->seq[j+pos] != rec->v->label->seq[j]) {
+                if(string->seq[j+rec->pos] != rec->v->label->seq[j]) {
                     free(rec);
                     matched = false;
                     break;
                 }
             }
             if(matched) {
-                if(pos + n_traversable == string->size) { // match exhausted
-                    fmd_vector_append(vertex_hits[i], (void*)(vertex->label->size - query_prefix_match_length - 1));
+                if(rec->pos + n_traversable == string->size) { // match exhausted
+                    fmd_vector_append(vertex_hits[i], (void*)(vertex->label->size - query_prefix_match_length));
                     free(rec);
                 } else { // match needs to be extended
                     fmd_table_lookup(graph->outgoing_neighbors, (void*)rec->v->id, &n);
                     for(int_t j = 0; j < n->size; j++) {
-                        graph_find_dfs_t *rec = malloc(sizeof(graph_find_dfs_t));
-                        rec->v = graph->vertex_list->data[(int_t)n->data[j]];
-                        rec->pos = pos + n_traversable;
-                        fmd_vector_append(stack, rec);
+                        graph_find_dfs_t *nrec = malloc(sizeof(graph_find_dfs_t));
+                        nrec->v = graph->vertex_list->data[(int_t)n->data[j]];
+                        nrec->pos = rec->pos + n_traversable;
+                        fmd_vector_append(stack, nrec);
                     }
                 }
             }
