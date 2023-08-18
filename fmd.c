@@ -1293,7 +1293,10 @@ int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode) {
                 return_code = -1;
                 return return_code;
             }
+            clock_gettime(CLOCK_REALTIME, &t1);
             graph = fmdg_parse(fref);
+            clock_gettime(CLOCK_REALTIME, &t2);
+            parse_time += to_sec(t1,t2);
             if(!graph) {
                 if (fref_path) fclose(fref);
                 fprintf(stderr, "[fmd:utils] Malformed fmdg file, quitting.\n");
@@ -1301,12 +1304,10 @@ int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode) {
                 return return_code;
             }
             if(verbose) {
-                fprintf(stderr, "[fmd:utils] Graph file parsed.\n", fref_path);
+                fprintf(stderr, "[fmd:utils] Graph file %s parsed.\n", fref_path);
             }
-
-
             if(verbose) {
-                fprintf(stderr, "[fmd:utils] Parsing and launching queries with %d threads\n", (int)num_threads);
+                fprintf(stderr, "[fmd:utils] Parsing and launching queries with %d threads.\n", (int)num_threads);
             }
             if(finput_path) {
                 finput = fopen(finput_path, "r");
@@ -1378,6 +1379,28 @@ int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode) {
             }
             free(buf);
             free(tasks);
+            fmd_graph_free(graph);
+            if(finput_path) fclose(finput);
+            if(foutput_path) fclose(foutput);
+            if(verbose) {
+                fprintf(stderr, "[fmd:utils] Params: Graph file name (-r): %s\n", fref_path);
+                if(finput_path) {
+                    fprintf(stderr, "[fmd:utils] Params: Query file name (-i): %s\n", finput_path);
+                }
+                fprintf(stderr, "[fmd:utils] Params: Read batch size (-b): %lld\n", batch_size);
+                fprintf(stderr, "[fmd:utils] Params: Threads (-j): %lld\n", num_threads);
+                fprintf(stderr, "[fmd:utils] Index: Index parse time (s): %lf\n", parse_time);
+                fprintf(stderr, "[fmd:utils] Decode: Total matches decoded: %lld\n", utils_no_matches);
+                fprintf(stderr, "[fmd:utils] Decode: Total decoding time (s): %lf\n", utils_find_time);
+                fprintf(stderr, "[fmd:utils] Decode: Matches decoded per second: %lf\n", (double)utils_no_matches / utils_find_time);
+                fprintf(stderr, "[fmd:utils] Decode: Time per match decode (s): %lf\n", utils_find_time / (double)utils_no_matches);
+                if(utils_queries_processed) {
+                    fprintf(stderr, "[fmd:utils] Find: Total queries processed: %lld\n",utils_queries_processed);
+                    fprintf(stderr, "[fmd:utils] Find: Total querying time (s): %lf\n",utils_find_time);
+                    fprintf(stderr, "[fmd:utils] Find: Queries per second: %lf\n",(double) utils_queries_processed / (double) utils_find_time);
+                    fprintf(stderr, "[fmd:utils] Find: Time per query (s): %lf\n",(double) utils_find_time / (double) utils_queries_processed);
+                }
+            }
             break;
         }
         default: {
