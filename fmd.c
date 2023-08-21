@@ -739,12 +739,27 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                     no_matching_forks += tasks[j].exact_matches->size;
                                     no_missing_forks += tasks[j].partial_matches->size;
                                     fmd_fmd_decoder_decode_ends(fmd_dec,tasks[j].exact_matches, max_matches, &decoded_matches);
+                                    if(verbose) {
+                                        int_t count = 0;
+                                        for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
+                                            fmd_fork_node_t *fork = tasks[j].exact_matches->data[k];
+                                            no_matching_count += fork->sa_hi - fork->sa_lo;
+                                            count += fork->sa_hi - fork->sa_lo;
+                                        }
+                                        fprintf(foutput, "%s:(c:%lld):(m:%lld,p:%lld)\n",
+                                                tasks[j].str->seq,
+                                                count,
+                                                tasks[j].exact_matches->size,
+                                                tasks[j].partial_matches->size);
+                                    } else {
+                                        fprintf(foutput, "%s:\n", tasks[j].str->seq);
+                                    }
                                     for(int_t k = 0; k < decoded_matches->size; k++) {
                                         fmd_vector_t *decoded_matches_for_fork = decoded_matches->data[k];
                                         no_matching_count += decoded_matches_for_fork->size;
                                         for(int_t l = 0; l < decoded_matches_for_fork->size; l++) {
                                             fmd_decoded_match_t *decoded_match = decoded_matches_for_fork->data[l];
-                                            fprintf(foutput, "%s:(v:%lld,o:%lld)\n", tasks[j].str->seq, decoded_match->vid, decoded_match->offset);
+                                            fprintf(foutput, "\t(v:%lld,o:%lld)\n", decoded_match->vid, decoded_match->offset);
                                         }
                                     }
                                     fmd_vector_free(decoded_matches);
@@ -767,8 +782,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                 for (int_t j = 0; j < i; j++) {
                                     if (!tasks[j].str) continue;
                                     if (!tasks[j].exact_matches->size) {
-                                        fprintf(foutput, "%s:(0)\n",tasks[j].str->seq);
-                                        fprintf(foutput, "\t:-\n",tasks[j].str->seq);
+                                        fprintf(foutput, "%s:(c:0):(m:0,p:%lld)\n",tasks[j].str->seq,tasks[j].partial_matches->size);
                                     } else {
                                         int_t count = 0;
                                         for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
@@ -776,12 +790,20 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                             no_matching_count += fork->sa_hi - fork->sa_lo;
                                             count += fork->sa_hi - fork->sa_lo;
                                         }
-                                        fprintf(foutput, "%s:(%lld)\n",tasks[j].str->seq, count);
+                                        if(verbose) {
+                                            fprintf(foutput, "%s:(c:%lld):(m:%lld,p:%lld)\n",
+                                                    tasks[j].str->seq,
+                                                    count,
+                                                    tasks[j].exact_matches->size,
+                                                    tasks[j].partial_matches->size);
+                                        } else {
+                                            fprintf(foutput, "%s:(c:%lld)\n", tasks[j].str->seq, count);
+                                        }
                                         no_matching_forks += tasks[j].exact_matches->size;
                                         no_missing_forks += tasks[j].partial_matches->size;
                                         for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
                                             fmd_fork_node_t *fork = tasks[j].exact_matches->data[k];
-                                            fprintf(foutput, "\t(sa:(%lld,%lld))\n", fork->sa_lo,fork->sa_hi);
+                                            fprintf(foutput, "\t(%lld,%lld)\n", fork->sa_lo,fork->sa_hi);
                                         }
                                     }
                                     fmd_vector_free(tasks[j].exact_matches);
