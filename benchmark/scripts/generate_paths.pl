@@ -9,6 +9,7 @@ my @labels;
 my %vertex_to_index;
 my ($input_file, $query_length);
 my %memo;
+my %path_groups; # This will store the unique offsets for each unique path
 
 # Parse command-line arguments
 GetOptions(
@@ -61,14 +62,42 @@ sub generate_paths {
     return \@paths;
 }
 
+# Convert sorted list of numbers into compact intervals
+sub compact_intervals {
+    my @numbers = @_;
+    my @intervals;
+
+    for (my $i = 0; $i < scalar(@numbers); $i++) {
+        my $start = $numbers[$i];
+        while ($i+1 < scalar(@numbers) && $numbers[$i+1] == $numbers[$i] + 1) {
+            $i++;
+        }
+        if ($start == $numbers[$i]) {
+            push @intervals, $start;
+        } else {
+            push @intervals, "$start,$numbers[$i]";
+        }
+    }
+
+    return @intervals;
+}
+
 for my $vertex_index (0..$#labels) {
     my $start_offset = length($labels[$vertex_index]) - $query_length + 1;
     $start_offset = 0 if $start_offset < 0; # Make sure the offset isn't negative
 
     for my $offset ($start_offset .. length($labels[$vertex_index]) - 1) {
-        my $paths = generate_paths($vertex_index, $offset, $query_length, "$offset,$vertex_index");
+        my $paths = generate_paths($vertex_index, $offset, $query_length, "$vertex_index");
         for my $path (@$paths) {
-            print "$path\n";
+            # Group paths by their vertex progression and ensure unique offsets
+            $path_groups{$path}{$offset} = 1;
         }
     }
+}
+
+# Printing the grouped results
+for my $path (keys %path_groups) {
+    my @offsets = sort {$a <=> $b} keys %{$path_groups{$path}};
+    my @interval_offsets = compact_intervals(@offsets);
+    print join(":", @interval_offsets) . ";$path\n";
 }
