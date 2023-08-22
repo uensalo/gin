@@ -15,13 +15,15 @@ LOG_DIR="../log/$EXPERIMENT_NAME"
 mkdir -p "$LOG_DIR"
 BASENAME=$(basename "$INPUT_GRAPH" .fmdg)
 
-PLOT_COMMAND="set terminal pngcairo size 800,600; \
-set output '$LOG_DIR/plot_${BASENAME}_k${DEPTH}.png'; \
-set xlabel 'Path Length'; \
-set ylabel 'Frequency'; \
-plot "
+# Define the inner loop as a function
+compute() {
+    local k="$1"
+    local INPUT_GRAPH="$2"
+    local LOG_DIR="$3"
+    local BASENAME="$4"
+    local VERTEX_COMPLEXITY="$5"
+    local EDGE_COMPLEXITY="$6"
 
-for ((k=1; k<=$DEPTH; k++)); do
     PATH_LOG="$LOG_DIR/paths_${BASENAME}_k$k.txt"
     ./path_generation.pl -i "$INPUT_GRAPH" -q "$k" > "$PATH_LOG"
 
@@ -37,8 +39,30 @@ for ((k=1; k<=$DEPTH; k++)); do
 
     HISTOGRAM_LOG="$LOG_DIR/histogram_${BASENAME}_k$k.txt"
     ./path_histogram.pl -i "$PATH_LOG" > "$HISTOGRAM_LOG"
+}
+export -f compute
 
-    # Append to the gnuplot commands
+
+count=0
+for ((k=1; k<=$DEPTH; k++)); do
+    compute "$k" "$INPUT_GRAPH" "$LOG_DIR" "$BASENAME" "$VERTEX_COMPLEXITY" "$EDGE_COMPLEXITY" &
+    ((count++))
+
+    # Wait for processes to finish if we have 4 running
+    if ((count % 4 == 0)); then
+        wait
+    fi
+done
+wait
+
+PLOT_COMMAND="set terminal pngcairo size 800,600; \
+set output '$LOG_DIR/plot_${BASENAME}_k${DEPTH}.png'; \
+set xlabel 'Path Length'; \
+set ylabel 'Frequency'; \
+plot "
+
+for ((k=1; k<=$DEPTH; k++)); do
+    HISTOGRAM_LOG="$LOG_DIR/histogram_${BASENAME}_k$k.txt"
     PLOT_COMMAND="$PLOT_COMMAND '$HISTOGRAM_LOG' using 1:2 with linespoints title 'k=$k', "
 done
 
