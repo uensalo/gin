@@ -25,20 +25,20 @@ compute() {
     local EDGE_COMPLEXITY="$6"
 
     PATH_LOG="$LOG_DIR/paths_${BASENAME}_k$k.txt"
-    ./path_generation.pl -i "$INPUT_GRAPH" -q "$k" > "$PATH_LOG"
+    perl ./generate_paths.pl -i "$INPUT_GRAPH" -q "$k" > "$PATH_LOG"
 
     if [ "$VERTEX_COMPLEXITY" = true ]; then
         VERTEX_LOG="$LOG_DIR/vertex_complexity_${BASENAME}_k$k.txt"
-        cat "$PATH_LOG" | ./vertex_complexity.pl > "$VERTEX_LOG"
+        cat "$PATH_LOG" | perl ./vertex_complexity.pl > "$VERTEX_LOG"
     fi
 
     if [ "$EDGE_COMPLEXITY" = true ]; then
         EDGE_LOG="$LOG_DIR/edge_complexity_${BASENAME}_k$k.txt"
-        cat "$PATH_LOG" | ./edge_complexity.pl > "$EDGE_LOG"
+        cat "$PATH_LOG" | perl ./edge_complexity.pl > "$EDGE_LOG"
     fi
 
     HISTOGRAM_LOG="$LOG_DIR/histogram_${BASENAME}_k$k.txt"
-    ./path_histogram.pl -i "$PATH_LOG" > "$HISTOGRAM_LOG"
+    perl ./generate_path_histogram.pl -i "$PATH_LOG" > "$HISTOGRAM_LOG"
 }
 export -f compute
 
@@ -47,8 +47,6 @@ count=0
 for ((k=1; k<=$DEPTH; k++)); do
     compute "$k" "$INPUT_GRAPH" "$LOG_DIR" "$BASENAME" "$VERTEX_COMPLEXITY" "$EDGE_COMPLEXITY" &
     ((count++))
-
-    # Wait for processes to finish if we have 4 running
     if ((count % 4 == 0)); then
         wait
     fi
