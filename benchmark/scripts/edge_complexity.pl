@@ -16,7 +16,7 @@ GetOptions(
 sub get_interval_width {
     my ($interval) = @_;
     my ($start, $end) = split /,/, $interval;
-    $end = $start unless $end; # If only one number is given, start = end
+    $end = $start unless $end;
     return $end - $start + 1;
 }
 
@@ -48,7 +48,6 @@ while (<$fh>) {
 
 close($fh) if $input_file;
 
-# Print the complexity of each edge
 for my $edge (sort keys %edge_complexity) {
     print "$edge;$edge_complexity{$edge}\n";
 }
