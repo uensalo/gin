@@ -4,6 +4,9 @@
 FMD_DIR=../bin
 QUERY_SCRIPT=generate_queries.pl
 
+# If hard queries are requested
+HARD_SUFFIX=""
+
 # Set the hard-coded directories
 LOG_DIR=../log
 QUERY_DIR=../res/query
@@ -27,7 +30,7 @@ EXPERIMENT_NAME=""
 # Read input parameters
 INPUT_FILE=$1
 shift
-while getopts ":c:r:m:M:j:l:t:p:dL:" opt; do
+while getopts ":c:r:m:M:j:l:t:p:dL:h" opt; do
   case $opt in
     c) IFS=' ' read -r -a CACHE_DEPTHS <<< "$OPTARG";;
     r) IFS=' ' read -r -a SAMPLE_RATES <<< "$OPTARG";;
@@ -41,6 +44,9 @@ while getopts ":c:r:m:M:j:l:t:p:dL:" opt; do
        DECODE_FLAG="--decode";
        DECODE_SUFFIX="_decode";;
     L) EXPERIMENT_NAME="$OPTARG";;
+    h)
+       QUERY_SCRIPT=generate_queries_hard.pl; # Switch scripts.
+       HARD_SUFFIX="_hard";;
     \?) echo "Invalid option -$OPTARG" >&2; exit 1;;
   esac
 done
@@ -55,7 +61,7 @@ mkdir -p $LOG_DIR
 # Pre-generate the query files (if they don't exist)
 for LENGTH in "${LENGTHS[@]}"
 do
-  QUERY_FILE="$QUERY_DIR/${BASENAME}_query_length_${LENGTH}.fmdq"
+  QUERY_FILE="$QUERY_DIR/${BASENAME}${HARD_SUFFIX}_query_length_${LENGTH}.fmdq"
   if [[ ! -f $QUERY_FILE ]]; then
     ./$QUERY_SCRIPT -i "$INPUT_FILE" -q "$LENGTH" -N $NO_QUERIES -s $SEED > "$QUERY_FILE" &
   fi
@@ -153,7 +159,7 @@ do
               do
                 LOG_FILE="$LOG_DIR/find_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}_cache_${CACHE_DEPTH}_fork_${FORK}_match_${MATCH}_threads_${THREAD}_length_${LENGTH}${DECODE_SUFFIX}.txt"
                 # Run the find command with the query set, redirecting stderr to the log file
-                QUERY_FILE="$QUERY_DIR/${BASENAME}_query_length_${LENGTH}.fmdq"
+                QUERY_FILE="$QUERY_DIR/${BASENAME}${HARD_SUFFIX}_query_length_${LENGTH}.fmdq"
                 INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.fmdi"
                 $FMD_DIR/fmd query find -r "$INDEX_FILE" $CACHE_FLAG "$CACHE_FILE" -i "$QUERY_FILE" -j "$THREAD" -b $BATCH_SIZE -m "$FORK" -M "$MATCH" $DECODE_FLAG -v 2>> "$LOG_FILE"
               done
