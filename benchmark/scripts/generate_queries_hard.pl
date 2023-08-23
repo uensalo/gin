@@ -40,21 +40,23 @@ close $fh;
 my ($tmp_fh, $tmp_filename) = tempfile();
 
 sub generate_paths {
-    my ($vertex, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path) = @_;
+    my ($vertex, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path, $current_weight) = @_;
     my $label_length = length($labels[$vertex]);
+    my $path_length = scalar(split(/:/, $current_path));
 
     return if index($labels[$vertex], 'N') != -1;  # Skip paths containing 'N'
 
     $current_path = "$current_path:$vertex";
+    $current_weight += $label_length / ($path_length);
 
     if ($label_length >= $consumable_end) {
         # Entire vertex label is consumed
-        print $tmp_fh "$offset_start,$offset_end;$current_path\n";
+        print $tmp_fh "$offset_start,$offset_end;$current_path;$current_weight\n";
         return;
     } elsif ($consumable_end > $label_length && $label_length >= $consumable_start) {
         # Vertex label partially satisfies the path length
         my $push_end = $offset_start + $label_length - $consumable_start;
-        print $tmp_fh "$offset_start,$push_end;$current_path\n";
+        print $tmp_fh "$offset_start,$push_end;$current_path;$current_weight\n";
         $offset_start = $push_end + 1;
         $consumable_start = 1;
         $consumable_end -= $label_length;
@@ -66,7 +68,7 @@ sub generate_paths {
 
     # Recurse
     foreach my $neighbor (@{$graph[$vertex]}) {
-        generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path);
+        generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path, $current_weight);
     }
 }
 
@@ -92,18 +94,18 @@ for my $vertex (0..$#labels) {
 
     # Call generate_paths on each neighbor of the vertex
     foreach my $neighbor (@{$graph[$vertex]}) {
-        generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$vertex");
+        generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$vertex", $label_length);
     }
 }
 
 close $tmp_fh;
 
-# Read back from the temporary file, sort, and extract strings
-open my $sorted_fh, "-|", "sort -t: -k2,2nr $tmp_filename" or die "Failed to sort: $!";
+# Read back from the temporary file, sort by weight in ascending order, and extract strings
+open my $sorted_fh, "-|", "sort -t';' -k3,3n $tmp_filename" or die "Failed to sort: $!";
 my %unique_strings;
 
 PATH_LOOP: while (<$sorted_fh>) {
-    my ($offsets, $vertices) = split /;/;
+    my ($offsets, $vertices, $weight) = split /;/;
     my ($start, $end) = split /,/, $offsets;
     my @vertex_ids = split /:/, $vertices;
 
