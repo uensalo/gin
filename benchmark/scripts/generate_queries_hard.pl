@@ -87,6 +87,9 @@ for my $vertex (0..$#labels) {
         $consumable_end = $query_length - 1;
     }
 
+    # Skip if the first label already contains an 'N'
+    next if index(substr($labels[$vertex], $offset_start, $offset_end - $offset_start + 1), 'N') != -1;
+
     # Call generate_paths on each neighbor of the vertex
     foreach my $neighbor (@{$graph[$vertex]}) {
         generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$vertex");
