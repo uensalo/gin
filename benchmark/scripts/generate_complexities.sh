@@ -59,7 +59,7 @@ set xlabel 'Path Length'; \
 set ylabel 'Frequency'; \
 plot "
 
-for ((k=1; k<=$DEPTH; k++)); do
+for ((k=2; k<=$DEPTH; k++)); do
     HISTOGRAM_LOG="$LOG_DIR/histogram_${BASENAME}_k$k.txt"
     PLOT_COMMAND="$PLOT_COMMAND '$HISTOGRAM_LOG' using 1:2 with linespoints title 'k=$k', "
 done
