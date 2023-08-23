@@ -43,6 +43,8 @@ sub generate_paths {
     my ($vertex, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path) = @_;
     my $label_length = length($labels[$vertex]);
 
+    return if index($labels[$vertex], 'N') != -1;  # Skip paths containing 'N'
+
     $current_path = "$current_path:$vertex";
 
     if ($label_length >= $consumable_end) {
