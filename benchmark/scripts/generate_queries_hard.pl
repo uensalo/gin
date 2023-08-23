@@ -3,18 +3,18 @@
 use strict;
 use warnings;
 use Getopt::Long;
+use File::Temp qw/ tempfile /;
 
 my @graph;
 my @labels;
 my %vertex_to_index;
 my ($input_file, $query_length, $num_queries, $seed);
-my @all_paths;
 
 GetOptions(
     'i=s' => \$input_file,
     'q=i' => \$query_length,
     'N=i' => \$num_queries,
-    's=i' => \$seed   # For backward compatibility with the other script
+    's=i' => \$seed   # For backward compatibility
 ) or die("Error in command line arguments\n");
 
 open my $fh, '<', $input_file or die "Cannot open $input_file: $!";
@@ -36,6 +36,9 @@ while (<$fh>) {
 }
 close $fh;
 
+# Temporary file for writing paths
+my ($tmp_fh, $tmp_filename) = tempfile();
+
 sub generate_paths {
     my ($vertex, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path) = @_;
     my $label_length = length($labels[$vertex]);
@@ -44,12 +47,11 @@ sub generate_paths {
 
     if ($label_length >= $consumable_end) {
         # Everything is consumed
-        push @all_paths, "$offset_start,$offset_end;$current_path";
-        return;
+        print $tmp_fh "$offset_start,$offset_end;$current_path\n";
     } elsif ($consumable_end > $label_length && $label_length >= $consumable_start) {
         # Compute the end of the consumed interval
         my $push_end = $offset_start + $label_length - $consumable_start;
-        push @all_paths, "$offset_start,$push_end;$current_path";
+        print $tmp_fh "$offset_start,$push_end;$current_path\n";
         $offset_start = $push_end + 1;
         $consumable_start = 1;
         $consumable_end -= $label_length;
@@ -65,6 +67,7 @@ sub generate_paths {
     }
 }
 
+# Generate paths
 for my $vertex (0..$#labels) {
     my $label_length = length($labels[$vertex]);
     my ($offset_start, $offset_end, $consumable_start, $consumable_end);
@@ -87,13 +90,14 @@ for my $vertex (0..$#labels) {
     }
 }
 
-# Sort paths by the number of vertices
-@all_paths = sort { ($b =~ tr/:/:/) <=> ($a =~ tr/:/:/) } @all_paths;
+close $tmp_fh;
 
-# Extract N hardest strings
+# Read back from the temporary file, sort, and extract strings
+open my $sorted_fh, "-|", "sort -t: -k2,2nr $tmp_filename" or die "Failed to sort: $!";
 my %unique_strings;
-PATH_LOOP: foreach my $path (@all_paths) {
-    my ($offsets, $vertices) = split /;/, $path;
+
+while (<$sorted_fh>) {
+    my ($offsets, $vertices) = split /;/;
     my ($start, $end) = split /,/, $offsets;
     my @vertex_ids = split /:/, $vertices;
 
@@ -108,13 +112,17 @@ PATH_LOOP: foreach my $path (@all_paths) {
             }
         }
         $unique_strings{$string} = 1;
-        last PATH_LOOP if scalar(keys %unique_strings) >= $num_queries;
+        last if scalar(keys %unique_strings) >= $num_queries;
     }
 }
 
-# Print
+close $sorted_fh;
+
 foreach my $string (keys %unique_strings) {
     print "$string\n";
 }
+
+# Cleanup: Remove the temporary file
+unlink $tmp_filename;
 
 print "exit();\n"
