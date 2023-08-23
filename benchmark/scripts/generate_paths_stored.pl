@@ -8,6 +8,7 @@ my @graph;
 my @labels;
 my %vertex_to_index;
 my ($input_file, $query_length);
+my %path_groups;
 
 GetOptions(
     'i=s' => \$input_file,
@@ -36,17 +37,25 @@ close $fh;
 sub generate_paths {
     my ($vertex, $offset_start, $offset_end, $consumable_start, $consumable_end, $current_path) = @_;
     my $label_length = length($labels[$vertex]);
+    my @resulting_paths;
 
     $current_path = "$current_path:$vertex";
 
+    #    print "label: $label_length\n";
+    #    print "constt: $consumable_start\n";
+    #    print "conend: $consumable_end\n";
+    #    print "offstt: $offset_start\n";
+    #    print "offend: $offset_end\n";
+    #    print "pathcr: $current_path\n";
+
     if ($label_length >= $consumable_end) {
-        # Everything is consumed
-        print "$offset_start,$offset_end;$current_path\n";
-        return;
+        # Everything is consumed, push one final time and terminate
+        push @resulting_paths, "$offset_start,$offset_end;$current_path";
+        return \@resulting_paths; # terminate
     } elsif ($consumable_end > $label_length && $label_length >= $consumable_start) {
-        # Compute the end of the consumed interval
+        # Compute the end of the consumed interval and push partially
         my $push_end = $offset_start + $label_length - $consumable_start;
-        print "$offset_start,$push_end;$current_path\n";
+        push @resulting_paths, "$offset_start,$push_end;$current_path";
         $offset_start = $push_end + 1;
         $consumable_start = 1;
         $consumable_end -= $label_length;
@@ -58,8 +67,9 @@ sub generate_paths {
 
     # Recurse
     foreach my $neighbor (@{$graph[$vertex]}) {
-        generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$current_path");
+        push @resulting_paths, @{generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$current_path")};
     }
+    return \@resulting_paths;
 }
 
 for my $vertex (0..$#labels) {
@@ -80,6 +90,9 @@ for my $vertex (0..$#labels) {
 
     # Call generate_paths on each neighbor of the vertex
     foreach my $neighbor (@{$graph[$vertex]}) {
-        generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$vertex");
+        my $paths = generate_paths($neighbor, $offset_start, $offset_end, $consumable_start, $consumable_end, "$vertex");
+        foreach my $path (@$paths) {
+            print "$path\n";
+        }
     }
 }
