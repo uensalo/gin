@@ -46,17 +46,18 @@ sub generate_paths {
     $current_path = "$current_path:$vertex";
 
     if ($label_length >= $consumable_end) {
-        # Everything is consumed
+        # Entire vertex label is consumed
         print $tmp_fh "$offset_start,$offset_end;$current_path\n";
+        return;
     } elsif ($consumable_end > $label_length && $label_length >= $consumable_start) {
-        # Compute the end of the consumed interval
+        # Vertex label partially satisfies the path length
         my $push_end = $offset_start + $label_length - $consumable_start;
         print $tmp_fh "$offset_start,$push_end;$current_path\n";
         $offset_start = $push_end + 1;
         $consumable_start = 1;
         $consumable_end -= $label_length;
     } else {
-        # Consume symbols
+        # Entire vertex label is needed but doesn't fulfill required length
         $consumable_start -= $label_length;
         $consumable_end -= $label_length;
     }
@@ -96,7 +97,7 @@ close $tmp_fh;
 open my $sorted_fh, "-|", "sort -t: -k2,2nr $tmp_filename" or die "Failed to sort: $!";
 my %unique_strings;
 
-while (<$sorted_fh>) {
+PATH_LOOP: while (<$sorted_fh>) {
     my ($offsets, $vertices) = split /;/;
     my ($start, $end) = split /,/, $offsets;
     my @vertex_ids = split /:/, $vertices;
@@ -112,7 +113,7 @@ while (<$sorted_fh>) {
             }
         }
         $unique_strings{$string} = 1;
-        last if scalar(keys %unique_strings) >= $num_queries;
+        last PATH_LOOP if scalar(keys %unique_strings) >= $num_queries;
     }
 }
 
