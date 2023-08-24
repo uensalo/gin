@@ -241,7 +241,12 @@ def plot_p_f(directory_name, output_filename):
     plt.close()
 
 
-def plot_p_c(directory_name, output_filename):
+def plot_p_c(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
     # Assuming the first return value from your function is the DataFrame
     find_df, _, _, _ = parse_directory_logs(directory_name)
 
@@ -253,46 +258,38 @@ def plot_p_c(directory_name, output_filename):
 
     plt.figure(figsize=(12, 8))
 
-    # First plot the data grouped by cache
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    # Plot the data grouped by query length with regular lines
+    for qlength in unique_lengths:
+        subset = find_df[find_df['length'] == qlength]
+        subset = subset.sort_values(by='cache')
+        plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], '-o', color=length_cmap(unique_lengths.index(qlength)), label=f'Query Length: {qlength}')
+
+    # Connect data points of the same cache size with dashed lines
     caches = sorted(find_df['cache'].unique())
-    cache_handles = []
+    cache_cmap = plt.get_cmap('Dark2', len(caches))  # Using the Dark2 colormap for cache lines
     for cache in caches:
         subset = find_df[find_df['cache'] == cache]
         subset = subset.sort_values(by='length')
+        plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], '--', color=cache_cmap(caches.index(cache)))
 
-        line, = plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], marker='o')
-        cache_handles.append(line)
+    # Set the x and y scales to be logarithmic
+    plt.xscale('log')
+    plt.yscale('log')
 
-    # Create a color map for the different query lengths, using a colormap that trends towards darker colors
-    unique_lengths = sorted(find_df['length'].unique())
-    cmap = plt.get_cmap('Dark2', len(unique_lengths))
-
-    # Draw dashed lines connecting points of the same query length across cache groups
-    lines_for_legend = []  # This will store handles for the legend
-    for idx, qlength in enumerate(unique_lengths):
-        line_added_to_legend = False  # Track if we added the line to the legend yet
-
-        for i in range(len(caches) - 1):  # We subtract 1 because we'll be using i and i+1 as indices
-            subset1 = find_df[(find_df['cache'] == caches[i]) & (find_df['length'] == qlength)]
-            subset2 = find_df[(find_df['cache'] == caches[i+1]) & (find_df['length'] == qlength)]
-
-            # Ensure there's a point in both caches to connect
-            if not subset1.empty and not subset2.empty:
-                line, = plt.plot([subset1['avg_forks_per_query'].values[0], subset2['avg_forks_per_query'].values[0]],
-                                 [subset1['queries_per_second'].values[0], subset2['queries_per_second'].values[0]],
-                                 '--',
-                                 color=cmap(idx))
-
-                # Add line to the legend only once per query length
-                if not line_added_to_legend:
-                    lines_for_legend.append(line)
-                    line_added_to_legend = True
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
 
     # Create the legends with explicit positioning
-    legend1 = plt.legend(cache_handles, [str(c) for c in caches], loc='upper right', title="Cache Size", bbox_to_anchor=(1, 1))
-    legend2 = plt.legend(lines_for_legend, unique_lengths, loc='upper right', bbox_to_anchor=(1, 0.75), title="Query Length")
-
+    cache_handles = [plt.Line2D([0], [0], color=cache_cmap(i), linestyle='--', label=f'Cache Size: {cache}') for i, cache in enumerate(caches)]
+    legend1 = plt.legend(handles=cache_handles, loc='upper right', title="Cache Size")
     plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
+    legend2 = plt.legend(loc='upper right', bbox_to_anchor=(0.83, 1), title="Query Length")
 
     plt.xlabel('Average Forks per Query (log scale)')
     plt.ylabel('Queries per Second (log scale)')
@@ -303,15 +300,22 @@ def plot_p_c(directory_name, output_filename):
 
 
 
+
+
 if __name__ == '__main__':
-    plot_c_l('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_c_l.png')
-    plot_c_l('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_c_l.png')
+    #plot_c_l('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_c_l.png')
+    #plot_c_l('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_c_l.png')
 
-    plot_m_l('../log/gencode.v40.fmdg_m_l', '../plot/gencode.v40.fmdg_m_l.png')
-    plot_m_l('../log/GRCh38-20-0.10b.fmdg_m_l', '../plot/GRCh38-20-0.10b.fmdg_m_l.png')
+    #plot_m_l('../log/gencode.v40.fmdg_m_l', '../plot/gencode.v40.fmdg_m_l.png')
+    #plot_m_l('../log/GRCh38-20-0.10b.fmdg_m_l', '../plot/GRCh38-20-0.10b.fmdg_m_l.png')
 
-    plot_p_f('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_f.png')
-    plot_p_f('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_f.png')
+    #plot_p_f('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_f.png')
+    #plot_p_f('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_f.png')
 
-    plot_p_c('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_c.png')
-    plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_c.png')
+    p_c_scale = ((5,2e5),(5,5e5))
+
+    plot_p_c('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_c.png', p_c_scale)
+    plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_c.png', p_c_scale)
+
+    plot_p_c('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
+    plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
