@@ -299,8 +299,81 @@ def plot_p_c(directory_name, output_filename, scale=None):
     plt.close()
 
 
+def plot_f_l(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Create a new column for total forks
+    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
+    find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
+
+    plt.figure(figsize=(12, 8))
+
+    # Unique cache depths to iterate over and assign a color for each one
+    cache_depths = sorted(find_df['cache'].unique())
+    color_map = plt.get_cmap('tab10', len(cache_depths))
+
+    for cache in cache_depths:
+        subset = find_df[find_df['cache'] == cache]
+        subset = subset.sort_values(by='length')
+        plt.plot(subset['length'], subset['avg_forks_per_query'], '-o', label=f"Cache Depth: {cache}", color=color_map(cache_depths.index(cache)))
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    plt.xlabel('Query Length')
+    plt.ylabel('Average Number of Forks')
+    plt.title(f"Average Number of Forks vs Query Length from {os.path.basename(directory_name)}")
+    plt.legend(loc='upper left')
+    plt.grid(True)
+    plt.savefig(output_filename, format='png')
+    plt.close()
 
 
+def plot_f_l0(directories, output_filename, scale=None):
+    # Check if all directories exist
+    for directory_name in directories:
+        if not os.path.exists(directory_name):
+            print(f"Directory {directory_name} not found!")
+            return
+
+    plt.figure(figsize=(12, 8))
+
+    color_map = plt.get_cmap('tab10', len(directories))
+
+    for idx, directory_name in enumerate(directories):
+        # Assuming the first return value from your function is the DataFrame
+        find_df, _, _, _ = parse_directory_logs(directory_name)
+
+        # Create a new column for total forks
+        find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
+        find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
+
+        # Filter the DataFrame for cache depth 0
+        subset = find_df[find_df['cache'] == 0]
+        subset = subset.sort_values(by='length')
+
+        plt.plot(subset['length'], subset['avg_forks_per_query'], '-o', label=f"{os.path.basename(directory_name)}", color=color_map(idx))
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    plt.xlabel('Query Length')
+    plt.ylabel('Average Number of Forks')
+    plt.title(f"Average Number of Forks vs Query Length")
+    plt.legend(loc='lower right')
+    plt.grid(True)
+    plt.savefig(output_filename, format='png')
+    plt.close()
 
 if __name__ == '__main__':
     #plot_c_l('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_c_l.png')
@@ -319,3 +392,13 @@ if __name__ == '__main__':
 
     plot_p_c('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
     plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
+
+    plot_f_l('../log/gencode.v40.fmdg_c_l2', '../plot/gencode.v40.fmdg_f_l.png')
+    plot_f_l('../log/GRCh38-20-0.10b.fmdg_c_l2', '../plot/GRCh38-20-0.10b.fmdg_f_l.png')
+
+    plot_f_l('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_f_l_hard.png')
+    plot_f_l('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_f_l_hard.png')
+
+    plot_f_l0(['../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../log/gencode.v40.fmdg_c_l2_hard'], '../plot/forks_v_qlen_hard.png')
+
+    plot_f_l0(['../log/GRCh38-20-0.10b.fmdg_c_l2', '../log/gencode.v40.fmdg_c_l2'], '../plot/forks_v_qlen.png')

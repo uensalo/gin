@@ -61,9 +61,16 @@ mkdir -p $LOG_DIR
 # Pre-generate the query files (if they don't exist)
 for LENGTH in "${LENGTHS[@]}"
 do
+  if [[ -z "$HARD_SUFFIX" ]]; then
+    CURRENT_QUERY_SCRIPT="generate_queries.pl"
+  elif [[ "$LENGTH" -le 512 ]]; then
+    CURRENT_QUERY_SCRIPT="generate_queries_hard.pl"
+  else
+    CURRENT_QUERY_SCRIPT="generate_queries_hard_long.pl"
+  fi
   QUERY_FILE="$QUERY_DIR/${BASENAME}${HARD_SUFFIX}_query_length_${LENGTH}.fmdq"
   if [[ ! -f $QUERY_FILE ]]; then
-    ./$QUERY_SCRIPT -i "$INPUT_FILE" -q "$LENGTH" -N $NO_QUERIES -s $SEED > "$QUERY_FILE" &
+    ./$CURRENT_QUERY_SCRIPT -i "$INPUT_FILE" -q "$LENGTH" -N $NO_QUERIES -s $SEED > "$QUERY_FILE" &
   fi
 done
 wait
@@ -140,15 +147,12 @@ do
     do
       for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
       do
-        # Handle the cache flag if CACHE_DEPTH is 0
         CACHE_FLAG=""
         CACHE_FILE=""
         if [[ "$CACHE_DEPTH" -ne "0" ]]; then
           CACHE_FLAG="-C"
           CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.fmdc"
         fi
-
-        # Iterate over the rest of the parameters
         for FORK in "${MAX_FORKS[@]}"
         do
           for MATCH in "${MAX_MATCHES[@]}"
@@ -158,7 +162,7 @@ do
               for LENGTH in "${LENGTHS[@]}"
               do
                 LOG_FILE="$LOG_DIR/find_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}_cache_${CACHE_DEPTH}_fork_${FORK}_match_${MATCH}_threads_${THREAD}_length_${LENGTH}${DECODE_SUFFIX}.txt"
-                # Run the find command with the query set, redirecting stderr to the log file
+                # Run the find command with the queries, redirecting stderr to the log file
                 QUERY_FILE="$QUERY_DIR/${BASENAME}${HARD_SUFFIX}_query_length_${LENGTH}.fmdq"
                 INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.fmdi"
                 $FMD_DIR/fmd query find -r "$INDEX_FILE" $CACHE_FLAG "$CACHE_FILE" -i "$QUERY_FILE" -j "$THREAD" -b $BATCH_SIZE -m "$FORK" -M "$MATCH" $DECODE_FLAG -v 2>> "$LOG_FILE"
