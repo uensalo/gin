@@ -165,7 +165,7 @@ do
                 # Run the find command with the queries, redirecting stderr to the log file
                 QUERY_FILE="$QUERY_DIR/${BASENAME}${HARD_SUFFIX}_query_length_${LENGTH}.fmdq"
                 INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.fmdi"
-                $FMD_DIR/fmd query find -r "$INDEX_FILE" $CACHE_FLAG "$CACHE_FILE" -i "$QUERY_FILE" -j "$THREAD" -b $BATCH_SIZE -m "$FORK" -M "$MATCH" $DECODE_FLAG -v 2>> "$LOG_FILE"
+                $FMD_DIR/fmd query find -r "$INDEX_FILE" $CACHE_FLAG "$CACHE_FILE" -i "$QUERY_FILE" -j "$THREAD" -b $BATCH_SIZE -m "$FORK" -M "$MATCH" $DECODE_FLAG -o "/dev/null" -v 2>> "$LOG_FILE"
               done
             done
           done
