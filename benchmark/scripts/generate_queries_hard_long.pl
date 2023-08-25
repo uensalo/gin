@@ -102,37 +102,39 @@ for my $vertex (0..$#labels) {
     }
 }
 
-# Reset the temporary file's position to the beginning for reading
-seek $tmp_fh, 0, 0;
+close $tmp_fh;
 
 # Read back from the temporary file, sort by weight in ascending order, and extract extended paths
 open my $sorted_fh, "-|", "sort -t';' -k3,3n $tmp_filename" or die "Failed to sort: $!";
 my %unique_strings;
 
-while (<$sorted_fh>) {
+PATH_LOOP: while (<$sorted_fh>) {
     my ($offsets, $vertices, $weight) = split /;/;
     my ($start, $end) = split /,/, $offsets;
     my @vertex_ids = split /:/, $vertices;
 
-    # Construct the query string from the path
-    my $query_string = substr($labels[$vertex_ids[0]], $start, $end-$start+1);
-    for my $i (1..$#vertex_ids) {
-        $query_string .= $labels[$vertex_ids[$i]];
-    }
+    for my $offset ($start..$end) {
+        # Construct the query string from the path
+        my $query_string = substr($labels[$vertex_ids[0]], $offset);
+        for my $i (1..$#vertex_ids) {
+            $query_string .= $labels[$vertex_ids[$i]];
+        }
 
-    # Extend the query string until it reaches the required length
-    my $current_vertex = $vertex_ids[-1];
-    while (length($query_string) < $query_length) {
-        my @sorted_neighbors = sort { length($labels[$a]) <=> length($labels[$b]) } @{$graph[$current_vertex]};
-        my $selected_neighbor = shift @sorted_neighbors;
-        $query_string .= $labels[$selected_neighbor];
-        $current_vertex = $selected_neighbor;
-    }
-    $query_string = substr($query_string, 0, $query_length);
-    $unique_strings{$query_string} = 1;
+        # Extend the query string until it reaches the required length
+        my $current_vertex = $vertex_ids[-1];
+        while (length($query_string) < $query_length) {
+            my @sorted_neighbors = sort { length($labels[$a]) <=> length($labels[$b]) } @{$graph[$current_vertex]};
+            my $selected_neighbor = shift @sorted_neighbors;
+            $query_string .= $labels[$selected_neighbor];
+            $current_vertex = $selected_neighbor;
+        }
+        $query_string = substr($query_string, 0, $query_length);
+        $unique_strings{$query_string} = 1;
 
-    last if scalar(keys %unique_strings) >= $num_queries;
+        last PATH_LOOP if scalar(keys %unique_strings) >= $num_queries;
+    }
 }
+
 
 foreach my $string (keys %unique_strings) {
     print "$string\n";
