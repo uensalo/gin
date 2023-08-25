@@ -42,28 +42,41 @@
 # -h
 
 # decoding speed benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_decode_hard" \
--c "10" \
--r "16 32 64" \
--m "-1" \
--M "65536" \
--j "1" \
--l "10 30 100 300 500" \
--t "3600" \
--p "4" \
--d \
--h
+# ./fmd_run.sh ../input/gencode.v40.fmdg \
+# -L "gencode.v40.fmdg_decode_hard" \
+# -c "10" \
+# -r "16 32 64" \
+# -m "-1" \
+# -M "65536" \
+# -j "1" \
+# -l "10 30 100 300 500" \
+# -t "3600" \
+# -p "4" \
+# -d \
+# -h
 
 # extensive cache benchmark
+#./fmd_run.sh ../input/gencode.v40.fmdg \
+# -L "gencode.v40.fmdg_c_l2_hard" \
+# -c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
+# -r "16" \
+# -m "-1" \
+# -M "-1" \
+# -j "1" \
+# -l "2 4 8 16 32 64 128 256 512" \
+# -t "3600" \
+# -p "4" \
+# -h
+
+# long cache benchmark
 ./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_c_l2_hard" \
 -c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
--r "16" \
+r "16" \
 -m "-1" \
 -M "-1" \
 -j "1" \
--l "2 4 8 16 32 64 128 256 512" \
+-l "1024 2048" \
 -t "3600" \
 -p "4" \
 -h
