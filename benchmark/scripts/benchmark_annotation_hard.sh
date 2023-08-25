@@ -72,7 +72,7 @@
 ./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_c_l2_hard" \
 -c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
-r "16" \
+-r "16" \
 -m "-1" \
 -M "-1" \
 -j "1" \
