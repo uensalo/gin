@@ -138,110 +138,7 @@ def parse_directory_logs(dir_path):
     return find_df, index_df, cache_df, perm_df
 
 
-def plot_c_l(directory_name, output_path):
-    # Step 1: Parsing the logs to get the find_df
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # We're assuming 'qps' is already in the find_df, if not we'll calculate it.
-    if 'qps' not in find_df.columns:
-        find_df['qps'] = find_df['total_queries_processed'] / find_df['total_querying_time']
-
-    # Step 2: Grouping by cache size
-    grouped = find_df.groupby('cache')
-
-    # Step 3: Plotting
-    plt.figure(figsize=(10, 6))
-    colors = plt.cm.jet(np.linspace(0, 1, len(grouped)))
-
-    for (cache, group), color in zip(grouped, colors):
-        group = group.sort_values(by='length')
-        plt.loglog(group['length'], group['qps'], label=f'Cache Size: {cache}', color=color)
-
-    plt.xlabel('Query Length (log scale)')
-    plt.ylabel('Queries per Second (log scale)')
-    directory_basename = os.path.basename(directory_name)
-    plt.title(f'Effect of cache size on query speed for {directory_basename}')
-    plt.legend()
-    plt.grid(True, which="both", ls="--", linewidth=0.5)
-    plt.savefig(output_path, format='png', dpi=300)
-    plt.close()
-
-
-def plot_m_l(directory_name, output_filename):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Parse logs in the directory
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # Start plotting
-    plt.figure(figsize=(10, 6))
-
-    # Group by query length
-    grouped = find_df.groupby('length')
-
-    for name, group in grouped:
-        # Find the total matches for m=-1
-        total_matches = group[group['max_forks_tracked'] == -1]['number_of_matches'].values[0]
-        # Sort the group by max_forks_tracked and filter out m=-1
-        sorted_group = group[group['max_forks_tracked'] != -1].sort_values(by='max_forks_tracked')
-        # Calculate the percentage of matches
-        sorted_group['percentage_matches'] = 100 * sorted_group['number_of_matches'] / total_matches
-        plt.plot(sorted_group['max_forks_tracked'], sorted_group['percentage_matches'], label=f'Length {name}', marker='o')
-
-    plt.xscale('log', base=2)
-    plt.xlabel('Max Forks Tracked (m)')
-    plt.ylabel('Percentage of Matches Returned')
-    plt.title(f"Percentage of Matches vs. Max Forks Tracked for {os.path.basename(directory_name)}")
-    plt.legend()
-
-    # Handle tick formatting
-    ax = plt.gca()
-    ax.get_xaxis().set_major_formatter(plt.ScalarFormatter())
-    ax.get_yaxis().set_major_formatter(plt.ScalarFormatter())
-    ax.xaxis.set_major_locator(plt.FixedLocator(sorted_group['max_forks_tracked'].unique()))
-    ax.yaxis.set_major_locator(plt.MaxNLocator(integer=True))
-
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
-    plt.close()
-
-
-def plot_p_f(directory_name, output_filename):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # Create a new column for total forks
-    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
-
-    plt.figure(figsize=(10, 6))
-
-    # For each unique cache size
-    for cache in sorted(find_df['cache'].unique()):
-        subset = find_df[find_df['cache'] == cache]
-
-        # Sort this subset by query length
-        subset = subset.sort_values(by='length')
-
-        plt.plot(subset['length'], subset['total_forks'], label=f'Cache Size: {cache}', marker='o')
-
-    plt.xlabel('Query Length')
-    plt.ylabel('Total Forks')
-    plt.title(f"Query Length vs Total Forks for {os.path.basename(directory_name)}")
-    plt.legend()
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
-    plt.close()
-
-
-def plot_p_c(directory_name, output_filename, scale=None):
+def plot_principal(directory_name, output_filename, scale=None):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -266,7 +163,7 @@ def plot_p_c(directory_name, output_filename, scale=None):
     for qlength in unique_lengths:
         subset = find_df[find_df['length'] == qlength]
         subset = subset.sort_values(by='cache')
-        plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], '-o', color=length_cmap(unique_lengths.index(qlength)), label=f'Query Length: {qlength}')
+        plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], '-o', color=length_cmap(unique_lengths.index(qlength)), label=f'{qlength}')
 
     # Connect data points of the same cache size with dashed lines
     caches = sorted(find_df['cache'].unique())
@@ -286,10 +183,10 @@ def plot_p_c(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     # Create the legends with explicit positioning
-    cache_handles = [plt.Line2D([0], [0], color=cache_cmap(i), linestyle='--', label=f'Cache Size: {cache}') for i, cache in enumerate(caches)]
+    cache_handles = [plt.Line2D([0], [0], color=cache_cmap(i), linestyle='--', label=f'{cache}') for i, cache in enumerate(caches)]
     legend1 = plt.legend(handles=cache_handles, loc='upper right', title="Cache Size")
     plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
-    legend2 = plt.legend(loc='upper right', bbox_to_anchor=(0.83, 1), title="Query Length")
+    legend2 = plt.legend(loc='upper right', bbox_to_anchor=(0.9025, 1), title="Query Length")
 
     plt.xlabel('Average Forks per Query (log scale)')
     plt.ylabel('Queries per Second (log scale)')
@@ -299,7 +196,7 @@ def plot_p_c(directory_name, output_filename, scale=None):
     plt.close()
 
 
-def plot_f_l(directory_name, output_filename, scale=None):
+def plot_partial_forks(directory_name, output_filename, scale=None):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -307,10 +204,7 @@ def plot_f_l(directory_name, output_filename, scale=None):
 
     # Assuming the first return value from your function is the DataFrame
     find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # Create a new column for total forks
-    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
-    find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
+    find_df['avg_partial_forks_per_query'] = find_df['number_of_partial_forks'] / find_df['total_queries_processed']
 
     plt.figure(figsize=(12, 8))
 
@@ -321,7 +215,7 @@ def plot_f_l(directory_name, output_filename, scale=None):
     for cache in cache_depths:
         subset = find_df[find_df['cache'] == cache]
         subset = subset.sort_values(by='length')
-        plt.plot(subset['length'], subset['avg_forks_per_query'], '-o', label=f"Cache Depth: {cache}", color=color_map(cache_depths.index(cache)))
+        plt.plot(subset['length'], subset['avg_partial_forks_per_query'], '-o', label=f"{cache}", color=color_map(cache_depths.index(cache)))
 
     # If a scale is provided, set the x and y limits
     if scale:
@@ -337,68 +231,111 @@ def plot_f_l(directory_name, output_filename, scale=None):
     plt.close()
 
 
-def plot_f_l0(directories, output_filename, scale=None):
-    # Check if all directories exist
-    for directory_name in directories:
-        if not os.path.exists(directory_name):
-            print(f"Directory {directory_name} not found!")
-            return
+def plot_threads(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Create a new column for total forks
+    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
+
+    # Compute average forks per query
+    find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
 
     plt.figure(figsize=(12, 8))
 
-    color_map = plt.get_cmap('tab10', len(directories))
+    # Create a color map for the different query lengths
+    #unique_lengths = sorted(find_df['length'].unique())
+    #length_cmap = plt.get_cmap('tab10', len(unique_lengths))
 
-    for idx, directory_name in enumerate(directories):
-        # Assuming the first return value from your function is the DataFrame
-        find_df, _, _, _ = parse_directory_logs(directory_name)
+    unique_threads = sorted(find_df['threads'].unique())
+    threads_cmap = plt.get_cmap('tab10', len(unique_threads))
 
-        # Create a new column for total forks
-        find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
-        find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
-
-        # Filter the DataFrame for cache depth 0
-        subset = find_df[find_df['cache'] == 0]
+    # Plot the data grouped by query length with regular lines
+    for threads in unique_threads:
+        subset = find_df[find_df['threads'] == threads]
         subset = subset.sort_values(by='length')
+        plt.loglog(subset['length'], subset['queries_per_second'], '-o', color=threads_cmap(unique_threads.index(threads)), label=f'{threads}')
 
-        plt.plot(subset['length'], subset['avg_forks_per_query'], '-o', label=f"{os.path.basename(directory_name)}", color=color_map(idx))
+    # Set the x and y scales to be logarithmic
+    plt.xscale('log')
+    plt.yscale('log')
 
     # If a scale is provided, set the x and y limits
     if scale:
         plt.xlim(scale[0])
         plt.ylim(scale[1])
 
-    plt.xlabel('Query Length')
-    plt.ylabel('Average Number of Forks')
-    plt.title(f"Average Number of Forks vs Query Length")
-    plt.legend(loc='lower right')
-    plt.grid(True)
+    plt.legend(loc='upper right', title='No threads')
+    plt.xlabel('Query Length (log scale)')
+    plt.ylabel('Queries per Second (log scale)')
+    plt.title(f"Query Length vs. Queries per Second {os.path.basename(directory_name)} (log-log scale)")
+    plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
 
+
+def plot_threads_rate(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different thread values
+    unique_threads = sorted(find_df['threads'].unique())
+    thread_cmap = plt.get_cmap('tab10', len(unique_threads))
+
+    # Create a marker list for different sampling rates
+    unique_rates = sorted(find_df['sampling_rate'].unique())
+    markers = ['o', 's', 'D', '^', 'v', '<', '>', 'P', 'X']
+
+    # Plot the data grouped by thread values and sampling rates
+    for thread in unique_threads:
+        for rate in unique_rates:
+            subset = find_df[(find_df['threads'] == thread) & (find_df['sampling_rate'] == rate)]
+            subset = subset.sort_values(by='length')
+            plt.loglog(subset['length'], subset['queries_per_second'], '-o', color=thread_cmap(unique_threads.index(thread)), marker=markers[unique_rates.index(rate)], label=f'Threads: {thread}, Sampling Rate: {rate}')
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legend
+    plt.legend(title="Threads and Sampling Rate")
+
+    plt.xlabel('Query Length')
+    plt.ylabel('Queries per Second')
+    plt.title(f"Query Length vs Queries per Second for {os.path.basename(directory_name)}")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
+# Example usage:
+# plot_threads_rate('path/to/directory', 'output.png')
+
+
+
 if __name__ == '__main__':
-    #plot_c_l('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_c_l.png')
-    #plot_c_l('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_c_l.png')
-
-    #plot_m_l('../log/gencode.v40.fmdg_m_l', '../plot/gencode.v40.fmdg_m_l.png')
-    #plot_m_l('../log/GRCh38-20-0.10b.fmdg_m_l', '../plot/GRCh38-20-0.10b.fmdg_m_l.png')
-
-    #plot_p_f('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_f.png')
-    #plot_p_f('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_f.png')
-
     p_c_scale = ((5,2e5),(5,5e5))
 
-    plot_p_c('../log/gencode.v40.fmdg_c_l', '../plot/gencode.v40.fmdg_p_c.png', p_c_scale)
-    plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l', '../plot/GRCh38-20-0.10b.fmdg_p_c.png', p_c_scale)
+    plot_principal('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
+    plot_principal('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
 
-    plot_p_c('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
-    plot_p_c('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
+    plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
+    plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
 
-    plot_f_l('../log/gencode.v40.fmdg_c_l2', '../plot/gencode.v40.fmdg_f_l.png')
-    plot_f_l('../log/GRCh38-20-0.10b.fmdg_c_l2', '../plot/GRCh38-20-0.10b.fmdg_f_l.png')
+    plot_threads('../log/gencode.v40.fmdg_j_l2_hard', '../plot/gencode.v40.fmdg_threads_hard.png')
+    plot_threads('../log/GRCh38-20-0.10b.fmdg_j_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_hard.png')
 
-    plot_f_l('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_f_l_hard.png')
-    plot_f_l('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_f_l_hard.png')
-
-    plot_f_l0(['../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../log/gencode.v40.fmdg_c_l2_hard'], '../plot/forks_v_qlen_hard.png')
-
-    plot_f_l0(['../log/GRCh38-20-0.10b.fmdg_c_l2', '../log/gencode.v40.fmdg_c_l2'], '../plot/forks_v_qlen.png')
+    plot_threads_rate('../log/gencode.v40.fmdg_j_l3_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png')
+    plot_threads_rate('../log/GRCh38-20-0.10b.fmdg_j_l3_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png')
