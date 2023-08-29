@@ -76,19 +76,20 @@ done
 wait
 
 # Compute all the permutations in parallel (2 at a time)
-for PERM_TIME_IDX in $(seq 0 1 $((${#PERMUTATION_TIMES[@]} - 1)))
+for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
 do
-  for IDX in $(seq "$PERM_TIME_IDX" $(($PERM_TIME_IDX + 1)))
+  for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
   do
-    PERMUTATION_TIME=${PERMUTATION_TIMES[$IDX]}
-    PERMUTATION_DEPTH=${PERMUTATION_DEPTHS[$IDX]}
     PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.fmdp"
     PERM_LOG_FILE="$LOG_DIR/perm_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.txt"
-    if [[ ! -f $PERMUTATION_FILE && $IDX -lt ${#PERMUTATION_TIMES[@]} ]]; then
+    if [[ ! -f $PERMUTATION_FILE ]]; then
       $FMD_DIR/fmd permutation -i "$INPUT_FILE" -t "$PERMUTATION_TIME" -u "$PERMUTATION_TIME" -e $TEMPERATURE -c $COOLING -d "$PERMUTATION_DEPTH" -o "$PERMUTATION_FILE" -j $PERMUTATION_NUM_THREADS -v 2>> "$PERM_LOG_FILE" &
     fi
+    # Wait after starting two processes
+    if ((++count % 2 == 0)); then
+      wait
+    fi
   done
-  wait
 done
 
 # Compute all the indexes in parallel over sample rates (4 at a time)
