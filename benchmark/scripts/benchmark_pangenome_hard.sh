@@ -111,7 +111,7 @@
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg  \
 -L "GRCh38-20-0.10b.fmdg_j_p_hard" \
 -c "12" \
--r "16" \
+-r "64" \
 -m "-1" \
 -M "-1" \
 -j "1" \
