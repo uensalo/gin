@@ -85,10 +85,10 @@ do
     if [[ ! -f $PERMUTATION_FILE ]]; then
       $FMD_DIR/fmd permutation -i "$INPUT_FILE" -t "$PERMUTATION_TIME" -u "$PERMUTATION_TIME" -e $TEMPERATURE -c $COOLING -d "$PERMUTATION_DEPTH" -o "$PERMUTATION_FILE" -j $PERMUTATION_NUM_THREADS -v 2>> "$PERM_LOG_FILE" &
     fi
-    # Wait after starting two processes
-    if ((++count % 2 == 0)); then
-      wait
-    fi
+    # Make sure only two tasks are running at the same time
+    while [ $(jobs | wc -l) -ge 2 ]; do
+      sleep 1
+    done
   done
 done
 
