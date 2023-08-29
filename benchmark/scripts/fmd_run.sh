@@ -75,10 +75,10 @@ do
 done
 wait
 
-# Compute all the permutations in parallel (4 at a time)
-for PERM_TIME_IDX in $(seq 0 3 $((${#PERMUTATION_TIMES[@]} - 1)))
+# Compute all the permutations in parallel (2 at a time)
+for PERM_TIME_IDX in $(seq 0 1 $((${#PERMUTATION_TIMES[@]} - 1)))
 do
-  for IDX in $(seq "$PERM_TIME_IDX" $(($PERM_TIME_IDX + 3)))
+  for IDX in $(seq "$PERM_TIME_IDX" $(($PERM_TIME_IDX + 1)))
   do
     PERMUTATION_TIME=${PERMUTATION_TIMES[$IDX]}
     PERMUTATION_DEPTH=${PERMUTATION_DEPTHS[$IDX]}
