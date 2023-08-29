@@ -81,28 +81,41 @@
 #-h
 
 # decoding speed benchmark
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_decode2_hard" \
--c "12" \
--r "16 32 64" \
--m "-1" \
--M "65536" \
--j "1" \
--l "16 32 64 128 256 512 1024 2048 4096" \
--t "3600" \
--p "4" \
--d \
--h
+#./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
+#-L "GRCh38-20-0.10b.fmdg_decode2_hard" \
+#-c "12" \
+#-r "16 32 64" \
+#-m "-1" \
+#-M "65536" \
+#-j "1" \
+#-l "16 32 64 128 256 512 1024 2048 4096" \
+#-t "3600" \
+#-p "4" \
+#-d \
+#-h
 
 # threading benchmark
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_j_l2_hard" \
+#./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
+#-L "GRCh38-20-0.10b.fmdg_j_l2_hard" \
+#-c "12" \
+#-r "16" \
+#-m "-1" \
+#-M "-1" \
+#-j "1 2 4 8 16 32" \
+#-l "16 32 64 128 256 512 1024 2048 4096" \
+#-t "3600" \
+#-p "4" \
+#-h
+
+# permutation benchmark
+./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg  \
+-L "GRCh38-20-0.10b.fmdg_j_p_hard" \
 -c "12" \
 -r "16" \
 -m "-1" \
 -M "-1" \
--j "1 2 4 8 16 32" \
+-j "1" \
 -l "16 32 64 128 256 512 1024 2048 4096" \
--t "3600" \
+-t "225 450 900 1800 3600" \
 -p "4" \
 -h

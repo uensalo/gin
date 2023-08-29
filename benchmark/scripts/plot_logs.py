@@ -190,7 +190,7 @@ def plot_principal(directory_name, output_filename, scale=None):
 
     plt.xlabel('Average Forks per Query (log scale)')
     plt.ylabel('Queries per Second (log scale)')
-    plt.title(f"Average Forks per Query vs Queries per Second for {os.path.basename(directory_name)} (log-log scale)")
+    plt.title(f"Average Forks per Query vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
@@ -223,58 +223,10 @@ def plot_partial_forks(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     plt.xlabel('Query Length')
-    plt.ylabel('Average Number of Forks')
-    plt.title(f"Average Number of Forks vs Query Length from {os.path.basename(directory_name)}")
+    plt.ylabel('Average Number of Partially Matching Forks')
+    plt.title(f"Average Number of Partially Matching Forks vs Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}")
     plt.legend(loc='upper left')
     plt.grid(True)
-    plt.savefig(output_filename, format='png')
-    plt.close()
-
-
-def plot_threads(directory_name, output_filename, scale=None):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # Create a new column for total forks
-    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
-
-    # Compute average forks per query
-    find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
-
-    plt.figure(figsize=(12, 8))
-
-    # Create a color map for the different query lengths
-    #unique_lengths = sorted(find_df['length'].unique())
-    #length_cmap = plt.get_cmap('tab10', len(unique_lengths))
-
-    unique_threads = sorted(find_df['threads'].unique())
-    threads_cmap = plt.get_cmap('tab10', len(unique_threads))
-
-    # Plot the data grouped by query length with regular lines
-    for threads in unique_threads:
-        subset = find_df[find_df['threads'] == threads]
-        subset = subset.sort_values(by='length')
-        plt.loglog(subset['length'], subset['queries_per_second'], '-o', color=threads_cmap(unique_threads.index(threads)), label=f'{threads}')
-
-    # Set the x and y scales to be logarithmic
-    plt.xscale('log')
-    plt.yscale('log')
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    plt.legend(loc='upper right', title='No threads')
-    plt.xlabel('Query Length (log scale)')
-    plt.ylabel('Queries per Second (log scale)')
-    plt.title(f"Query Length vs. Queries per Second {os.path.basename(directory_name)} (log-log scale)")
-    plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
 
@@ -290,43 +242,53 @@ def plot_threads_rate(directory_name, output_filename, scale=None):
 
     plt.figure(figsize=(12, 8))
 
+    # Create a list of line styles
+    line_styles = ['-', '-.', ':', '--']
+
     # Create a color map for the different thread values
     unique_threads = sorted(find_df['threads'].unique())
     thread_cmap = plt.get_cmap('tab10', len(unique_threads))
 
-    # Create a marker list for different sampling rates
-    unique_rates = sorted(find_df['sampling_rate'].unique())
-    markers = ['o', 's', 'D', '^', 'v', '<', '>', 'P', 'X']
+    # Create a marker list for the different sampling rates
+    unique_sampling_rates = sorted(find_df['sampling_rate'].unique())
+    markers = ['o', 's', 'D', 'X', '^']
 
     # Plot the data grouped by thread values and sampling rates
-    for thread in unique_threads:
-        for rate in unique_rates:
-            subset = find_df[(find_df['threads'] == thread) & (find_df['sampling_rate'] == rate)]
+    for i, thread in enumerate(unique_threads):
+        for j, sampling_rate in enumerate(unique_sampling_rates):
+            subset = find_df[(find_df['threads'] == thread) & (find_df['sampling_rate'] == sampling_rate)]
             subset = subset.sort_values(by='length')
-            plt.loglog(subset['length'], subset['queries_per_second'], '-o', color=thread_cmap(unique_threads.index(thread)), marker=markers[unique_rates.index(rate)], label=f'Threads: {thread}, Sampling Rate: {rate}')
+            plt.loglog(subset['length'], subset['queries_per_second'],
+                       linestyle=line_styles[j % len(line_styles)],
+                       marker=markers[i % len(markers)],
+                       markersize=4,
+                       color=thread_cmap(i / len(unique_threads)),
+                       label=f'Threads: {thread}, Sampling Rate: {sampling_rate}')
 
     # If a scale is provided, set the x and y limits
     if scale:
         plt.xlim(scale[0])
         plt.ylim(scale[1])
 
-    # Create the legend
-    plt.legend(title="Threads and Sampling Rate")
+    # Create the legends with explicit positioning
+    thread_handles = [plt.Line2D([0], [0], color=thread_cmap(i / len(unique_threads)), marker=markers[i % len(markers)], linestyle='None', label=f'{thread}') for i, thread in enumerate(unique_threads)]
+    legend1 = plt.legend(handles=thread_handles, loc='upper right', title="Threads")
+    plt.gca().add_artist(legend1)
+    sampling_rate_handles = [plt.Line2D([0], [0], color='black', linestyle=line_styles[i % len(line_styles)], label=f'{sampling_rate}') for i, sampling_rate in enumerate(unique_sampling_rates)]
+    legend2 = plt.legend(handles=sampling_rate_handles, loc='upper right', bbox_to_anchor=(1, 0.75), title="Sampling Rate")
 
     plt.xlabel('Query Length')
     plt.ylabel('Queries per Second')
-    plt.title(f"Query Length vs Queries per Second for {os.path.basename(directory_name)}")
+    plt.title(f"Query Length vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
-
-# Example usage:
-# plot_threads_rate('path/to/directory', 'output.png')
 
 
 
 if __name__ == '__main__':
     p_c_scale = ((5,2e5),(5,5e5))
+    t_r_scale = ((1e1,8192),(1e2,1e6))
 
     plot_principal('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
     plot_principal('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
@@ -334,8 +296,5 @@ if __name__ == '__main__':
     plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
     plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
 
-    plot_threads('../log/gencode.v40.fmdg_j_l2_hard', '../plot/gencode.v40.fmdg_threads_hard.png')
-    plot_threads('../log/GRCh38-20-0.10b.fmdg_j_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_hard.png')
-
-    plot_threads_rate('../log/gencode.v40.fmdg_j_l3_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png')
-    plot_threads_rate('../log/GRCh38-20-0.10b.fmdg_j_l3_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png')
+    plot_threads_rate('../log/gencode.v40.fmdg_j_l3_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
+    plot_threads_rate('../log/GRCh38-20-0.10b.fmdg_j_l3_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
