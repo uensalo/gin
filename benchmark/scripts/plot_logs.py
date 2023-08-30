@@ -20,10 +20,17 @@ def parse_file(filepath):
 
     # Additional type-specific fields
     if basename.startswith('find_'):
-        find_pattern = re.compile(
-            r'sampling_rate_(?P<sampling_rate>\d+)_cache_(?P<cache>\d+)_fork_(?P<fork>-?\d+)_match_(?P<match>-?\d+)_threads_(?P<threads>\d+)_length_(?P<length>\d+)\.txt')
-        find_fields = find_pattern.search(basename)
-        data.update(find_fields.groupdict())
+        if 'decode' not in basename:
+            find_pattern = re.compile(
+                r'sampling_rate_(?P<sampling_rate>\d+)_cache_(?P<cache>\d+)_fork_(?P<fork>-?\d+)_match_(?P<match>-?\d+)_threads_(?P<threads>\d+)_length_(?P<length>\d+)\.txt')
+            find_fields = find_pattern.search(basename)
+            data.update(find_fields.groupdict())
+        else:
+            find_pattern = re.compile(
+                r'sampling_rate_(?P<sampling_rate>\d+)_cache_(?P<cache>\d+)_fork_(?P<fork>-?\d+)_match_(?P<match>-?\d+)_threads_(?P<threads>\d+)_length_(?P<length>\d+)_decode\.txt')
+            find_fields = find_pattern.search(basename)
+            data.update(find_fields.groupdict())
+
 
     elif basename.startswith('perm_'):
         perm_pattern = re.compile(r'threads_(?P<threads>\d+)\.txt')
@@ -77,6 +84,14 @@ def parse_file(filepath):
                     data['cache_parse_time'] = float(re.search(r'Cache parse time in seconds: (\d+\.\d+)', line).group(1))
                 if "Cache: Cache size in memory (MB)" in line:
                     data['cache_size_memory_MB'] = float(re.search(r'Cache size in memory \(MB\): (\d+\.\d+)', line).group(1))
+                if "Decode: Total matches decoded:" in line:
+                    data['total_matches_decoded'] = int(re.search(r'Total matches decoded: (\d+)', line).group(1))
+                if "Decode: Total decoding time (s):" in line:
+                    data['total_decoding_time'] = float(re.search(r'Total decoding time \(s\): (\d+\.\d+)', line).group(1))
+                if "Decode: Matches decoded per second:" in line:
+                    data['matches_decoded_per_second'] = float(re.search(r'Matches decoded per second: (\d+\.\d+)', line).group(1))
+                if "Decode: Time per match decode (s):" in line:
+                    data['time_per_match_decode'] = float(re.search(r'Time per match decode \(s\): (\d+\.\d+)', line).group(1))
                 if "Find: Total queries processed" in line:
                     data['total_queries_processed'] = int(re.search(r'Total queries processed: (\d+)', line).group(1))
                 if "Find: Total querying time" in line:
@@ -188,9 +203,9 @@ def plot_principal(directory_name, output_filename, scale=None):
     plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
     legend2 = plt.legend(loc='upper right', bbox_to_anchor=(0.9025, 1), title="Query Length")
 
-    plt.xlabel('Average Forks per Query (log scale)')
-    plt.ylabel('Queries per Second (log scale)')
-    plt.title(f"Average Forks per Query vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.xlabel('Average number of forks per query')
+    plt.ylabel('Queries matched per second')
+    plt.title(f"Average number of forks per query vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
@@ -222,9 +237,9 @@ def plot_partial_forks(directory_name, output_filename, scale=None):
         plt.xlim(scale[0])
         plt.ylim(scale[1])
 
-    plt.xlabel('Query Length')
-    plt.ylabel('Average Number of Partially Matching Forks')
-    plt.title(f"Average Number of Partially Matching Forks vs Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}")
+    plt.xlabel('Query length')
+    plt.ylabel('Average number of partially matching forks')
+    plt.title(f"Average number of partially matching forks vs query length for {os.path.basename(directory_name).split('.fmdg')[0]}")
     plt.legend(loc='upper left')
     plt.grid(True)
     plt.savefig(output_filename, format='png')
@@ -263,7 +278,7 @@ def plot_threads_rate(directory_name, output_filename, scale=None):
                        marker=markers[i % len(markers)],
                        markersize=4,
                        color=thread_cmap(i / len(unique_threads)),
-                       label=f'Threads: {thread}, Sampling Rate: {sampling_rate}')
+                       label=f'Threads: {thread}, Sampling Period: {sampling_rate}')
 
     # If a scale is provided, set the x and y limits
     if scale:
@@ -275,20 +290,118 @@ def plot_threads_rate(directory_name, output_filename, scale=None):
     legend1 = plt.legend(handles=thread_handles, loc='upper right', title="Threads")
     plt.gca().add_artist(legend1)
     sampling_rate_handles = [plt.Line2D([0], [0], color='black', linestyle=line_styles[i % len(line_styles)], label=f'{sampling_rate}') for i, sampling_rate in enumerate(unique_sampling_rates)]
-    legend2 = plt.legend(handles=sampling_rate_handles, loc='upper right', bbox_to_anchor=(1, 0.75), title="Sampling Rate")
+    legend2 = plt.legend(handles=sampling_rate_handles, loc='upper right', bbox_to_anchor=(0.9025, 1), title="Sampling Period")
 
-    plt.xlabel('Query Length')
-    plt.ylabel('Queries per Second')
-    plt.title(f"Query Length vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.xlabel('Query length')
+    plt.ylabel('Queries matched per second')
+    plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
 
 
+def plot_threads_rate2(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a list of line styles
+    line_styles = ['-', '-.', ':', '--']
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    # Create a marker list for the different sampling rates
+    unique_sampling_rates = sorted(find_df['sampling_rate'].unique())
+    markers = ['o', 's', 'D', 'X', '^']
+
+    # Plot the data grouped by query length and sampling rates
+    for i, length in enumerate(unique_lengths):
+        for j, sampling_rate in enumerate(unique_sampling_rates):
+            subset = find_df[(find_df['length'] == length) & (find_df['sampling_rate'] == sampling_rate)]
+            subset = subset.sort_values(by='threads')
+            plt.loglog(subset['threads'], subset['queries_per_second'],
+                       linestyle=line_styles[j % len(line_styles)],
+                       marker=markers[i % len(markers)],
+                       markersize=4,
+                       color=length_cmap(i / len(unique_lengths)),
+                       label=f'Query Length: {length}, Sampling Period: {sampling_rate}')
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legends with explicit positioning
+    length_handles = [plt.Line2D([0], [0], color=length_cmap(i / len(unique_lengths)), marker=markers[i % len(markers)], linestyle='None', label=f'{length}') for i, length in enumerate(unique_lengths)]
+    legend1 = plt.legend(handles=length_handles, loc='upper right', title="Query Length")
+    plt.gca().add_artist(legend1)
+    sampling_rate_handles = [plt.Line2D([0], [0], color='black', linestyle=line_styles[i % len(line_styles)], label=f'{sampling_rate}') for i, sampling_rate in enumerate(unique_sampling_rates)]
+    legend2 = plt.legend(handles=sampling_rate_handles, loc='upper right', bbox_to_anchor=(0.88, 1), title="Sampling Period")
+
+    plt.xlabel('Number of threads')
+    plt.ylabel('Queries matched per second')
+    plt.title(f"Number of Threads vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
+
+def plot_decode(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    # Plot the data grouped by query length
+    for i, qlength in enumerate(unique_lengths):
+        subset = find_df[find_df['length'] == qlength]
+        subset = subset.sort_values(by='sampling_rate')
+        plt.loglog(subset['sampling_rate'], subset['matches_decoded_per_second'],
+                   linestyle='--',
+                   color=length_cmap(unique_lengths.index(qlength)),
+                   marker='o',
+                   label=f'{qlength}')
+
+    # Set the x and y scales to be logarithmic
+    plt.xscale('log')
+    plt.yscale('log')
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legend
+    plt.legend(title="Query Length")
+
+    plt.xlabel('Index sampling period')
+    plt.ylabel('Decoding speed (matches per second)')
+    plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
 
 if __name__ == '__main__':
     p_c_scale = ((5,2e5),(5,5e5))
-    t_r_scale = ((1e1,8192),(1e2,1e6))
+    t_r_scale = ((0,128),(1e2,1e6))
+    dec_scale = ((16,64),(1e5,1e7))
 
     plot_principal('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
     plot_principal('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
@@ -296,5 +409,8 @@ if __name__ == '__main__':
     plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
     plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
 
-    plot_threads_rate('../log/gencode.v40.fmdg_j_l3_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
-    plot_threads_rate('../log/GRCh38-20-0.10b.fmdg_j_l3_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
+    plot_threads_rate2('../log/gencode.v40.fmdg_j_l4_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
+    plot_threads_rate2('../log/GRCh38-20-0.10b.fmdg_j_l4_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
+
+    plot_decode('../log/gencode.v40.fmdg_decode2_hard', '../plot/gencode.v40.fmdg_decode_hard.png', dec_scale)
+    plot_decode('../log/GRCh38-20-0.10b.fmdg_decode2_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard.png', dec_scale)
