@@ -396,6 +396,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
     int_t no_matching_forks = 0;
     int_t no_missing_forks = 0;
     int_t no_matching_count = 0; // to compare with DFS
+    int_t no_decoded_count = 0; // count the number of decodes
 
     static struct option options[] = {
             {"reference",  required_argument, NULL, 'r'},
@@ -752,11 +753,15 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                                 tasks[j].exact_matches->size,
                                                 tasks[j].partial_matches->size);
                                     } else {
+                                        for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
+                                            fmd_fork_node_t *fork = tasks[j].exact_matches->data[k];
+                                            no_matching_count += fork->sa_hi - fork->sa_lo;
+                                        }
                                         fprintf(foutput, "%s:\n", tasks[j].str->seq);
                                     }
                                     for(int_t k = 0; k < decoded_matches->size; k++) {
                                         fmd_vector_t *decoded_matches_for_fork = decoded_matches->data[k];
-                                        no_matching_count += decoded_matches_for_fork->size;
+                                        no_decoded_count += decoded_matches_for_fork->size;
                                         for(int_t l = 0; l < decoded_matches_for_fork->size; l++) {
                                             fmd_decoded_match_t *decoded_match = decoded_matches_for_fork->data[l];
                                             fprintf(foutput, "\t(v:%lld,o:%lld)\n", decoded_match->vid, decoded_match->offset);
@@ -845,10 +850,10 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                     fprintf(stderr, "[fmd:query] Cache: Cache size in memory (MB): %.4lf\n", (double)fmd_fmd_cache_size(fmd_cache) / 1e6);
                 }
                 if(decode) {
-                    fprintf(stderr, "[fmd:query] Decode: Total matches decoded: %lld\n", no_matching_count);
+                    fprintf(stderr, "[fmd:query] Decode: Total matches decoded: %lld\n", no_decoded_count);
                     fprintf(stderr, "[fmd:query] Decode: Total decoding time (s): %lf\n", query_decoding_time);
-                    fprintf(stderr, "[fmd:query] Decode: Matches decoded per second: %lf\n", (double)no_matching_count / query_decoding_time);
-                    fprintf(stderr, "[fmd:query] Decode: Time per match decode (s): %lf\n", query_decoding_time / (double)no_matching_count);
+                    fprintf(stderr, "[fmd:query] Decode: Matches decoded per second: %lf\n", (double)no_decoded_count / query_decoding_time);
+                    fprintf(stderr, "[fmd:query] Decode: Time per match decode (s): %lf\n", query_decoding_time / (double)no_decoded_count);
                 }
                 if(queries_processed) {
                     fprintf(stderr, "[fmd:query] Find: Total queries processed: %lld\n",queries_processed);
