@@ -398,6 +398,101 @@ def plot_decode(directory_name, output_filename, scale=None):
     plt.savefig(output_filename, format='png')
     plt.close()
 
+
+def plot_decode_diff(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    # Plot the data grouped by query length
+    for i, qlength in enumerate(unique_lengths):
+        subset = find_df[find_df['length'] == qlength]
+        subset = subset.sort_values(by='sampling_rate')
+        plt.loglog(subset['sampling_rate'], subset['matches_decoded_per_second'],
+                   linestyle='--',
+                   color=length_cmap(unique_lengths.index(qlength)),
+                   marker='o',
+                   label=f'{qlength}')
+
+    # Set the x and y scales to be logarithmic
+    plt.xscale('log')
+    plt.yscale('log')
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legend
+    plt.legend(title="Query Length")
+
+    plt.xlabel('Index sampling period')
+    plt.ylabel('Decoding speed (matches per second)')
+    plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
+
+def plot_decode_diff(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Compute the average query time minus the average decode time per query
+    find_df['avg_query_time_minus_decode_time'] = (find_df['total_querying_time'] / find_df['total_queries_processed']) - (find_df['total_decoding_time'] / find_df['total_queries_processed'])
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    # Plot the data grouped by query length
+    for i, qlength in enumerate(unique_lengths):
+        subset = find_df[find_df['length'] == qlength]
+        subset = subset.sort_values(by='sampling_rate')
+        plt.plot(subset['sampling_rate'], subset['avg_query_time_minus_decode_time'],
+                   linestyle='--',
+                   color=length_cmap(unique_lengths.index(qlength)),
+                   marker='o',
+                   label=f'{qlength}')
+
+    # Set the x and y scales to be logarithmic
+    #plt.xscale('log')
+    #plt.yscale('log')
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legend
+    plt.legend(title="Query Length")
+
+    plt.xlabel('Index sampling period')
+    plt.ylabel('Average Query Time Minus Average Decode Time per Query (s)')
+    plt.title(f"Index Sampling Period vs Average Query Time Minus Average Decode Time per Query for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
+
+
 if __name__ == '__main__':
     p_c_scale = ((5,2e5),(5,5e5))
     t_r_scale = ((0,128),(1e2,1e6))
@@ -412,5 +507,11 @@ if __name__ == '__main__':
     plot_threads_rate2('../log/gencode.v40.fmdg_j_l4_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
     plot_threads_rate2('../log/GRCh38-20-0.10b.fmdg_j_l4_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
 
-    plot_decode('../log/gencode.v40.fmdg_decode2_hard', '../plot/gencode.v40.fmdg_decode_hard.png', dec_scale)
-    plot_decode('../log/GRCh38-20-0.10b.fmdg_decode2_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard.png', dec_scale)
+    #plot_decode('../log/gencode.v40.fmdg_decode3_hard', '../plot/gencode.v40.fmdg_decode_hard3.png', dec_scale)
+    #plot_decode('../log/GRCh38-20-0.10b.fmdg_decode3_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard3.png', dec_scale)
+
+    plot_decode('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_hard.png', dec_scale)
+    plot_decode('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard.png', dec_scale)
+
+    plot_decode_diff('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_diff_hard.png')
+    plot_decode_diff('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_diff_hard.png')
