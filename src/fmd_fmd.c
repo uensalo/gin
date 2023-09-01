@@ -2,8 +2,7 @@
 
 
 fmd_fork_node_t *fmd_fork_node_init(int_t sa_lo, int_t sa_hi,
-                                    int_t pos,
-                                    fmd_fork_node_type_t type) {
+                                    int_t pos, fmd_fork_node_type_t type) {
     fmd_fork_node_t *fn = calloc(1, sizeof(fmd_fork_node_t));
     fn->sa_lo = sa_lo;
     fn->sa_hi = sa_hi;
@@ -428,7 +427,7 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
     //fmd_fmd_qr_free(query);
 }
 
-void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, int_t *t, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches) {
+void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, int_t *t, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches, fmd_fmd_stats_t *stats) {
     fmd_vector_t *forks= *cur_forks;
     int_t V = fmd->permutation->size;
     /**********************************************************************
@@ -443,7 +442,6 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
         fmd_fmd_fork_precedence_range(fmd, fork, fmd->c_0, &c_0_lo, &c_0_hi);
         bool more_to_track = max_forks == -1 || max_forks > forks->size;
         if(more_to_track && c_0_lo < c_0_hi) {
-            fmd_fork_node_t *breakpoint;
             fmd_vector_t *incoming_sa_intervals;
             fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
             int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
@@ -472,13 +470,13 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     fmd_vector_t *next_iter_forks;
     fmd_vector_init(&next_iter_forks, forks->size + merged->size, &fmd_fstruct_fork_node);
     // advance and filter previous queries
-#pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
+    #pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
     for(int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
         if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
+            #pragma omp critical(partial_matches_append)
             {
                 fmd_vector_append(*partial_matches, fork);
             }
@@ -486,7 +484,7 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
             if(*t==1) {
                 fork->type = LEAF;
             }
-#pragma omp critical(next_iter_queries_append)
+            #pragma omp critical(next_iter_queries_append)
             {
                 fmd_vector_append(next_iter_forks, fork);
             }
@@ -510,6 +508,8 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
             }
         }
     }
+    stats->no_calls_to_advance_fork += forks->size + merged->size;
+    stats->no_calls_to_precedence_range += forks->size;
     fmd_vector_free_disown(merged);
     fmd_vector_free_disown(forks);
 
@@ -530,14 +530,14 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     --(*t);
 }
 
-void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
+void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, fmd_fmd_stats_t *stats) {
     fmd_vector_t *forks = bootstrap;
     fmd_vector_t *partial_matches;
     fmd_vector_init(&partial_matches, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
 
     int_t t = bootstrap_depth; // stores the position last matched
     while(forks->size && t > 0) {
-        fmd_fmd_query_find_step(fmd, string, max_forks, &t, &forks, &partial_matches);
+        fmd_fmd_query_find_step(fmd, string, max_forks, &t, &forks, &partial_matches, stats);
     }
     /* experimental */
     // compact forks one more time to prevent the reporting of duplicate matches
@@ -548,11 +548,20 @@ void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, in
     /* experimental */
     *paths = forks;
     *dead_ends = partial_matches;
+    stats->no_matching_forks = forks->size;
+    stats->no_partial_forks = partial_matches->size;
 }
 
-void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends) {
+void fmd_fmd_query_find(fmd_fmd_t *fmd,
+                        fmd_fmd_cache_t *cache,
+                        fmd_string_t *string,
+                        int_t max_forks,
+                        fmd_vector_t **paths,
+                        fmd_vector_t **dead_ends,
+                        fmd_fmd_stats_t **stats) {
     fmd_vector_t *forks = NULL;
     int_t bootstrap_depth = -1;
+    *stats = calloc(1, sizeof(fmd_fmd_stats_t));
     if(!cache) {
         // no cache: default bootstrap
         //data structures to keep track of forks
@@ -577,6 +586,7 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
             fmd_vector_append(partial_matches, root);
             *dead_ends = partial_matches;
             fmd_vector_free(forks);
+            ++(*stats)->no_calls_to_advance_fork;
             return;
         }
         fmd_vector_append(forks, root);
@@ -592,7 +602,7 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *st
         fmd_string_free(cached_suffix);
         forks = bootstrap;
     }
-    fmd_fmd_query_find_bootstrapped(fmd, forks, bootstrap_depth, string, max_forks, paths, dead_ends);
+    fmd_fmd_query_find_bootstrapped(fmd, forks, bootstrap_depth, string, max_forks, paths, dead_ends, *stats);
 }
 
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks) {
@@ -614,6 +624,67 @@ void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **m
     }
     *merged_forks = merged;
 }
+
+/*
+void fmd_fmd_advance_fork_match(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    for(int_t i = 0; i < al->forks->size; i++) {
+        fmd_fork_node_t *fork = al->forks->data[i];
+        fmd_fmd_advance_fork(fmd, fork, pattern);
+    }
+    fmd_string_append(&al->edits, FMD_ALIGN_MATCH);
+    --al->pos;
+}
+
+void fmd_fmd_advance_fork_mismatch(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    int_t S = fmd->graph_fmi->alphabet->size - FMD_FMD_NO_RESERVED_CHARS - 1;
+    char_t cur_char = pattern->seq[al->pos];
+    fmd_vector_t *mismatch_forks;
+    fmd_vector_init(&mismatch_forks, al->forks->size * S, &fmd_fstruct_fork_node);
+    for(int_t i = FMD_FMD_NO_RESERVED_CHARS; i < fmd->graph_fmi->alphabet->size; i++) {
+        if(cur_char == (char_t)fmd->graph_fmi->alphabet->data[i]) {
+            continue;
+        }
+        for(int_t j = 0; j < al->forks->size; j++) {
+            fmd_fork_node_t *orig_fork = al->forks->data[j];
+            fmd_fork_node_t *fork = fmd_fork_node_copy(orig_fork);
+            fmd_fmd_advance_fork(fmd, fork, pattern);
+            fmd_vector_append(mismatch_forks, fork);
+        }
+    }
+    fmd_vector_free(al->forks);
+    al->forks = mismatch_forks;
+    fmd_string_append(&al->edits, FMD_ALIGN_MISMATCH);
+    ++al->no_edits.mismatches;
+    --al->pos;
+}
+void fmd_fmd_advance_fork_deletion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    for(int_t i = 0; i < al->forks->size; i++) {
+        fmd_fork_node_t *fork = al->forks->data[i];
+        --fork->pos;
+    }
+    ++al->no_edits.mismatches;
+    --al->pos;
+}
+
+void fmd_fmd_advance_fork_insertion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    return;
+}
+
+
+void fmd_fmd_align_step(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
+                        int_t max_mismatches, int_t max_deletions, int_t max_insertions,
+                        int_t max_forks, int_t *t,
+                        fmd_vector_t **forks) {
+    return;
+}
+
+void fmd_fmd_align(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
+                   int_t max_mismatches, int_t max_deletions, int_t max_insertions,
+                   int_t max_forks,
+                   fmd_vector_t **paths) {
+    return;
+}
+ */
 
 /*
 void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain) {

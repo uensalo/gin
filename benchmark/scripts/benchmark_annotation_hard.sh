@@ -109,14 +109,40 @@
 #-h
 
 # permutation benchmark
+#./fmd_run.sh ../input/gencode.v40.fmdg \
+#-L "gencode.v40.fmdg_j_p_hard" \
+#-c "12" \
+#-r "64" \
+#-m "-1" \
+#-M "-1" \
+#-j "1" \
+#-l "16 32 64 128 256 512 1024 2048 4096" \
+#-t "225 450 900 1800 3600" \
+#-p "4" \
+#-h
+
+# long cache benchmark 2
 ./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_j_p_hard" \
--c "12" \
--r "64" \
+-L "gencode.v40.fmdg_principal" \
+-c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
+-r "16" \
 -m "-1" \
 -M "-1" \
 -j "1" \
 -l "16 32 64 128 256 512 1024 2048 4096" \
--t "225 450 900 1800 3600" \
+-t "3600" \
 -p "4" \
+-h
+
+./fmd_run.sh ../input/gencode.v40.fmdg \
+-L "gencode.v40.fmdg_rate_decode" \
+-c "12" \
+-r "16 32 64" \
+-m "-1" \
+-M "-1" \
+-j "1" \
+-l "16 32 64 128 256 512 1024 2048 4096" \
+-t "3600" \
+-p "4" \
+-d \
 -h

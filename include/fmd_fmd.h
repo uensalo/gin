@@ -52,6 +52,14 @@ fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, in
 void fmd_fmd_free(fmd_fmd_t *fmd);
 int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2);
 
+// for gathering statistics
+typedef struct fmd_fmd_stats_ {
+    int_t no_calls_to_advance_fork;
+    int_t no_calls_to_precedence_range;
+    int_t no_matching_forks;
+    int_t no_partial_forks;
+} fmd_fmd_stats_t;
+
 /******************************************************************************
  * Querying (forks, functions, caching)
  *****************************************************************************/
@@ -141,14 +149,57 @@ void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *qr, char_t c, int_t *lo, int_t *hi);
 
-void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, int_t *t, fmd_vector_t **forks, fmd_vector_t **partial_matches);
-void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
-void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends);
-void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
 
 // legacy, or for debugging purposes
 void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
 void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
+
+void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, int_t *t, fmd_vector_t **forks, fmd_vector_t **partial_matches, fmd_fmd_stats_t *stats);
+void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, fmd_fmd_stats_t *stats);
+void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, fmd_fmd_stats_t **stats);
+void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
+
+/******************************************************************************
+ * Inexact matching
+ *****************************************************************************/
+/*
+typedef enum fmd_align_edit_code_ {
+   FMD_ALIGN_MATCH = 'M',
+   FMD_ALIGN_MISMATCH = 'X',
+   FMD_ALIGN_DELETE = 'D',
+   FMD_ALIGN_INSERT = 'I'
+} fmd_align_edit_code_t;
+#define FMD_FMD_ALIGN_BITS_PER_EDIT_CODE 2
+
+typedef struct fmd_align_edit_stats_ {
+   int_t mismatches;
+   int_t deletions;
+   int_t insertions;
+   int_t d;
+} fmd_align_edit_stats_t;
+
+typedef struct fmd_align_node_ {
+   fmd_vector_t *forks;
+   int_t pos;
+   fmd_align_edit_stats_t no_edits;
+   fmd_string_t edits;
+} fmd_align_node_t;
+void fmd_fmd_advance_fork_match(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
+void fmd_fmd_advance_fork_mismatch(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
+void fmd_fmd_advance_fork_deletion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
+void fmd_fmd_advance_fork_insertion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
+
+
+void fmd_fmd_align_step(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
+                        int_t max_mismatches, int_t max_deletions, int_t max_insertions,
+                        int_t max_forks, int_t *t,
+                        fmd_vector_t **forks);
+
+void fmd_fmd_align(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
+                   int_t max_mismatches, int_t max_deletions, int_t max_insertions,
+                   int_t max_forks,
+                   fmd_vector_t **paths);
+*/
 
 /******************************************************************************
  * Result reporting and decoding
