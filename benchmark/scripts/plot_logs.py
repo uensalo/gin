@@ -106,7 +106,10 @@ def parse_file(filepath):
                     data['number_of_partial_forks'] = int(re.search(r'Number of partial forks: (\d+)', line).group(1))
                 if "Find: Number of matches" in line:
                     data['number_of_matches'] = int(re.search(r'Number of matches: (\d+)', line).group(1))
-
+                if "Find: Number of fork advances per query" in line:
+                    data['number_fork_advances_per_query'] = float(re.search(r'Number of fork advances per query: (\d+\.\d+)', line).group(1))
+                elif "Find: Number of fork advances" in line:
+                    data['number_fork_advances'] = int(re.search(r'Number of fork advances: (\d+)', line).group(1))
 
             elif basename.startswith('index_'):
                 if "Number of vertices:" in line:
@@ -163,10 +166,10 @@ def plot_principal(directory_name, output_filename, scale=None):
     find_df, _, _, _ = parse_directory_logs(directory_name)
 
     # Create a new column for total forks
-    find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
+    #find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
 
     # Compute average forks per query
-    find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
+    #find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
 
     plt.figure(figsize=(12, 8))
 
@@ -178,7 +181,7 @@ def plot_principal(directory_name, output_filename, scale=None):
     for qlength in unique_lengths:
         subset = find_df[find_df['length'] == qlength]
         subset = subset.sort_values(by='cache')
-        plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], '-o', color=length_cmap(unique_lengths.index(qlength)), label=f'{qlength}')
+        plt.loglog(subset['number_fork_advances_per_query'], subset['queries_per_second'], '-o', color=length_cmap(unique_lengths.index(qlength)), label=f'{qlength}')
 
     # Connect data points of the same cache size with dashed lines
     caches = sorted(find_df['cache'].unique())
@@ -186,7 +189,7 @@ def plot_principal(directory_name, output_filename, scale=None):
     for cache in caches:
         subset = find_df[find_df['cache'] == cache]
         subset = subset.sort_values(by='length')
-        plt.loglog(subset['avg_forks_per_query'], subset['queries_per_second'], '--', color=cache_cmap(caches.index(cache)))
+        plt.loglog(subset['number_fork_advances_per_query'], subset['queries_per_second'], '--', color=cache_cmap(caches.index(cache)))
 
     # Set the x and y scales to be logarithmic
     plt.xscale('log')
@@ -203,9 +206,9 @@ def plot_principal(directory_name, output_filename, scale=None):
     plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
     legend2 = plt.legend(loc='upper right', bbox_to_anchor=(0.9025, 1), title="Query Length")
 
-    plt.xlabel('Average number of forks per query')
+    plt.xlabel('Average number of fork advances per query')
     plt.ylabel('Queries matched per second')
-    plt.title(f"Average number of forks per query vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.title(f"Average number of fork advances per query vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
@@ -443,8 +446,7 @@ def plot_decode_diff(directory_name, output_filename, scale=None):
     plt.savefig(output_filename, format='png')
     plt.close()
 
-
-def plot_decode_diff(directory_name, output_filename, scale=None):
+def plot_fm_gap(directory_name, output_filename, scale=None):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -453,8 +455,8 @@ def plot_decode_diff(directory_name, output_filename, scale=None):
     # Assuming the first return value from your function is the DataFrame
     find_df, _, _, _ = parse_directory_logs(directory_name)
 
-    # Compute the average query time minus the average decode time per query
-    find_df['avg_query_time_minus_decode_time'] = (find_df['total_querying_time'] / find_df['total_queries_processed']) - (find_df['total_decoding_time'] / find_df['total_queries_processed'])
+    # Compute FM gap
+    find_df['FM_gap'] = find_df['number_fork_advances_per_query'] - find_df['length']
 
     plt.figure(figsize=(12, 8))
 
@@ -463,18 +465,16 @@ def plot_decode_diff(directory_name, output_filename, scale=None):
     length_cmap = plt.get_cmap('tab10', len(unique_lengths))
 
     # Plot the data grouped by query length
-    for i, qlength in enumerate(unique_lengths):
+    for qlength in unique_lengths:
         subset = find_df[find_df['length'] == qlength]
-        subset = subset.sort_values(by='sampling_rate')
-        plt.plot(subset['sampling_rate'], subset['avg_query_time_minus_decode_time'],
-                   linestyle='--',
-                   color=length_cmap(unique_lengths.index(qlength)),
-                   marker='o',
-                   label=f'{qlength}')
+        subset = subset.sort_values(by='cache')
+        plt.plot(subset['cache'], subset['FM_gap'],
+                 linestyle='-',
+                 color=length_cmap(unique_lengths.index(qlength)),
+                 marker='o',
+                 label=f'{qlength}')
 
-    # Set the x and y scales to be logarithmic
-    #plt.xscale('log')
-    #plt.yscale('log')
+    plt.yscale('log')
 
     # If a scale is provided, set the x and y limits
     if scale:
@@ -484,9 +484,84 @@ def plot_decode_diff(directory_name, output_filename, scale=None):
     # Create the legend
     plt.legend(title="Query Length")
 
-    plt.xlabel('Index sampling period')
-    plt.ylabel('Average Query Time Minus Average Decode Time per Query (s)')
-    plt.title(f"Index Sampling Period vs Average Query Time Minus Average Decode Time per Query for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.xlabel('Cache Depth')
+    plt.ylabel('FM Gap')
+    plt.title(f"Cache Depth vs FM Gap for {os.path.basename(directory_name).split('.fmdg')[0]}")
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
+
+
+def plot_fm_gap_ratio(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Assuming the first return value from your function is the DataFrame
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Compute FM gap
+    find_df['FM_gap_ratio'] = (find_df['number_fork_advances_per_query'] - find_df['length']) / find_df['length']
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    # Plot the data grouped by query length
+    for qlength in unique_lengths:
+        subset = find_df[find_df['length'] == qlength]
+        subset = subset.sort_values(by='cache')
+        plt.plot(subset['cache'], subset['FM_gap_ratio'],
+                 linestyle='-',
+                 color=length_cmap(unique_lengths.index(qlength)),
+                 marker='o',
+                 label=f'{qlength}')
+
+    # Annotate the points for the largest cache depth
+    ax = plt.gca()
+    fig = plt.gcf()
+    fig_size_px = fig.get_size_inches() * fig.dpi
+    fig_width_px, fig_height_px = fig_size_px
+
+    # Find the largest cache depth
+    max_cache = find_df['cache'].max()
+
+    # Get the subset of data for the largest cache depth
+    max_cache_subset = find_df[find_df['cache'] == max_cache]
+
+    # Sort the subset by FM gap ratio
+    sorted_subset = max_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
+
+    # Calculate the y_step dynamically
+    y_step = 8 / len(sorted_subset)
+
+    # Start annotating from the bottom right of the figure
+    for i, (index, row) in enumerate(sorted_subset.iterrows()):
+        x_text = plt.xlim()[1] * 1.1
+        y_text = y_step*(i*i+1)
+        plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
+                     xy=(row['cache'], row['FM_gap_ratio']),
+                     xytext=(x_text, y_text),
+                     ha='center',
+                     fontsize=8,
+                     arrowprops=dict(arrowstyle="->"))
+
+    plt.yscale('log')
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legend
+    plt.legend(title="Query Length")
+
+    plt.xlabel('Cache Depth')
+    plt.ylabel('FM Gap Ratio')
+    plt.title(f"Cache Depth vs FM Gap Ratio for {os.path.basename(directory_name).split('.fmdg')[0]}")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
@@ -494,24 +569,28 @@ def plot_decode_diff(directory_name, output_filename, scale=None):
 
 
 if __name__ == '__main__':
-    p_c_scale = ((5,2e5),(5,5e5))
+    p_c_scale = ((1e1,5e5),(1e1,5e5))
     t_r_scale = ((0,128),(1e2,1e6))
     dec_scale = ((16,64),(1e5,1e7))
 
-    plot_principal('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_p_c2_hard.png', p_c_scale)
-    plot_principal('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_p_c2_hard.png', p_c_scale)
+    plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', p_c_scale)
+    plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', p_c_scale)
+    plot_fm_gap('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap.png')
+    plot_fm_gap('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap.png')
+    plot_fm_gap_ratio('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap_ratio.png')
+    plot_fm_gap_ratio('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_ratio.png')
 
-    plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
-    plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
+    #plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
+    #plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
 
-    plot_threads_rate2('../log/gencode.v40.fmdg_j_l4_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
-    plot_threads_rate2('../log/GRCh38-20-0.10b.fmdg_j_l4_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
+    #plot_threads_rate2('../log/gencode.v40.fmdg_j_l4_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
+    #plot_threads_rate2('../log/GRCh38-20-0.10b.fmdg_j_l4_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
 
     #plot_decode('../log/gencode.v40.fmdg_decode3_hard', '../plot/gencode.v40.fmdg_decode_hard3.png', dec_scale)
     #plot_decode('../log/GRCh38-20-0.10b.fmdg_decode3_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard3.png', dec_scale)
 
-    plot_decode('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_hard.png', dec_scale)
-    plot_decode('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard.png', dec_scale)
+    #plot_decode('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_hard.png', dec_scale)
+    #plot_decode('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard.png', dec_scale)
 
-    plot_decode_diff('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_diff_hard.png')
-    plot_decode_diff('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_diff_hard.png')
+    #plot_decode_diff('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_diff_hard.png')
+    #plot_decode_diff('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_diff_hard.png')
