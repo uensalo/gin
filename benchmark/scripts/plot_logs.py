@@ -206,9 +206,9 @@ def plot_principal(directory_name, output_filename, scale=None):
     plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
     legend2 = plt.legend(loc='upper right', bbox_to_anchor=(0.9025, 1), title="Query Length")
 
-    plt.xlabel('Average number of fork advances per query')
+    plt.xlabel('Average effective query length')
     plt.ylabel('Queries matched per second')
-    plt.title(f"Average number of fork advances per query vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
+    plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
@@ -528,25 +528,42 @@ def plot_fm_gap_ratio(directory_name, output_filename, scale=None):
 
     # Find the largest cache depth
     max_cache = find_df['cache'].max()
+    min_cache = find_df['cache'].min()
 
     # Get the subset of data for the largest cache depth
     max_cache_subset = find_df[find_df['cache'] == max_cache]
+    min_cache_subset = find_df[find_df['cache'] == min_cache]
 
     # Sort the subset by FM gap ratio
-    sorted_subset = max_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
+    sorted_subset_first = min_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
+    sorted_subset_last = max_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
 
     # Calculate the y_step dynamically
-    y_step = 8 / len(sorted_subset)
+    y_step = 8 / len(sorted_subset_last)
 
     # Start annotating from the bottom right of the figure
-    for i, (index, row) in enumerate(sorted_subset.iterrows()):
-        x_text = plt.xlim()[1] * 1.1
-        y_text = y_step*(i*i+1)
+    for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
+        x_text = plt.xlim()[1] + 1
+        y_text = y_step*(np.exp(i-3.5))
+        plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
+                     xy=(row['cache'], row['FM_gap_ratio']),
+                     xytext=(x_text, y_text),
+                     ha='center',
+                     xycoords='data',
+                     fontsize=8,
+                     arrowprops=dict(arrowstyle="->"))
+
+
+    # Start annotating from the bottom right of the figure
+    for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
+        x_text = -2
+        y_text = y_step*(np.exp(i))
         plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
                      xy=(row['cache'], row['FM_gap_ratio']),
                      xytext=(x_text, y_text),
                      ha='center',
                      fontsize=8,
+                     xycoords='data',
                      arrowprops=dict(arrowstyle="->"))
 
     plt.yscale('log')
@@ -560,8 +577,8 @@ def plot_fm_gap_ratio(directory_name, output_filename, scale=None):
     plt.legend(title="Query Length")
 
     plt.xlabel('Cache Depth')
-    plt.ylabel('FM Gap Ratio')
-    plt.title(f"Cache Depth vs FM Gap Ratio for {os.path.basename(directory_name).split('.fmdg')[0]}")
+    plt.ylabel('Relative Effective Query Length')
+    plt.title(f"Cache Depth vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}")
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png')
     plt.close()
