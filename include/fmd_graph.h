@@ -25,7 +25,6 @@
 #include <fmd_tree.h>
 #include <fmd_vector.h>
 
-typedef int_t vid_t;
 typedef struct {
     vid_t id;
     fmd_string_t *label;

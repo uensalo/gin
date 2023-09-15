@@ -17,6 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+/*
 #include "fmd_match_chain.h"
 
 void fmd_fmd_match_chain_init(fmd_match_chain_t **chain) {
@@ -126,3 +127,4 @@ void fmd_fmd_match_chain_prepend(fmd_match_chain_t *chain, fmd_string_t *match_s
     }
     chain->size++;
 }
+*/

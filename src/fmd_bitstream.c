@@ -35,6 +35,17 @@ void fmd_bs_init(fmd_bs_t **bs) {
     *bs = b;
 }
 
+void fmd_bs_init_no_alloc(fmd_bs_t *bs) {
+    if(!bs) {
+        return;
+    }
+    bs->words = calloc(BS_INIT_SIZE_WORDS, sizeof(word_t));
+    if(!bs->words) {
+        return;
+    }
+    bs->cap_in_words = BS_INIT_SIZE_WORDS;
+}
+
 void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words) {
     fmd_bs_t *b = calloc(1, sizeof(fmd_bs_t));
     if(!b) {
@@ -49,6 +60,14 @@ void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words) {
     }
     b->cap_in_words = no_words;
     *bs = b;
+}
+
+void fmd_bs_init_reserve_no_alloc(fmd_bs_t *bs, uint64_t no_words) {
+    bs->words = calloc(no_words, sizeof(word_t));
+    if(!bs->words) {
+        return;
+    }
+    bs->cap_in_words = no_words;
 }
 
 void fmd_bs_init_from_buffer(unsigned char *buf, size_t buf_size, fmd_bs_t **bs) {
@@ -142,6 +161,14 @@ void fmd_bs_free(fmd_bs_t *bs) {
 void fmd_bs_free_disown(fmd_bs_t *bs) {
     if(bs) {
         free(bs);
+    }
+}
+
+void fmd_bs_free_no_alloc(fmd_bs_t *bs) {
+    if(bs) {
+        free(bs->words);
+        bs->words = NULL;
+        bs->cap_in_words = 0;
     }
 }
 

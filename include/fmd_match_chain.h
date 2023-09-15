@@ -17,6 +17,8 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
+
+/*
 #ifndef FMD_FMD_MATCH_CHAIN_H
 #define FMD_FMD_MATCH_CHAIN_H
 
@@ -55,3 +57,4 @@ void fmd_fmd_match_chain_prepend(fmd_match_chain_t *list, fmd_string_t *match_st
 
 
 #endif //FMD_FMD_MATCH_CHAIN_H
+*/
