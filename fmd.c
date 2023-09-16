@@ -951,6 +951,8 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
     FILE *fref = NULL;
 
     int_t batch_size = 8;
+    int_t strings_processed = 0;
+    int_t roots_processed = 0;
     int_t walks_processed = 0;
 
     double walk_process_time = 0;
@@ -994,6 +996,9 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
             }
             case 'j': {
                 num_threads = strtoll(optarg, NULL, 10);
+                #ifdef FMD_OMP
+                omp_set_num_threads((int)num_threads);
+                #endif
                 break;
             }
             case 'v': {
@@ -1174,11 +1179,12 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                         enc_strs[j] = encoded_query;
                         current_encoded_string = encoded_query;
                         ++j;
+                        ++strings_processed;
                     } else { // v,o pair
                         if (sscanf(buf, "\t(v:%lu,o:%ld)", &tasks[i].v, &tasks[i].o) == 2) {
                             tasks[i].str = current_string;
                             tasks[i].metadata = current_encoded_string;
-                            walks_processed++;
+                            roots_processed++;
                             ++i;
                         }
                     }
@@ -1207,6 +1213,7 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                         fprintf(foutput, "%s:\n", tasks[k].str->seq);
                         last_printed = tasks[k].str;
                     }
+                    walks_processed += tasks[k].walks->size;
                     for(int_t l = 0; l < tasks[k].walks->size; l++) {
                         fmd_walk_t *walk = tasks[k].walks->data[l];
                         int_t start_offset = walk->head->graph_lo;
@@ -1256,8 +1263,19 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
             free(tasks);
             free(strings);
             free(enc_strs);
-
             fmd_encoded_graph_free(encoded_graph);
+
+            if(verbose) {
+                fprintf(stderr, "[fmd:decode] Walks: Number of threads: %lld\n",num_threads);
+                fprintf(stderr, "[fmd:decode] Walks: Number of strings processed: %lld\n",strings_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Number of roots processed: %lld\n",roots_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Number of matching walks: %lld\n",walks_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Time elapsed assembling walks: %lf\n",walk_process_time);
+                fprintf(stderr, "[fmd:decode] Walks: Time per root: %lf\n",(double) walk_process_time / (double) roots_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Roots per second: %lf\n",(double) roots_processed / (double) walk_process_time);
+
+            }
+
             break;
         }
         default:
