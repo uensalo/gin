@@ -884,6 +884,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             /**************************************************************************
             * 4 - Free all data structures and return
             **************************************************************************/
+            fprintf(foutput,"%s\n", FMD_MAIN_QUERY_EXIT_PROMPT);
             if(finput_path) fclose(finput);
             if(foutput_path) fclose(foutput);
 
@@ -1209,7 +1210,7 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                     for(int_t l = 0; l < tasks[k].walks->size; l++) {
                         fmd_walk_t *walk = tasks[k].walks->data[l];
                         int_t start_offset = walk->head->graph_lo;
-                        int_t end_offset = walk->tail->graph_hi-1;
+                        int_t end_offset = walk->tail->graph_hi;
                         fmd_walk_node_t *n = walk->head;
                         char tmp[256];
                         int_t outbuf_len = 0;
