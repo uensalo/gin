@@ -1884,7 +1884,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "[fmd:help] Parameters:\n");
             fprintf(stderr, "\t--reference   or -r: Required parameter (find, cache). Path to the index file. See fmd index for more help.\n");
             fprintf(stderr, "\t--input       or -i: Optional parameter (find).        Path to the input file containing string queries, with one string per line. Default: stdin\n");
-            fprintf(stderr, "\t--fastq       or -f: Optional flag      (find).        Specifies if queries are contained in fastq format. Default: False\n");
+            fprintf(stderr, "\t--fastq       or -f: Optional flag      (find).        Specifies if queries are contained in fastq format. If not in FASTQ format, the program expects on string per line, and the string exit(); to indicate the end of the stream. Default: False\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter (find, cache). Path to the output file. For find, (vertex_id, index) is written to this file if decode is enabled, else suffix array entries are written. For cache, the cache binary is written. Default: stdout\n");
             fprintf(stderr, "\t--cache-depth or -c: Optional parameter (cache).       Specifies the depth of the cache to be constructed. Default: 10\n");
             fprintf(stderr, "\t--cache       or -C: Optional parameter (find).        Path to the index cache. Default: None\n");
@@ -1896,6 +1896,29 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--verbose     or -v: Optional parameter (find, cache). Provides more information (time, progress, memory requirements) about the indexing process.\n");
             fprintf(stderr, "[fmd:help] Example invocation (cache): fmd query cache -r myindex.fmdi -o myindex_cache.fmdc -j 8 -c 10 -v\n");
             fprintf(stderr, "[fmd:help] Example invocation (find):  fmd query find  -r myindex.fmdi -i queries.fastq -f -C myindex_cache.fmdc -o results.txt -j 8 -m -1 -M 10 -v\n");
+
+            return_code = 0;
+            break;
+        }
+        case fmd_mode_decode : {
+            fprintf(stderr, "[fmd:help] ---------- fmd:decode ----------\n");
+            fprintf(stderr, "[fmd:help] fmd decode loads an bit encoded graph into memory and enumerates full walks from the output of fmd query find --decode without -v.\n");
+            fprintf(stderr, "[fmd:help] Inputs are expected to be in the form of the output of fmd query find --decode.\n");
+            fprintf(stderr, "[fmd:help] fmd query has two modes described below:\n");
+            fprintf(stderr, "\tencode: Encodes the input fmdg graph into a program specific format using ceil(log2(s)) bits per character.\n");
+            fprintf(stderr, "\twalks:  Enumerates all walks of a given string originating from (vertex,offset) pairs. The output format is of the form:\n"
+                            "\t\t<string>:\n"
+                            "\t\t\t(o1,oN);v1:...:vN\n"
+                            "\t\t\t(o1,oN);v1:...:vN\n");
+            fprintf(stderr, "[fmd:help] Parameters:\n");
+            fprintf(stderr, "\t--reference   or -r: Required parameter (walks). Path to the index file. See fmd index for more help.\n");
+            fprintf(stderr, "\t--input       or -i: Optional parameter (walks, encode). Path to the input file containing string queries, or the input fmdg graph to be encoded. Default: stdin\n");
+            fprintf(stderr, "\t--output      or -o: Optional parameter (walks, encode). Path to the output file. For encode, the bit encoded graph is written. For walks, resulting walks are written. Default: stdout\n");
+            fprintf(stderr, "\t--batch-size  or -b: Optional parameter (walks).         Number of queries to be read and processed at once. Default: 8\n");
+            fprintf(stderr, "\t--threads     or -j: Optional parameter (walks, encode). Number of threads to be used for parallel querying. Default: 1\n");
+            fprintf(stderr, "\t--verbose     or -v: Optional parameter (walks, encode). Provides more information (time, progress, memory requirements).\n");
+            fprintf(stderr, "[fmd:help] Example invocation (encode): fmd decode encode -i mygraph.fmdg -o mygraph.fmde-v\n");
+            fprintf(stderr, "[fmd:help] Example invocation (walks):  fmd query walks  -r myindex.fmde -i queries.query -o results.txt -j 8 -b 16 -v\n");
 
             return_code = 0;
             break;
