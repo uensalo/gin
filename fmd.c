@@ -24,28 +24,30 @@
 #include "rgfa_parser.h"
 #include "permutation_parser.h"
 #include "fmdg_parser.h"
+#include "fmd_encoded_graph.h"
 #ifdef FMD_OMP
 #include <omp.h>
 #endif
 
 #define FMD_MAIN_ISA_SAMPLE_RATE_DEFAULT 32
 #define FMD_MAIN_RANK_SAMPLE_RATE_DEFAULT 32
-#define to_sec(t1,t2) (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9
+#define to_sec(t1,t2) ((double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) * 1e-9)
 #define FMD_MAIN_BUF_READ_SIZE 1024
 
 #define FMD_MAIN_QUERY_BUF_LEN 65536
 #define FMD_MAIN_QUERY_EXIT_PROMPT "exit();"
 
 char *fmd_version = "1.0";
-char* fmd_mode_names[] = {"index","query","permutation","utils","help"};
+char* fmd_mode_names[] = {"index","query","decode","permutation","utils","help"};
 
 typedef enum fmd_mode_ {
     fmd_mode_index=0,
     fmd_mode_query=1,
-    fmd_mode_permutation=2,
-    fmd_mode_utils=3,
-    fmd_mode_help=4,
-    fmd_mode_no_modes=5
+    fmd_mode_decode=2,
+    fmd_mode_permutation=3,
+    fmd_mode_utils=4,
+    fmd_mode_help=5,
+    fmd_mode_no_modes=6
 } fmd_mode_t;
 
 char* fmd_query_mode_names[] = {"find","cache"};
@@ -55,6 +57,14 @@ typedef enum fmd_query_mode_ {
     fmd_query_mode_cache=1,
     fmd_query_mode_no_modes=2,
 } fmd_query_mode_t;
+
+char* fmd_decode_mode_names[] = {"encode", "walks"};
+
+typedef enum fmd_decode_mode_ {
+    fmd_decode_mode_encode=0,
+    fmd_decode_mode_walks=1,
+    fmd_decode_mode_no_modes=2,
+} fmd_decode_mode_t;
 
 char* fmd_convert_mode_names[] = {"rgfa2fmdg", "fastq2query", "spectrum", "find"};
 
@@ -68,6 +78,7 @@ typedef enum fmd_utils_mode_ {
 
 int fmd_main_index(int argc, char **argv);
 int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode);
+int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode);
 int fmd_main_permutation(int argc, char **argv);
 int fmd_main_utils(int argc, char **argv, fmd_utils_mode_t mode);
 int fmd_main_help(fmd_mode_t progmode, char *progname);
@@ -90,6 +101,18 @@ fmd_query_mode_t fmd_string_to_qmode(char *str) {
     for(int i = 0; i < fmd_query_mode_no_modes; i++) {
         if(strcmp(str,fmd_query_mode_names[i]) == 0) {
             progmode = (fmd_query_mode_t)i;
+            break;
+        }
+    }
+    return progmode;
+}
+
+fmd_decode_mode_t fmd_string_to_dmode(char *str) {
+    if(!str) return fmd_decode_mode_no_modes;
+    fmd_decode_mode_t progmode = fmd_decode_mode_no_modes;
+    for(int i = 0; i < fmd_decode_mode_no_modes; i++) {
+        if(strcmp(str,fmd_decode_mode_names[i]) == 0) {
+            progmode = (fmd_decode_mode_t)i;
             break;
         }
     }
@@ -124,6 +147,12 @@ int main(int argc, char *argv[]) {
             char *query_mode_name = argcp > 1 ? argvp[1] : NULL;
             fmd_query_mode_t query_mode = fmd_string_to_qmode(query_mode_name);
             return_code = fmd_main_query(argcp, argvp, query_mode);
+            break;
+        }
+        case fmd_mode_decode : {
+            char *query_mode_name = argcp > 1 ? argvp[1] : NULL;
+            fmd_decode_mode_t decode_mode = fmd_string_to_dmode(query_mode_name);
+            return_code = fmd_main_decode(argcp, argvp, decode_mode);
             break;
         }
         case fmd_mode_permutation : {
@@ -705,7 +734,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                 return return_code;
             } else {
                 int_t i;
-                char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char*));
+                char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
                 typedef struct query_task_ {
                     fmd_string_t *str;
                     uint64_t count;
@@ -855,6 +884,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             /**************************************************************************
             * 4 - Free all data structures and return
             **************************************************************************/
+            fprintf(foutput,"%s\n", FMD_MAIN_QUERY_EXIT_PROMPT);
             if(finput_path) fclose(finput);
             if(foutput_path) fclose(foutput);
 
@@ -908,6 +938,351 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
             return return_code;
         }
     }
+
+    return return_code;
+}
+
+int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
+    char *finput_path = NULL;
+    char *foutput_path = NULL;
+    char *fref_path = NULL;
+    FILE *finput = stdin;
+    FILE *foutput = stdout;
+    FILE *fref = NULL;
+
+    int_t batch_size = 8;
+    int_t strings_processed = 0;
+    int_t roots_processed = 0;
+    int_t walks_processed = 0;
+
+    double walk_process_time = 0;
+
+    bool verbose = false;
+    int_t num_threads = 1;
+    static struct option options[] = {
+            {"input",       required_argument, NULL, 'i'},
+            {"output",      required_argument, NULL, 'o'},
+            {"reference",   required_argument, NULL, 'r'},
+            {"batch_size",  required_argument, NULL, 'b'},
+            {"threads",     required_argument, NULL, 'j'},
+            {"verbose",     no_argument,       NULL, 'v'},
+    };
+    int return_code = 0;
+    opterr = 0;
+    int optindex,c;
+    while((c = getopt_long(argc, argv, "i:o:r:b:j:v", options, &optindex)) != -1) {
+        switch(c) {
+            case 'i': {
+                finput_path = optarg;
+                finput = fopen(finput_path, "r");
+                if(!finput) {
+                    fprintf(stderr, "[fmd:decdode] Input path %s could not be opened, quitting.\n", finput_path);
+                    return_code = -1;
+                    return return_code;
+                }
+                break;
+            }
+            case 'o': {
+                foutput_path = optarg;
+                break;
+            }
+            case 'r': {
+                fref_path = optarg;
+                break;
+            }
+            case 'b': {
+                batch_size = strtoll(optarg, NULL, 10);
+                break;
+            }
+            case 'j': {
+                num_threads = strtoll(optarg, NULL, 10);
+                #ifdef FMD_OMP
+                omp_set_num_threads((int)num_threads);
+                #endif
+                break;
+            }
+            case 'v': {
+                verbose = true;
+                break;
+            }
+            default: {
+                fprintf(stderr, "[fmd:decode] Option %s not recognized, please see fmd help permutation for more.\n",optarg);
+                return_code = -1;
+                break;
+            }
+        }
+    }
+    fmd_encoded_graph_t *encoded_graph = NULL;
+
+    switch (mode) {
+        case fmd_decode_mode_encode: {
+            fmd_graph_t *graph = NULL;
+            unsigned char *fmd_encoded_graph_buf;
+            uint64_t fmd_encoded_graph_buf_size;
+            /**************************************************************************
+            * 1 - Parse the input graph the variable graph. By the end of this block,
+            * the variable graph should be populated and the files must be closed.
+            *************************************************************************/
+            graph = fmdg_parse(finput);
+            if(!graph) {
+                if (finput_path) fclose(finput);
+                if (foutput_path) fclose(foutput);
+                fprintf(stderr, "[fmd:decode] Malformed fmdg file, quitting.\n");
+                return_code = -1;
+                return return_code;
+            }
+            /**************************************************************************
+            * 2 - log2 bit-encode the input graph. By the end of this block, the
+            * variable graph should be freed and encoded graph should be populated.
+            *************************************************************************/
+            fmd_encoded_graph_init(&encoded_graph, graph);
+            if(!encoded_graph) {
+                if (finput_path) fclose(finput);
+                if (foutput_path) fclose(foutput);
+                fprintf(stderr, "[fmd:decode] Failed to encode fmdg file, quitting.\n");
+                return_code = -1;
+                return return_code;
+            }
+            fmd_graph_free(graph);
+            graph = NULL;
+            /**************************************************************************
+            * 3 - Convert the encoded graph to a payload and flush it on the disk
+            *************************************************************************/
+            fmd_encoded_graph_serialize_to_buffer(encoded_graph, &fmd_encoded_graph_buf, &fmd_encoded_graph_buf_size);
+            fmd_encoded_graph_free(encoded_graph);
+            encoded_graph = NULL;
+            if(!fmd_encoded_graph_buf || !fmd_encoded_graph_buf_size) {
+                fprintf(stderr, "[fmd:decode] Could not convert graph into a bitstream, please send a PR. Quitting.\n");
+                return_code = -1;
+                if(foutput != stdout) fclose(foutput);
+                return return_code;
+            }
+
+            if(foutput_path) {
+                foutput = fopen(foutput_path, "w");
+                if(!foutput) {
+                    fprintf(stderr, "[fmd:index] Output path %s could not be opened, quitting.\n", foutput_path);
+                    free(fmd_encoded_graph_buf);
+                    return_code = -1;
+                    return return_code;
+                }
+            }
+
+            fwrite(fmd_encoded_graph_buf,sizeof(unsigned char),fmd_encoded_graph_buf_size,foutput);
+            if(foutput_path) fclose(foutput);
+            free(fmd_encoded_graph_buf);
+
+            break;
+        }
+        case fmd_decode_mode_walks : {
+            /**************************************************************************
+            * 1 - Read the encoded graph from disk, fmd_buf and fmd_buf_size should be
+            * populated and fref be closed by the end of this block
+            **************************************************************************/
+            fref = fopen(fref_path, "r");
+            if(!fref) {
+                fprintf(stderr, "[fmd:decode] Could not open encoded graph reference file %s, quitting.\n", fref_path);
+                return_code = -1;
+                return return_code;
+            }
+
+            uint64_t fmd_buf_capacity = 65536;
+            uint64_t fmd_buf_size = 0;
+            uint8_t *fmd_buf = calloc(fmd_buf_capacity, sizeof(uint8_t));
+
+            uint64_t read_size;
+            uint8_t *read_buf = calloc(FMD_MAIN_BUF_READ_SIZE, sizeof(uint8_t));
+            while((read_size = fread(read_buf,sizeof(uint8_t), FMD_MAIN_BUF_READ_SIZE, fref))) {
+                if(read_size + fmd_buf_size > fmd_buf_capacity) {
+                    fmd_buf = realloc(fmd_buf, (fmd_buf_capacity *= 2)*sizeof(uint8_t));
+                    memset(fmd_buf + (fmd_buf_capacity/2), 0, sizeof(uint8_t)*(fmd_buf_capacity/2));
+                }
+                memcpy(fmd_buf+fmd_buf_size,read_buf,read_size);
+                fmd_buf_size+=read_size;
+            }
+            fmd_buf = realloc(fmd_buf, fmd_buf_size*sizeof(uint8_t));
+            free(read_buf);
+            fclose(fref);
+            /**************************************************************************
+            * 2 - Read the graph bitstream into data structures
+            **************************************************************************/
+            struct timespec t1,t2;
+            clock_gettime(CLOCK_REALTIME, &t1);
+            fmd_encoded_graph_serialize_from_buffer(&encoded_graph, fmd_buf, fmd_buf_size);
+            clock_gettime(CLOCK_REALTIME, &t2);
+            double data_struct_read = to_sec(t1,t2);
+            if(verbose) {
+                fprintf(stderr, "[fmd:decode] Encoded graph read into data structures in %lf seconds\n", data_struct_read);
+            }
+            /**************************************************************************
+            * 3 - Parse queries from input and launch them as tasks
+            **************************************************************************/
+            if(foutput_path) {
+                foutput = fopen(foutput_path, "w");
+                if(!foutput) {
+                    fprintf(stderr, "[fmd:decode] Can't open output file %s, quitting.\n", foutput_path);
+                    return_code = -1;
+                    return return_code;
+                }
+            }
+            int_t i, j = 0;
+            char *buf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
+            char *outbuf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
+            int_t outbuf_size = FMD_MAIN_QUERY_BUF_LEN;
+            typedef struct walk_task_ {
+                fmd_string_t *str;
+                void *metadata;
+                vid_t v;
+                int_t o;
+                fmd_vector_t *walks;
+            } walk_task_t;
+            #ifdef FMD_OMP
+            omp_set_num_threads((int)num_threads);
+            #endif
+            walk_task_t *tasks = calloc(batch_size, sizeof(walk_task_t));
+            fmd_string_t **strings = calloc(batch_size, sizeof(fmd_string_t*));
+            fmd_bs_t **enc_strs = calloc(batch_size, sizeof(fmd_bs_t*));
+            fmd_string_t *last_printed = NULL;
+            fmd_string_t *current_string = NULL;
+            fmd_bs_t *current_encoded_string = NULL;
+            bool exit_flag = false;
+
+            while(true) {
+                i = 0;
+                while (i < batch_size && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
+                    int_t len = (int_t)strlen(buf);
+                    if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
+                    if(!strcmp(buf,FMD_MAIN_QUERY_EXIT_PROMPT)) {
+                        exit_flag = true;
+                        break;
+                    }
+                    // parse the line here
+                    if (buf[0] != '\t') { // string label
+                        buf[len-2] = 0; // get rid of the colon
+                        if(i == 0 && current_string) { // string was exhausted in the last batch
+                            j = 0;
+                            fmd_string_free(current_string);
+                            fmd_bs_free(current_encoded_string);
+                        }
+                        fmd_string_init_cstr(&current_string, buf);
+                        strings[j] = current_string;
+                        // metadata: compare in the encoded domain for faster traversal
+                        fmd_bs_t *encoded_query;
+                        int_t bits_per_char = fmd_ceil_log2(encoded_graph->alphabet_size);
+                        int_t no_words_in_encoding = 1 + (current_string->size * bits_per_char - 1) / WORD_NUM_BITS;
+                        fmd_bs_init_reserve(&encoded_query, no_words_in_encoding);
+                        word_t idx = 0;
+                        for(int_t q = 0; q < current_string->size; q++) {
+                            fmd_bs_write_word(encoded_query, idx, (word_t)encoded_graph->encoding_table[current_string->seq[q]], bits_per_char);
+                            idx += bits_per_char;
+                        }
+                        enc_strs[j] = encoded_query;
+                        current_encoded_string = encoded_query;
+                        ++j;
+                        ++strings_processed;
+                    } else { // v,o pair
+                        if (sscanf(buf, "\t(v:%lu,o:%ld)", &tasks[i].v, &tasks[i].o) == 2) {
+                            tasks[i].str = current_string;
+                            tasks[i].metadata = current_encoded_string;
+                            roots_processed++;
+                            ++i;
+                        }
+                    }
+                }
+
+                clock_gettime(CLOCK_REALTIME, &t1);
+                #ifdef FMD_OMP
+                omp_set_num_threads((int)num_threads);
+                #endif
+                #pragma omp parallel for default(none) shared(encoded_graph, tasks, i)
+                for(int_t k = 0; k < i; k++) {
+                    fmd_encoded_graph_walk_string(encoded_graph,
+                                                  tasks[k].str,
+                                                  tasks[k].v,
+                                                  tasks[k].o,
+                                                  tasks[k].metadata,
+                                                  fmd_encoded_graph_walk_extend_default,
+                                                  &tasks[k].walks);
+                }
+
+                clock_gettime(CLOCK_REALTIME, &t2);
+                walk_process_time += to_sec(t1,t2);
+
+                for(int_t k = 0; k < i; k++) {
+                    if(last_printed != tasks[k].str) {
+                        fprintf(foutput, "%s:\n", tasks[k].str->seq);
+                        last_printed = tasks[k].str;
+                    }
+                    walks_processed += tasks[k].walks->size;
+                    for(int_t l = 0; l < tasks[k].walks->size; l++) {
+                        fmd_walk_t *walk = tasks[k].walks->data[l];
+                        int_t start_offset = walk->head->graph_lo;
+                        int_t end_offset = walk->tail->graph_hi;
+                        fmd_walk_node_t *n = walk->head;
+                        char tmp[256];
+                        int_t outbuf_len = 0;
+                        while(n != walk->dummy) {
+                            int_t s = sprintf(tmp, "%ld", n->vid);
+                            while (s + outbuf_len + 1  >= outbuf_size) {
+                                outbuf = realloc(outbuf, (outbuf_size*=2));
+                            }
+                            memcpy(outbuf + outbuf_len, tmp, s);
+                            outbuf_len += s+1;
+                            outbuf[outbuf_len-1] = ':';
+                            n = n->next;
+                        }
+                        outbuf[outbuf_len-1] = '\0';
+                        fprintf(foutput, "\t(%ld,%ld);%s\n",start_offset,end_offset,outbuf);
+                    }
+                    if (!tasks[k].walks->size) {
+                        fprintf(foutput, "-\n");
+                    }
+                    fmd_vector_free(tasks[k].walks);
+                }
+                // cleanup, free all except the last
+                for(int_t k = 0 ; k < j - 1; k++) {
+                    fmd_string_free(strings[k]);
+                    fmd_bs_free(enc_strs[k]);
+                    strings[k] = NULL;
+                    enc_strs[k] = NULL;
+                }
+                // the last string may be cut-off
+                strings[0] = current_string;//strings[j];
+                enc_strs[0] = current_encoded_string;//enc_strs[j];
+                j = 1;
+                if(exit_flag)
+                    break;
+            }
+            if(current_string) {
+                fmd_string_free(current_string);
+                fmd_bs_free(current_encoded_string);
+            }
+
+            free(buf);
+            free(outbuf);
+            free(tasks);
+            free(strings);
+            free(enc_strs);
+            fmd_encoded_graph_free(encoded_graph);
+
+            if(verbose) {
+                fprintf(stderr, "[fmd:decode] Walks: Number of threads: %lld\n",num_threads);
+                fprintf(stderr, "[fmd:decode] Walks: Number of strings processed: %lld\n",strings_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Number of roots processed: %lld\n",roots_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Number of matching walks: %lld\n",walks_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Time elapsed assembling walks: %lf\n",walk_process_time);
+                fprintf(stderr, "[fmd:decode] Walks: Time per root: %lf\n",(double) walk_process_time / (double) roots_processed);
+                fprintf(stderr, "[fmd:decode] Walks: Roots per second: %lf\n",(double) roots_processed / (double) walk_process_time);
+
+            }
+
+            break;
+        }
+        default:
+            break;
+    }
+
+
 
     return return_code;
 }
@@ -1509,7 +1884,7 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "[fmd:help] Parameters:\n");
             fprintf(stderr, "\t--reference   or -r: Required parameter (find, cache). Path to the index file. See fmd index for more help.\n");
             fprintf(stderr, "\t--input       or -i: Optional parameter (find).        Path to the input file containing string queries, with one string per line. Default: stdin\n");
-            fprintf(stderr, "\t--fastq       or -f: Optional flag      (find).        Specifies if queries are contained in fastq format. Default: False\n");
+            fprintf(stderr, "\t--fastq       or -f: Optional flag      (find).        Specifies if queries are contained in fastq format. If not in FASTQ format, the program expects on string per line, and the string exit(); to indicate the end of the stream. Default: False\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter (find, cache). Path to the output file. For find, (vertex_id, index) is written to this file if decode is enabled, else suffix array entries are written. For cache, the cache binary is written. Default: stdout\n");
             fprintf(stderr, "\t--cache-depth or -c: Optional parameter (cache).       Specifies the depth of the cache to be constructed. Default: 10\n");
             fprintf(stderr, "\t--cache       or -C: Optional parameter (find).        Path to the index cache. Default: None\n");
@@ -1521,6 +1896,29 @@ int fmd_main_help(fmd_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--verbose     or -v: Optional parameter (find, cache). Provides more information (time, progress, memory requirements) about the indexing process.\n");
             fprintf(stderr, "[fmd:help] Example invocation (cache): fmd query cache -r myindex.fmdi -o myindex_cache.fmdc -j 8 -c 10 -v\n");
             fprintf(stderr, "[fmd:help] Example invocation (find):  fmd query find  -r myindex.fmdi -i queries.fastq -f -C myindex_cache.fmdc -o results.txt -j 8 -m -1 -M 10 -v\n");
+
+            return_code = 0;
+            break;
+        }
+        case fmd_mode_decode : {
+            fprintf(stderr, "[fmd:help] ---------- fmd:decode ----------\n");
+            fprintf(stderr, "[fmd:help] fmd decode loads an bit encoded graph into memory and enumerates full walks from the output of fmd query find --decode without -v.\n");
+            fprintf(stderr, "[fmd:help] Inputs are expected to be in the form of the output of fmd query find --decode.\n");
+            fprintf(stderr, "[fmd:help] fmd query has two modes described below:\n");
+            fprintf(stderr, "\tencode: Encodes the input fmdg graph into a program specific format using ceil(log2(s)) bits per character.\n");
+            fprintf(stderr, "\twalks:  Enumerates all walks of a given string originating from (vertex,offset) pairs. The output format is of the form:\n"
+                            "\t\t<string>:\n"
+                            "\t\t\t(o1,oN);v1:...:vN\n"
+                            "\t\t\t(o1,oN);v1:...:vN\n");
+            fprintf(stderr, "[fmd:help] Parameters:\n");
+            fprintf(stderr, "\t--reference   or -r: Required parameter (walks). Path to the index file. See fmd index for more help.\n");
+            fprintf(stderr, "\t--input       or -i: Optional parameter (walks, encode). Path to the input file containing string queries, or the input fmdg graph to be encoded. Default: stdin\n");
+            fprintf(stderr, "\t--output      or -o: Optional parameter (walks, encode). Path to the output file. For encode, the bit encoded graph is written. For walks, resulting walks are written. Default: stdout\n");
+            fprintf(stderr, "\t--batch-size  or -b: Optional parameter (walks).         Number of queries to be read and processed at once. Default: 8\n");
+            fprintf(stderr, "\t--threads     or -j: Optional parameter (walks, encode). Number of threads to be used for parallel querying. Default: 1\n");
+            fprintf(stderr, "\t--verbose     or -v: Optional parameter (walks, encode). Provides more information (time, progress, memory requirements).\n");
+            fprintf(stderr, "[fmd:help] Example invocation (encode): fmd decode encode -i mygraph.fmdg -o mygraph.fmde-v\n");
+            fprintf(stderr, "[fmd:help] Example invocation (walks):  fmd query walks  -r myindex.fmde -i queries.query -o results.txt -j 8 -b 16 -v\n");
 
             return_code = 0;
             break;

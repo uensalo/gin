@@ -35,6 +35,7 @@
 typedef uint8_t  byte_t;
 typedef int64_t  int_t;
 typedef uint64_t uint_t;
+typedef int_t    vid_t;
 
 typedef int    (*fcomp)(void*, void*);
 typedef uint_t (*fhash)(void*);
