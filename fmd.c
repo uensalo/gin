@@ -1136,12 +1136,13 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
             walk_task_t *tasks = calloc(batch_size, sizeof(walk_task_t));
             fmd_string_t **strings = calloc(batch_size, sizeof(fmd_string_t*));
             fmd_bs_t **enc_strs = calloc(batch_size, sizeof(fmd_bs_t*));
+            fmd_string_t *last_printed = NULL;
+            fmd_string_t *current_string = NULL;
+            fmd_bs_t *current_encoded_string = NULL;
             bool exit_flag = false;
 
             while(true) {
                 i = 0;
-                fmd_string_t *current_string;
-                fmd_bs_t *current_encoded_string;
                 while (i < batch_size && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
                     int_t len = (int_t)strlen(buf);
                     if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
@@ -1152,6 +1153,11 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                     // parse the line here
                     if (buf[0] != '\t') { // string label
                         buf[len-2] = 0; // get rid of the colon
+                        if(i == 0 && current_string) { // string was exhausted in the last batch
+                            j = 0;
+                            fmd_string_free(current_string);
+                            fmd_bs_free(current_encoded_string);
+                        }
                         fmd_string_init_cstr(&current_string, buf);
                         strings[j] = current_string;
                         // metadata: compare in the encoded domain for faster traversal
@@ -1181,7 +1187,7 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                 #ifdef FMD_OMP
                 omp_set_num_threads((int)num_threads);
                 #endif
-                #pragma omp parallel for default(none) shared(encoded_graph, tasks)
+                #pragma omp parallel for default(none) shared(encoded_graph, tasks, i)
                 for(int_t k = 0; k < i; k++) {
                     fmd_encoded_graph_walk_string(encoded_graph,
                                                   tasks[k].str,
@@ -1195,9 +1201,11 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                 clock_gettime(CLOCK_REALTIME, &t2);
                 walk_process_time += to_sec(t1,t2);
 
-                //\t(o1,o2);v1:v2:...:vN
                 for(int_t k = 0; k < i; k++) {
-                    fprintf(foutput, "%s:\n",tasks[k].str->seq);
+                    if(last_printed != tasks[k].str) {
+                        fprintf(foutput, "%s:\n", tasks[k].str->seq);
+                        last_printed = tasks[k].str;
+                    }
                     for(int_t l = 0; l < tasks[k].walks->size; l++) {
                         fmd_walk_t *walk = tasks[k].walks->data[l];
                         int_t start_offset = walk->head->graph_lo;
@@ -1218,23 +1226,29 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                         outbuf[outbuf_len-1] = '\0';
                         fprintf(foutput, "\t(%ld,%ld);%s\n",start_offset,end_offset,outbuf);
                     }
-                    //fmd_vector_free(tasks[k].walks);
+                    if (!tasks[k].walks->size) {
+                        fprintf(foutput, "-\n");
+                    }
+                    fmd_vector_free(tasks[k].walks);
                 }
                 // cleanup, free all except the last
-                //for(int_t k = 0 ; k < j - 1; k++) {
-                //    fmd_string_free(strings[k]);
-                //    strings[k] = NULL;
-                //    fmd_bs_free(enc_strs[k]);
-                //    enc_strs[k] = NULL;
-                //}
-                //strings[0] = strings[j];
-                //enc_strs[0] = enc_strs[j];
+                for(int_t k = 0 ; k < j - 1; k++) {
+                    fmd_string_free(strings[k]);
+                    fmd_bs_free(enc_strs[k]);
+                    strings[k] = NULL;
+                    enc_strs[k] = NULL;
+                }
+                // the last string may be cut-off
+                strings[0] = current_string;//strings[j];
+                enc_strs[0] = current_encoded_string;//enc_strs[j];
                 j = 1;
                 if(exit_flag)
                     break;
             }
-
-
+            if(current_string) {
+                fmd_string_free(current_string);
+                fmd_bs_free(current_encoded_string);
+            }
 
             free(buf);
             free(outbuf);
