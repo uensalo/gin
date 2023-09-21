@@ -151,7 +151,7 @@
 ./fmd_run.sh ../input/gencode.v40.fmdg \
 -L "gencode.v40.fmdg_baseline_plain" \
 -c "0" \
--r "16" \
+-r "32" \
 -m "-1" \
 -M "-1" \
 -j "1" \

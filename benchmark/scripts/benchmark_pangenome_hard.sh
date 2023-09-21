@@ -151,7 +151,7 @@
 ./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
 -L "GRCh38-20-0.10b.fmdg_baseline_plain" \
 -c "0" \
--r "16" \
+-r "32" \
 -m "-1" \
 -M "-1" \
 -j "1" \
