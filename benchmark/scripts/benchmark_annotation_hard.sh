@@ -122,10 +122,49 @@
 #-h
 
 # long cache benchmark 2
+#./fmd_run.sh ../input/gencode.v40.fmdg \
+#-L "gencode.v40.fmdg_principal" \
+#-c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
+#-r "16" \
+#-m "-1" \
+#-M "-1" \
+#-j "1" \
+#-l "16 32 64 128 256 512 1024 2048 4096" \
+#-t "3600" \
+#-p "4" \
+#-h
+
+#./fmd_run.sh ../input/gencode.v40.fmdg \
+#-L "gencode.v40.fmdg_rate_decode" \
+#-c "12" \
+#-r "16 32 64" \
+#-m "-1" \
+#-M "-1" \
+#-j "1" \
+#-l "16 32 64 128 256 512 1024 2048 4096" \
+#-t "3600" \
+#-p "4" \
+#-d \
+#-h
+
+# plain benchmark
 ./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_principal" \
--c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
+-L "gencode.v40.fmdg_baseline_plain" \
+-c "0" \
 -r "16" \
+-m "-1" \
+-M "-1" \
+-j "1" \
+-l "16 32 64 128 256 512 1024 2048 4096" \
+-t "0" \
+-p "0" \
+-h
+
+# permutation baseline benchmark
+./fmd_run.sh ../input/gencode.v40.fmdg  \
+-L "gencode.v40.fmdg_baseline_permutation" \
+-c "0" \
+-r "32" \
 -m "-1" \
 -M "-1" \
 -j "1" \
@@ -134,15 +173,28 @@
 -p "4" \
 -h
 
+# cache baseline benchmark
 ./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_rate_decode" \
+-L "gencode.v40.fmdg_baseline_cache" \
 -c "12" \
--r "16 32 64" \
+-r "32" \
+-m "-1" \
+-M "-1" \
+-j "1" \
+-l "16 32 64 128 256 512 1024 2048 4096" \
+-t "0" \
+-p "0" \
+-h
+
+# cache permutation baseline benchmark
+./fmd_run.sh ../input/gencode.v40.fmdg \
+-L "gencode.v40.fmdg_baseline_cache_permutation" \
+-c "12" \
+-r "32" \
 -m "-1" \
 -M "-1" \
 -j "1" \
 -l "16 32 64 128 256 512 1024 2048 4096" \
 -t "3600" \
 -p "4" \
--d \
 -h
