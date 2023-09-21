@@ -80,15 +80,17 @@ for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
 do
   for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
   do
-    PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.fmdp"
-    PERM_LOG_FILE="$LOG_DIR/perm_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.txt"
-    if [[ ! -f $PERMUTATION_FILE ]]; then
-      $FMD_DIR/fmd permutation -i "$INPUT_FILE" -t "$PERMUTATION_TIME" -u "$PERMUTATION_TIME" -e $TEMPERATURE -c $COOLING -d "$PERMUTATION_DEPTH" -o "$PERMUTATION_FILE" -j $PERMUTATION_NUM_THREADS -v 2>> "$PERM_LOG_FILE" &
+    if [[ "$PERMUTATION_TIME" -ne 0 && "$PERMUTATION_DEPTH" -ne 0 ]]; then
+      PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.fmdp"
+      PERM_LOG_FILE="$LOG_DIR/perm_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.txt"
+      if [[ ! -f $PERMUTATION_FILE ]]; then
+        $FMD_DIR/fmd permutation -i "$INPUT_FILE" -t "$PERMUTATION_TIME" -u "$PERMUTATION_TIME" -e $TEMPERATURE -c $COOLING -d "$PERMUTATION_DEPTH" -o "$PERMUTATION_FILE" -j $PERMUTATION_NUM_THREADS -v 2>> "$PERM_LOG_FILE" &
+      fi
+      # Make sure only two tasks are running at the same time
+      while [ $(jobs | wc -l) -ge 2 ]; do
+        sleep 1
+      done
     fi
-    # Make sure only two tasks are running at the same time
-    while [ $(jobs | wc -l) -ge 2 ]; do
-      sleep 1
-    done
   done
 done
 
@@ -99,14 +101,19 @@ do
   do
     for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
     do
-      PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.fmdp"
+      PERMUTATION_FLAG=""
+      PERMUTATION_FILE=""
+      if [[ "$PERMUTATION_TIME" -ne 0 && "$PERMUTATION_DEPTH" -ne 0 ]]; then
+        PERMUTATION_FLAG="-p"
+        PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.fmdp"
+      fi
       for IDX in $(seq "$SAMPLE_RATE_IDX" $(($SAMPLE_RATE_IDX + 3)))
       do
         SAMPLE_RATE=${SAMPLE_RATES[$IDX]}
         INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.fmdi"
         INDEX_LOG_FILE="$LOG_DIR/index_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.txt"
         if [[ ! -f $INDEX_FILE && $IDX -lt ${#SAMPLE_RATES[@]} ]]; then
-          $FMD_DIR/fmd index -i "$INPUT_FILE" -p "$PERMUTATION_FILE" -o "$INDEX_FILE" -s "$SAMPLE_RATE" -r "$SAMPLE_RATE" -v 2>> "$INDEX_LOG_FILE" &
+          $FMD_DIR/fmd index -i "$INPUT_FILE" $PERMUTATION_FLAG "$PERMUTATION_FILE" -o "$INDEX_FILE" -s "$SAMPLE_RATE" -r "$SAMPLE_RATE" -v 2>> "$INDEX_LOG_FILE" &
         fi
       done
       wait
