@@ -162,14 +162,7 @@ def plot_principal(directory_name, output_filename, scale=None):
         print(f"Directory {directory_name} not found!")
         return
 
-    # Assuming the first return value from your function is the DataFrame
     find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # Create a new column for total forks
-    #find_df['total_forks'] = find_df['number_of_matching_forks'] + find_df['number_of_partial_forks']
-
-    # Compute average forks per query
-    #find_df['avg_forks_per_query'] = find_df['total_forks'] / find_df['total_queries_processed']
 
     plt.figure(figsize=(12, 8))
 
@@ -690,13 +683,82 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None):
     plt.savefig(output_filename, format='png')
     plt.close()
 
+def plot_baseline(directory_name, output_filename, scale=None):
+    # Check if directory exists
+    if not all([os.path.exists(directory_name + suffix) for suffix in ['_baseline_plain', '_baseline_permutation', '_baseline_cache', '_baseline_cache_permutation']]):
+        print(f"Baselines for {directory_name} not found!")
+        return
 
+    # Parse the four types of benchmarks
+    find_df_plain, _, _, _ = parse_directory_logs(directory_name + '_baseline_plain')
+    find_df_perm, _, _, _ = parse_directory_logs(directory_name + '_baseline_permutation')
+    find_df_cache, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache')
+    find_df_cache_permutation, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache_permutation')
+
+    dfs = {
+        "plain": find_df_plain,
+        "permutation": find_df_perm,
+        "cache": find_df_cache,
+        "cache+permutation": find_df_cache_permutation
+    }
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df_plain['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    benchmark_colors = {
+        "plain": "blue",
+        "permutation": "green",
+        "cache": "red",
+        "cache+permutation": "purple"
+    }
+
+    # Connect data points of the same query length with regular lines
+    for qlength in unique_lengths:
+        x_data, y_data = [], []
+        for benchmark in ["plain", "permutation", "cache", "cache+permutation"]:
+            df = dfs[benchmark]
+            subset = df[df['length'] == qlength]
+            x_data.extend(subset['number_fork_advances_per_query'].values)
+            y_data.extend(subset['queries_per_second'].values)
+            plt.loglog(subset['number_fork_advances_per_query'], subset['queries_per_second'], 'o', color=benchmark_colors[benchmark], label=f'{benchmark} {qlength}' if qlength == unique_lengths[0] else "")
+        plt.loglog(x_data, y_data, '-', color=length_cmap(unique_lengths.index(qlength)))
+
+    # Connect data points of the same benchmark type with dashed lines
+    for benchmark, df in dfs.items():
+        sorted_df = df.sort_values(by='length')
+        plt.loglog(sorted_df['number_fork_advances_per_query'], sorted_df['queries_per_second'], '--', color=benchmark_colors[benchmark], label=benchmark)
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    # Create the legends with explicit positioning
+    benchmark_handles = [plt.Line2D([0], [0], marker='o', color=benchmark_colors[benchmark], linestyle='', label=f'{benchmark}') for benchmark in dfs]
+    length_handles = [plt.Line2D([0], [0], color=length_cmap(i), linestyle='-', label=f'{qlength}') for i, qlength in enumerate(unique_lengths)]
+    legend1 = plt.legend(handles=length_handles, loc='upper right', title="Query Length")
+    plt.gca().add_artist(legend1)  # To ensure first legend is not overwritten by the second
+    legend2 = plt.legend(handles=benchmark_handles, loc='upper right', bbox_to_anchor=(0.8750, 1), title="Index")
+
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    plt.xlabel('Average effective query length (bp)', fontsize=14)
+    plt.ylabel('Queries matched per second', fontsize=14)
+    plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png')
+    plt.close()
 
 
 if __name__ == '__main__':
     p_c_scale = ((1e1,5e5),(1e1,5e5))
     t_r_scale = ((0,128),(1e2,1e6))
     dec_scale = ((16,64),(1e5,1e7))
+    baseline_scale = ((1e1,5e5),(1,5e5))
 
     plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', p_c_scale)
     plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', p_c_scale)
@@ -706,6 +768,8 @@ if __name__ == '__main__':
     plot_fm_gap_cache('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_cache.png')
     plot_fm_gap_permutation('../log/gencode.v40.fmdg_permutation', '../plot/gencode.v40.fmdg_fm_gap_permutation.png')
     plot_fm_gap_permutation('../log/GRCh38-20-0.10b.fmdg_permutation', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_permutation.png')
+    plot_baseline('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline.png', baseline_scale)
+    plot_baseline('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline.png', baseline_scale)
 
     #plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
     #plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
