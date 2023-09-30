@@ -156,7 +156,7 @@ def parse_directory_logs(dir_path):
     return find_df, index_df, cache_df, perm_df
 
 
-def plot_principal(directory_name, output_filename, scale=None):
+def plot_principal(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -202,53 +202,18 @@ def plot_principal(directory_name, output_filename, scale=None):
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Average effective query length (bp)', fontsize=14)
-    plt.ylabel('Queries matched per second', fontsize=14)
-    plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    if xlabel:
+        plt.xlabel('Average effective query length (bp)', fontsize=14)
+    if ylabel:
+        plt.ylabel('Queries matched per second', fontsize=14)
+    if title:
+        plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
-def plot_partial_forks(directory_name, output_filename, scale=None):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-    find_df['avg_partial_forks_per_query'] = find_df['number_of_partial_forks'] / find_df['total_queries_processed']
-
-    plt.figure(figsize=(12, 8))
-
-    # Unique cache depths to iterate over and assign a color for each one
-    cache_depths = sorted(find_df['cache'].unique())
-    color_map = plt.get_cmap('tab10', len(cache_depths))
-
-    for cache in cache_depths:
-        subset = find_df[find_df['cache'] == cache]
-        subset = subset.sort_values(by='length')
-        plt.plot(subset['length'], subset['avg_partial_forks_per_query'], '-o', label=f"{cache}", color=color_map(cache_depths.index(cache)))
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    plt.xlabel('Query length (bp)', fontsize=14)
-    plt.ylabel('Average number of partially matching forks', fontsize=14)
-    plt.title(f"Average number of partially matching forks vs query length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
-    plt.legend(loc='upper left')
-    plt.grid(True)
-    plt.savefig(output_filename, format='png')
-    plt.close()
-
-
-def plot_threads_rate(directory_name, output_filename, scale=None):
+def plot_threads_rate(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -297,15 +262,18 @@ def plot_threads_rate(directory_name, output_filename, scale=None):
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Query length', fontsize=14)
-    plt.ylabel('Queries matched per second', fontsize=14)
-    plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    if xlabel:
+        plt.xlabel('Query length', fontsize=14)
+    if ylabel:
+        plt.ylabel('Queries matched per second', fontsize=14)
+    if title:
+        plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
-def plot_threads_rate2(directory_name, output_filename, scale=None):
+def plot_threads_rate2(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -354,15 +322,18 @@ def plot_threads_rate2(directory_name, output_filename, scale=None):
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Number of threads', fontsize=14)
-    plt.ylabel('Queries matched per second', fontsize=14)
-    plt.title(f"Number of Threads vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    if xlabel:
+        plt.xlabel('Number of threads', fontsize=14)
+    if ylabel:
+        plt.ylabel('Queries matched per second', fontsize=14)
+    if title:
+        plt.title(f"Number of Threads vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
-def plot_decode(directory_name, output_filename, scale=None):
+def plot_decode(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -397,20 +368,22 @@ def plot_decode(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     # Create the legend
-    plt.legend(title="Query Length", fontsize=14)
+    plt.legend(title="Query Length", fontsize=10, loc='upper right')
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-
-    plt.xlabel('Index sampling period', fontsize=14)
-    plt.ylabel('Decoding speed (matches per second)', fontsize=14)
-    plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    if xlabel:
+        plt.xlabel('Index sampling period', fontsize=14)
+    if ylabel:
+        plt.ylabel('Decoding speed (matches per second)', fontsize=14)
+    if title:
+        plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
-def plot_decode_diff(directory_name, output_filename, scale=None):
+def plot_decode_diff(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -445,18 +418,21 @@ def plot_decode_diff(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     # Create the legend
-    plt.legend(title="Query Length", fontsize=14)
+    plt.legend(title="Query Length", loc='upper right', fontsize=10)
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Index sampling period', fontsize=14)
-    plt.ylabel('Decoding speed (matches per second)', fontsize=14)
-    plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    if xlabel:
+        plt.xlabel('Index sampling period', fontsize=14)
+    if ylabel:
+        plt.ylabel('Decoding speed (matches per second)', fontsize=14)
+    if title:
+        plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
-def plot_fm_gap(directory_name, output_filename, scale=None):
+def plot_fm_gap(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -492,20 +468,22 @@ def plot_fm_gap(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     # Create the legend
-    plt.legend(title="Query Length", fontsize=14)
+    plt.legend(title="Query Length", loc='upper right', fontsize=10)
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-
-    plt.xlabel('Cache Depth', fontsize=14)
-    plt.ylabel('FM Gap', fontsize=14)
-    plt.title(f"Cache Depth vs FM Gap for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
+    if xlabel:
+        plt.xlabel('Cache Depth', fontsize=14)
+    if ylabel:
+        plt.ylabel('FM Gap', fontsize=14)
+    if title:
+        plt.title(f"Cache Depth vs FM Gap for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
-def plot_fm_gap_cache(directory_name, output_filename, scale=None):
+def plot_fm_gap_cache(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -548,36 +526,36 @@ def plot_fm_gap_cache(directory_name, output_filename, scale=None):
     min_cache_subset = find_df[find_df['cache'] == min_cache]
 
     # Sort the subset by FM gap ratio
-    sorted_subset_first = min_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
-    sorted_subset_last = max_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
+    #sorted_subset_first = min_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
+    #sorted_subset_last = max_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
 
     # Calculate the y_step dynamically
-    y_step = 8 / len(sorted_subset_last)
+    #y_step = 8 / len(sorted_subset_last)
 
     # Start annotating from the bottom right of the figure
-    for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
-        x_text = plt.xlim()[1] + 1
-        y_text = y_step*(np.exp(i-3.5))
-        plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-                     xy=(row['cache'], row['FM_gap_ratio']),
-                     xytext=(x_text, y_text),
-                     ha='center',
-                     xycoords='data',
-                     fontsize=8,
-                     arrowprops=dict(arrowstyle="->"))
-
-
-    # Start annotating from the bottom right of the figure
-    for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
-        x_text = -2
-        y_text = y_step*(np.exp(i))
-        plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-                     xy=(row['cache'], row['FM_gap_ratio']),
-                     xytext=(x_text, y_text),
-                     ha='center',
-                     fontsize=8,
-                     xycoords='data',
-                     arrowprops=dict(arrowstyle="->"))
+    # for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
+    #     x_text = plt.xlim()[1] + 1
+    #     y_text = y_step*(np.exp(i-3.5))
+    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
+    #                  xy=(row['cache'], row['FM_gap_ratio']),
+    #                  xytext=(x_text, y_text),
+    #                  ha='center',
+    #                  xycoords='data',
+    #                  fontsize=8,
+    #                  arrowprops=dict(arrowstyle="->"))
+    #
+    #
+    # # Start annotating from the bottom right of the figure
+    # for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
+    #     x_text = -2
+    #     y_text = y_step*(np.exp(i))
+    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
+    #                  xy=(row['cache'], row['FM_gap_ratio']),
+    #                  xytext=(x_text, y_text),
+    #                  ha='center',
+    #                  fontsize=8,
+    #                  xycoords='data',
+    #                  arrowprops=dict(arrowstyle="->"))
 
     plt.yscale('log')
 
@@ -587,19 +565,22 @@ def plot_fm_gap_cache(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     # Create the legend
-    plt.legend(title="Query Length", fontsize=14)
+    plt.legend(title="Query Length", loc='upper right', fontsize=10)
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Cache Depth', fontsize=14)
-    plt.ylabel('Relative Effective Query Length', fontsize=14)
-    plt.title(f"Cache Depth vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
+    if xlabel:
+        plt.xlabel('Cache Depth', fontsize=14)
+    if ylabel:
+        plt.ylabel('Relative Effective Query Length', fontsize=14)
+    if title:
+        plt.title(f"Cache Depth vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
-def plot_fm_gap_permutation(directory_name, output_filename, scale=None):
+def plot_fm_gap_permutation(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
@@ -628,43 +609,44 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None):
                  label=f'{qlength}')
 
     # Find the largest cache depth
-    max_time = find_df['ptime'].max()
-    min_time = find_df['ptime'].min()
+    #max_time = find_df['ptime'].max()
+    #min_time = find_df['ptime'].min()
 
     # Get the subset of data for the largest cache depth
-    max_time_subset = find_df[find_df['ptime'] == max_time]
-    min_time_subset = find_df[find_df['ptime'] == min_time]
+    #max_time_subset = find_df[find_df['ptime'] == max_time]
+    #min_time_subset = find_df[find_df['ptime'] == min_time]
 
     # Sort the subset by FM gap ratio
-    sorted_subset_first = min_time_subset.sort_values(by='FM_gap_ratio', ascending=True)
-    sorted_subset_last = max_time_subset.sort_values(by='FM_gap_ratio', ascending=True)
+    #sorted_subset_first = min_time_subset.sort_values(by='FM_gap_ratio', ascending=True)
+    #sorted_subset_last = max_time_subset.sort_values(by='FM_gap_ratio', ascending=True)
 
     # Start annotating from the bottom right of the figure
-    for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
-        x_text = plt.xlim()[1] + 300
-        y_text = row["FM_gap_ratio"]
-        plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-                     xy=(row['ptime'], row['FM_gap_ratio']),
-                     xytext=(x_text, y_text),
-                     ha='center',
-                     xycoords='data',
-                     fontsize=8,
-                     arrowprops=dict(arrowstyle="->"))
-
-
-    # Start annotating from the bottom right of the figure
-    for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
-        x_text = -350
-        y_text = row['FM_gap_ratio']
-        plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-                     xy=(row['ptime'], row['FM_gap_ratio']),
-                     xytext=(x_text, y_text),
-                     ha='center',
-                     fontsize=8,
-                     xycoords='data',
-                     arrowprops=dict(arrowstyle="->"))
-
+    # for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
+    #     x_text = plt.xlim()[1] + 300
+    #     y_text = row["FM_gap_ratio"]
+    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
+    #                  xy=(row['ptime'], row['FM_gap_ratio']),
+    #                  xytext=(x_text, y_text),
+    #                  ha='center',
+    #                  xycoords='data',
+    #                  fontsize=8,
+    #                  arrowprops=dict(arrowstyle="->"))
+    #
+    #
+    # # Start annotating from the bottom right of the figure
+    # for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
+    #     x_text = -350
+    #     y_text = row['FM_gap_ratio']
+    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
+    #                  xy=(row['ptime'], row['FM_gap_ratio']),
+    #                  xytext=(x_text, y_text),
+    #                  ha='center',
+    #                  fontsize=8,
+    #                  xycoords='data',
+    #                  arrowprops=dict(arrowstyle="->"))
+    #
     plt.yscale('log')
+
 
     # If a scale is provided, set the x and y limits
     if scale:
@@ -672,18 +654,21 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None):
         plt.ylim(scale[1])
 
     # Create the legend
-    plt.legend(title="Query Length", fontsize=14)
+    plt.legend(title="Query Length", loc='lower right', fontsize=10)
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Permutation Time (s)', fontsize=14)
-    plt.ylabel('Relative Effective Query Length', fontsize=14)
-    plt.title(f"Permutation Time vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
+    if xlabel:
+        plt.xlabel('Permutation Time (s)', fontsize=14)
+    if ylabel:
+        plt.ylabel('Relative Effective Query Length', fontsize=14)
+    if title:
+        plt.title(f"Permutation Time vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
-def plot_baseline(directory_name, output_filename, scale=None):
+def plot_baseline(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not all([os.path.exists(directory_name + suffix) for suffix in ['_baseline_plain', '_baseline_permutation', '_baseline_cache', '_baseline_cache_permutation']]):
         print(f"Baselines for {directory_name} not found!")
@@ -746,30 +731,37 @@ def plot_baseline(directory_name, output_filename, scale=None):
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
-    plt.xlabel('Average effective query length (bp)', fontsize=14)
-    plt.ylabel('Queries matched per second', fontsize=14)
-    plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    if xlabel:
+        plt.xlabel('Average effective query length (bp)', fontsize=14)
+    if ylabel:
+        plt.ylabel('Queries matched per second', fontsize=14)
+    if title:
+        plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
 
 
 if __name__ == '__main__':
-    p_c_scale = ((1e1,5e5),(1e1,5e5))
-    t_r_scale = ((0,128),(1e2,1e6))
-    dec_scale = ((16,64),(1e5,1e7))
+    principal_scale = ((1e1,5e5),(1,5e5))
     baseline_scale = ((1e1,5e5),(1,5e5))
+    fm_gap_cache_scale = ((-1,13),(1e-2,5e5))
+    fm_gap_permuatation_scale = ((0,3800),(1e-2,5e5))
 
-    plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', p_c_scale)
-    plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', p_c_scale)
-    plot_fm_gap('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap.png')
-    plot_fm_gap('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap.png')
-    plot_fm_gap_cache('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap_cache.png')
-    plot_fm_gap_cache('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_cache.png')
-    plot_fm_gap_permutation('../log/gencode.v40.fmdg_permutation', '../plot/gencode.v40.fmdg_fm_gap_permutation.png')
-    plot_fm_gap_permutation('../log/GRCh38-20-0.10b.fmdg_permutation', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_permutation.png')
-    plot_baseline('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline.png', baseline_scale)
-    plot_baseline('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline.png', baseline_scale)
+    plot_baseline('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline.png', baseline_scale, ylabel=True) #a
+    plot_baseline('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline.png', baseline_scale) #b
+
+    plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', principal_scale, xlabel=True, ylabel=True) #c
+    plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', principal_scale, xlabel=True) #d
+
+    plot_fm_gap_permutation('../log/GRCh38-20-0.10b.fmdg_permutation', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True, ylabel=True) #e
+    plot_fm_gap_permutation('../log/gencode.v40.fmdg_permutation', '../plot/gencode.v40.fmdg_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True,)  #f
+
+    plot_fm_gap_cache('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ylabel=True) #g
+    plot_fm_gap_cache('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True,) #h
+
+    #plot_fm_gap('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap.png')
+    #plot_fm_gap('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap.png')
 
     #plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
     #plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
