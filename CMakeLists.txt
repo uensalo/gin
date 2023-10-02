@@ -4,15 +4,20 @@ project(fmd C)
 set(CMAKE_C_STANDARD 99)
 
 set(BUILD_OPENMP ON)
-set(BUILD_TESTS OFF)
-set(DEBUG OFF)
+set(BUILD_MARCH_NATIVE_FLAG OFF)
 
-if(DEBUG)
+set(BUILD_TESTS OFF)
+set(BUILD_DEBUG OFF)
+
+if(BUILD_DEBUG)
     add_link_options(-fsanitize=address)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
     set(BUILD_OPENMP OFF)
 else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIC")
+    if(BUILD_MARCH_NATIVE_FLAG)
+        set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=native")
+    endif()
 endif()
 
 set(PROJECT_ROOT_DIR   ${CMAKE_SOURCE_DIR})

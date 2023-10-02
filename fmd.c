@@ -855,7 +855,7 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                                 tasks[j].partial_matches->size,
                                                 tasks[j].stats->no_calls_to_advance_fork);
                                         } else {
-                                            fprintf(foutput, "%s:(c:%lld)\n", tasks[j].str->seq, matching_count);
+                                            fprintf(foutput, "%s:\n", tasks[j].str->seq);
                                         }
                                         no_matching_forks += tasks[j].exact_matches->size;
                                         no_missing_forks += tasks[j].partial_matches->size;
@@ -1181,7 +1181,7 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                         ++j;
                         ++strings_processed;
                     } else { // v,o pair
-                        if (sscanf(buf, "\t(v:%lu,o:%ld)", &tasks[i].v, &tasks[i].o) == 2) {
+                        if (sscanf(buf, "\t(v:%llu,o:%lld)", &tasks[i].v, &tasks[i].o) == 2) {
                             tasks[i].str = current_string;
                             tasks[i].metadata = current_encoded_string;
                             roots_processed++;
@@ -1281,8 +1281,6 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
         default:
             break;
     }
-
-
 
     return return_code;
 }
