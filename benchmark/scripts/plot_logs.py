@@ -1,8 +1,8 @@
 import os
 import re
 import pandas as pd
-import numpy as np
 import matplotlib.pyplot as plt
+from decimal import Decimal
 
 
 def parse_file(filepath):
@@ -30,7 +30,6 @@ def parse_file(filepath):
                 r'sampling_rate_(?P<sampling_rate>\d+)_cache_(?P<cache>\d+)_fork_(?P<fork>-?\d+)_match_(?P<match>-?\d+)_threads_(?P<threads>\d+)_length_(?P<length>\d+)_decode\.txt')
             find_fields = find_pattern.search(basename)
             data.update(find_fields.groupdict())
-
 
     elif basename.startswith('perm_'):
         perm_pattern = re.compile(r'threads_(?P<threads>\d+)\.txt')
@@ -162,6 +161,7 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
         print(f"Directory {directory_name} not found!")
         return
 
+    # Parse all logs from directory
     find_df, _, _, _ = parse_directory_logs(directory_name)
 
     plt.figure(figsize=(12, 8))
@@ -178,7 +178,7 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
 
     # Connect data points of the same cache size with dashed lines
     caches = sorted(find_df['cache'].unique())
-    cache_cmap = plt.get_cmap('Dark2', len(caches))  # Using the Dark2 colormap for cache lines
+    cache_cmap = plt.get_cmap('Dark2', len(caches))
     for cache in caches:
         subset = find_df[find_df['cache'] == cache]
         subset = subset.sort_values(by='length')
@@ -213,283 +213,13 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
     plt.close()
 
 
-def plot_threads_rate(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    plt.figure(figsize=(12, 8))
-
-    # Create a list of line styles
-    line_styles = ['-', '-.', ':', '--']
-
-    # Create a color map for the different thread values
-    unique_threads = sorted(find_df['threads'].unique())
-    thread_cmap = plt.get_cmap('tab10', len(unique_threads))
-
-    # Create a marker list for the different sampling rates
-    unique_sampling_rates = sorted(find_df['sampling_rate'].unique())
-    markers = ['o', 's', 'D', 'X', '^']
-
-    # Plot the data grouped by thread values and sampling rates
-    for i, thread in enumerate(unique_threads):
-        for j, sampling_rate in enumerate(unique_sampling_rates):
-            subset = find_df[(find_df['threads'] == thread) & (find_df['sampling_rate'] == sampling_rate)]
-            subset = subset.sort_values(by='length')
-            plt.loglog(subset['length'], subset['queries_per_second'],
-                       linestyle=line_styles[j % len(line_styles)],
-                       marker=markers[i % len(markers)],
-                       markersize=4,
-                       color=thread_cmap(i / len(unique_threads)),
-                       label=f'Threads: {thread}, Sampling Period: {sampling_rate}')
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    # Create the legends with explicit positioning
-    thread_handles = [plt.Line2D([0], [0], color=thread_cmap(i / len(unique_threads)), marker=markers[i % len(markers)], linestyle='None', label=f'{thread}') for i, thread in enumerate(unique_threads)]
-    legend1 = plt.legend(handles=thread_handles, loc='upper right', title="Threads")
-    plt.gca().add_artist(legend1)
-    sampling_rate_handles = [plt.Line2D([0], [0], color='black', linestyle=line_styles[i % len(line_styles)], label=f'{sampling_rate}') for i, sampling_rate in enumerate(unique_sampling_rates)]
-    legend2 = plt.legend(handles=sampling_rate_handles, loc='upper right', bbox_to_anchor=(0.9025, 1), title="Sampling Period")
-
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    if xlabel:
-        plt.xlabel('Query length', fontsize=14)
-    if ylabel:
-        plt.ylabel('Queries matched per second', fontsize=14)
-    if title:
-        plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png', bbox_inches='tight')
-    plt.close()
-
-
-def plot_threads_rate2(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    plt.figure(figsize=(12, 8))
-
-    # Create a list of line styles
-    line_styles = ['-', '-.', ':', '--']
-
-    # Create a color map for the different query lengths
-    unique_lengths = sorted(find_df['length'].unique())
-    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
-
-    # Create a marker list for the different sampling rates
-    unique_sampling_rates = sorted(find_df['sampling_rate'].unique())
-    markers = ['o', 's', 'D', 'X', '^']
-
-    # Plot the data grouped by query length and sampling rates
-    for i, length in enumerate(unique_lengths):
-        for j, sampling_rate in enumerate(unique_sampling_rates):
-            subset = find_df[(find_df['length'] == length) & (find_df['sampling_rate'] == sampling_rate)]
-            subset = subset.sort_values(by='threads')
-            plt.loglog(subset['threads'], subset['queries_per_second'],
-                       linestyle=line_styles[j % len(line_styles)],
-                       marker=markers[i % len(markers)],
-                       markersize=4,
-                       color=length_cmap(i / len(unique_lengths)),
-                       label=f'Query Length: {length}, Sampling Period: {sampling_rate}')
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    # Create the legends with explicit positioning
-    length_handles = [plt.Line2D([0], [0], color=length_cmap(i / len(unique_lengths)), marker=markers[i % len(markers)], linestyle='None', label=f'{length}') for i, length in enumerate(unique_lengths)]
-    legend1 = plt.legend(handles=length_handles, loc='upper right', title="Query Length")
-    plt.gca().add_artist(legend1)
-    sampling_rate_handles = [plt.Line2D([0], [0], color='black', linestyle=line_styles[i % len(line_styles)], label=f'{sampling_rate}') for i, sampling_rate in enumerate(unique_sampling_rates)]
-    legend2 = plt.legend(handles=sampling_rate_handles, loc='upper right', bbox_to_anchor=(0.88, 1), title="Sampling Period")
-
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    if xlabel:
-        plt.xlabel('Number of threads', fontsize=14)
-    if ylabel:
-        plt.ylabel('Queries matched per second', fontsize=14)
-    if title:
-        plt.title(f"Number of Threads vs Queries per Second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png', bbox_inches='tight')
-    plt.close()
-
-
-def plot_decode(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    plt.figure(figsize=(12, 8))
-
-    # Create a color map for the different query lengths
-    unique_lengths = sorted(find_df['length'].unique())
-    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
-
-    # Plot the data grouped by query length
-    for i, qlength in enumerate(unique_lengths):
-        subset = find_df[find_df['length'] == qlength]
-        subset = subset.sort_values(by='sampling_rate')
-        plt.loglog(subset['sampling_rate'], subset['matches_decoded_per_second'],
-                   linestyle='--',
-                   color=length_cmap(unique_lengths.index(qlength)),
-                   marker='o',
-                   label=f'{qlength}')
-
-    # Set the x and y scales to be logarithmic
-    plt.xscale('log')
-    plt.yscale('log')
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    # Create the legend
-    plt.legend(title="Query Length", fontsize=10, loc='upper right')
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    if xlabel:
-        plt.xlabel('Index sampling period', fontsize=14)
-    if ylabel:
-        plt.ylabel('Decoding speed (matches per second)', fontsize=14)
-    if title:
-        plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png', bbox_inches='tight')
-    plt.close()
-
-
-def plot_decode_diff(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    plt.figure(figsize=(12, 8))
-
-    # Create a color map for the different query lengths
-    unique_lengths = sorted(find_df['length'].unique())
-    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
-
-    # Plot the data grouped by query length
-    for i, qlength in enumerate(unique_lengths):
-        subset = find_df[find_df['length'] == qlength]
-        subset = subset.sort_values(by='sampling_rate')
-        plt.loglog(subset['sampling_rate'], subset['matches_decoded_per_second'],
-                   linestyle='--',
-                   color=length_cmap(unique_lengths.index(qlength)),
-                   marker='o',
-                   label=f'{qlength}')
-
-    # Set the x and y scales to be logarithmic
-    plt.xscale('log')
-    plt.yscale('log')
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    # Create the legend
-    plt.legend(title="Query Length", loc='upper right', fontsize=10)
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    if xlabel:
-        plt.xlabel('Index sampling period', fontsize=14)
-    if ylabel:
-        plt.ylabel('Decoding speed (matches per second)', fontsize=14)
-    if title:
-        plt.title(f"Index Sampling Period vs Decoding Speed for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png', bbox_inches='tight')
-    plt.close()
-
-def plot_fm_gap(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
-    # Check if directory exists
-    if not os.path.exists(directory_name):
-        print(f"Directory {directory_name} not found!")
-        return
-
-    # Assuming the first return value from your function is the DataFrame
-    find_df, _, _, _ = parse_directory_logs(directory_name)
-
-    # Compute FM gap
-    find_df['FM_gap'] = find_df['number_fork_advances_per_query'] - find_df['length']
-
-    plt.figure(figsize=(12, 8))
-
-    # Create a color map for the different query lengths
-    unique_lengths = sorted(find_df['length'].unique())
-    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
-
-    # Plot the data grouped by query length
-    for qlength in unique_lengths:
-        subset = find_df[find_df['length'] == qlength]
-        subset = subset.sort_values(by='cache')
-        plt.plot(subset['cache'], subset['FM_gap'],
-                 linestyle='-',
-                 color=length_cmap(unique_lengths.index(qlength)),
-                 marker='o',
-                 label=f'{qlength}')
-
-    plt.yscale('log')
-
-    # If a scale is provided, set the x and y limits
-    if scale:
-        plt.xlim(scale[0])
-        plt.ylim(scale[1])
-
-    # Create the legend
-    plt.legend(title="Query Length", loc='upper right', fontsize=10)
-    plt.xticks(fontsize=12)
-    plt.yticks(fontsize=12)
-
-    if xlabel:
-        plt.xlabel('Cache Depth', fontsize=14)
-    if ylabel:
-        plt.ylabel('FM Gap', fontsize=14)
-    if title:
-        plt.title(f"Cache Depth vs FM Gap for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
-    plt.grid(True, which="both", ls="--", c='0.65')
-    plt.savefig(output_filename, format='png', bbox_inches='tight')
-    plt.close()
-
-
 def plot_fm_gap_cache(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not os.path.exists(directory_name):
         print(f"Directory {directory_name} not found!")
         return
 
-    # Assuming the first return value from your function is the DataFrame
+    # Parse all logs from directory
     find_df, _, _, _ = parse_directory_logs(directory_name)
 
     # Compute FM gap
@@ -510,52 +240,6 @@ def plot_fm_gap_cache(directory_name, output_filename, scale=None, title=False, 
                  color=length_cmap(unique_lengths.index(qlength)),
                  marker='o',
                  label=f'{qlength}')
-
-    # Annotate the points for the largest cache depth
-    ax = plt.gca()
-    fig = plt.gcf()
-    fig_size_px = fig.get_size_inches() * fig.dpi
-    fig_width_px, fig_height_px = fig_size_px
-
-    # Find the largest cache depth
-    max_cache = find_df['cache'].max()
-    min_cache = find_df['cache'].min()
-
-    # Get the subset of data for the largest cache depth
-    max_cache_subset = find_df[find_df['cache'] == max_cache]
-    min_cache_subset = find_df[find_df['cache'] == min_cache]
-
-    # Sort the subset by FM gap ratio
-    #sorted_subset_first = min_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
-    #sorted_subset_last = max_cache_subset.sort_values(by='FM_gap_ratio', ascending=True)
-
-    # Calculate the y_step dynamically
-    #y_step = 8 / len(sorted_subset_last)
-
-    # Start annotating from the bottom right of the figure
-    # for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
-    #     x_text = plt.xlim()[1] + 1
-    #     y_text = y_step*(np.exp(i-3.5))
-    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-    #                  xy=(row['cache'], row['FM_gap_ratio']),
-    #                  xytext=(x_text, y_text),
-    #                  ha='center',
-    #                  xycoords='data',
-    #                  fontsize=8,
-    #                  arrowprops=dict(arrowstyle="->"))
-    #
-    #
-    # # Start annotating from the bottom right of the figure
-    # for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
-    #     x_text = -2
-    #     y_text = y_step*(np.exp(i))
-    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-    #                  xy=(row['cache'], row['FM_gap_ratio']),
-    #                  xytext=(x_text, y_text),
-    #                  ha='center',
-    #                  fontsize=8,
-    #                  xycoords='data',
-    #                  arrowprops=dict(arrowstyle="->"))
 
     plt.yscale('log')
 
@@ -586,7 +270,7 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None, title=F
         print(f"Directory {directory_name} not found!")
         return
 
-    # Assuming the first return value from your function is the DataFrame
+    # Parse all logs from directory
     find_df, _, _, _ = parse_directory_logs(directory_name)
 
     # Compute FM gap
@@ -608,45 +292,7 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None, title=F
                  marker='o',
                  label=f'{qlength}')
 
-    # Find the largest cache depth
-    #max_time = find_df['ptime'].max()
-    #min_time = find_df['ptime'].min()
-
-    # Get the subset of data for the largest cache depth
-    #max_time_subset = find_df[find_df['ptime'] == max_time]
-    #min_time_subset = find_df[find_df['ptime'] == min_time]
-
-    # Sort the subset by FM gap ratio
-    #sorted_subset_first = min_time_subset.sort_values(by='FM_gap_ratio', ascending=True)
-    #sorted_subset_last = max_time_subset.sort_values(by='FM_gap_ratio', ascending=True)
-
-    # Start annotating from the bottom right of the figure
-    # for i, (index, row) in enumerate(sorted_subset_last.iterrows()):
-    #     x_text = plt.xlim()[1] + 300
-    #     y_text = row["FM_gap_ratio"]
-    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-    #                  xy=(row['ptime'], row['FM_gap_ratio']),
-    #                  xytext=(x_text, y_text),
-    #                  ha='center',
-    #                  xycoords='data',
-    #                  fontsize=8,
-    #                  arrowprops=dict(arrowstyle="->"))
-    #
-    #
-    # # Start annotating from the bottom right of the figure
-    # for i, (index, row) in enumerate(sorted_subset_first.iterrows()):
-    #     x_text = -350
-    #     y_text = row['FM_gap_ratio']
-    #     plt.annotate(f'{row["FM_gap_ratio"] * 100:.2f}%',
-    #                  xy=(row['ptime'], row['FM_gap_ratio']),
-    #                  xytext=(x_text, y_text),
-    #                  ha='center',
-    #                  fontsize=8,
-    #                  xycoords='data',
-    #                  arrowprops=dict(arrowstyle="->"))
-    #
     plt.yscale('log')
-
 
     # If a scale is provided, set the x and y limits
     if scale:
@@ -667,6 +313,7 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None, title=F
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
+
 
 def plot_baseline(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
@@ -742,6 +389,34 @@ def plot_baseline(directory_name, output_filename, scale=None, title=False, xlab
     plt.close()
 
 
+def tabulate_decode(directory_name, output_filename):
+    # Check if directory exists
+    if not os.path.exists(directory_name):
+        print(f"Directory {directory_name} not found!")
+        return
+
+    # Parse all logs from directory
+    find_df, _, _, _ = parse_directory_logs(directory_name)
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df['length'].unique())
+
+    # get a handle to the output file
+    f = open(output_filename, 'w')
+    f.write('\\begin{tabular}{|c|c|c|c|}\n\\hline\n Query Length (bp) & Avg. Match Time & Avg. Decode Time & Avg. Count\\\\\\hline\n')
+
+    # Plot the data grouped by query length
+    for i, qlength in enumerate(unique_lengths):
+        subset = find_df[find_df['length'] == qlength]
+        ct = subset['total_matches_decoded'].iloc[0] / subset['total_queries_processed'].iloc[0]
+        mdps = subset['total_decoding_time'].iloc[0] / subset['total_queries_processed'].iloc[0]
+        mcps = subset['time_per_query'].iloc[0]
+        f.write(f'{qlength} & {Decimal(mcps):.3E} & {Decimal(mdps):.3E} & {Decimal(ct):.3E} \\\\ \\hline \n')
+
+    f.write('\\end{tabular}\n')
+    f.close()
+
+
 if __name__ == '__main__':
     principal_scale = ((1e1,5e5),(1,5e5))
     baseline_scale = ((1e1,5e5),(1,5e5))
@@ -758,22 +433,7 @@ if __name__ == '__main__':
     plot_fm_gap_permutation('../log/gencode.v40.fmdg_permutation', '../plot/gencode.v40.fmdg_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True,)  #f
 
     plot_fm_gap_cache('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ylabel=True) #g
-    plot_fm_gap_cache('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True,) #h
+    plot_fm_gap_cache('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ) #h
 
-    #plot_fm_gap('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap.png')
-    #plot_fm_gap('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap.png')
-
-    #plot_partial_forks('../log/gencode.v40.fmdg_c_l2_hard', '../plot/gencode.v40.fmdg_partial_forks_hard.png')
-    #plot_partial_forks('../log/GRCh38-20-0.10b.fmdg_c_l2_hard', '../plot/GRCh38-20-0.10b.fmdg_partial_forks_hard.png')
-
-    #plot_threads_rate2('../log/gencode.v40.fmdg_j_l4_hard', '../plot/gencode.v40.fmdg_threads_rates_hard.png', t_r_scale)
-    #plot_threads_rate2('../log/GRCh38-20-0.10b.fmdg_j_l4_hard', '../plot/GRCh38-20-0.10b.fmdg_threads_rates_hard.png', t_r_scale)
-
-    #plot_decode('../log/gencode.v40.fmdg_decode3_hard', '../plot/gencode.v40.fmdg_decode_hard3.png', dec_scale)
-    #plot_decode('../log/GRCh38-20-0.10b.fmdg_decode3_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard3.png', dec_scale)
-
-    #plot_decode('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_hard.png', dec_scale)
-    #plot_decode('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_hard.png', dec_scale)
-
-    #plot_decode_diff('../log/gencode.v40.fmdg_decode4_hard', '../plot/gencode.v40.fmdg_decode_diff_hard.png')
-    #plot_decode_diff('../log/GRCh38-20-0.10b.fmdg_decode4_hard', '../plot/GRCh38-20-0.10b.fmdg_decode_diff_hard.png')
+    tabulate_decode('../log/gencode.v40.fmdg_rate_decode', '../plot/gencode.v40.fmdg_rate_decode_table.tex')
+    tabulate_decode('../log/GRCh38-20-0.10b.fmdg_rate_decode', '../plot/GRCh38-20-0.10b.fmdg_rate_decode_table.tex')
