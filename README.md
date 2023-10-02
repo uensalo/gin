@@ -10,6 +10,12 @@ scale with the size of the input graph.
 - [Usage](#usage)
   - [General](#general)
   - [Program Specific File Formats](#program-arguments-and-further-usage)
+    - [.fmdg](#fmdg)
+    - [.fmdq](#fmdq)
+    - [.fmdi](#fmdi)
+    - [.fmdc](#fmdc)
+    - [.fmdp](#fmdp)
+    - [.fmde](#fmde)
   - [Bare Minimum Indexing Pipeline](#bare-minimum-indexing-scheme)
   - [Full Indexing Pipeline](#full-indexing-pipeline)
 - [Output Format Description of `fmd query find` and `fmd decode walks`](#output-format-description-of-fmd-query-find-and-fmd-decode-walks)    
@@ -62,7 +68,9 @@ of the outputs of other programs might significantly boost the performance of in
 
 `fmd` works with program specific file formats. 
 The file formats are as follows.
+
 #### .fmdg
+
 Human readable tab separated string graph file supplied as input to various programs under `fmd`. The `.fmdg` format is defined as follows:
 
 Each line defines either a string labelled vertex or a directed edge. Vertex lines start
@@ -109,7 +117,8 @@ which encodes the following string graph:
 
 <img src="img/fmdg_example.png" alt="String graph encoded by the example .fmdg file." width="25%">
 
-####.fmdq
+#### .fmdq
+
 Human readable query file format. One query per line, terminated with an exit prompt (`exit();` by default, can be changed arbitrarily in `fmd.c`) to indicate the end of stream.
 
 Example .fmdq file:
@@ -122,13 +131,13 @@ AAAAGCAT
 exit();
 ```
 
-####.fmdi
+#### .fmdi
 Binary graph index file.
 
-####.fmdc
+#### .fmdc
 Binary precomputed suffix array range cache file.
 
-####.fmdp
+#### .fmdp
 Human readable vertex permutation file. One integer per line. `V0` is permuted to the vertex index in the first line, `V1` to the second index, and so on.
 
 Example .fmdp file:
@@ -139,6 +148,9 @@ Example .fmdp file:
 1
 4
 ```
+
+#### .fmde
+Binary encoding of an .fmdg file.
 
 ### Bare Minimum Indexing Scheme
 To have a minimally working graph index, the following commands suffice:
