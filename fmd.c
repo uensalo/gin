@@ -1237,13 +1237,13 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                 #ifdef FMD_OMP
                 omp_set_num_threads((int)num_threads);
                 #endif
-                #pragma omp parallel default(none) shared(j, blocks, encoded_graph)
+                #pragma omp parallel default(none) shared(blocks, encoded_graph) firstprivate(j)
                 {
                     #pragma omp single
                     {
                         for (int_t b = 0; b < j; b++) {
                             for (int_t t = 0; t < blocks[b].no_tasks; t++) {
-                                #pragma omp task default(none) shared(j, blocks, encoded_graph, b, t)
+                                #pragma omp task default(none) shared(blocks, encoded_graph) firstprivate(b, t)
                                 {
                                     fmd_encoded_graph_walk_string(encoded_graph,
                                                                   blocks[b].str,
