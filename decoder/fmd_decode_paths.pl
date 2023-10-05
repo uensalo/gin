@@ -134,6 +134,8 @@ while (<$fh>) {
     if (/^(\w+):$/) {
         $current_string = $1;
         print OUT "$current_string:\n";
+    } elsif ($_ eq "\t-") {
+        print OUT "\t-\n";
     } elsif (my ($v, $o) = /\(v:(\d+),o:(\d+)\)/) {
         find_paths($current_string, $v, $o, [], $o);
     }
