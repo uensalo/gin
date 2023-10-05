@@ -822,6 +822,9 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                             fprintf(foutput, "\t(v:%lld,o:%lld)\n", decoded_match->vid, decoded_match->offset);
                                         }
                                     }
+                                    if(!decoded_matches->size) {
+                                        fprintf(foutput, "\t-\n");
+                                    }
                                     fmd_vector_free(decoded_matches);
                                     fmd_vector_free(tasks[j].exact_matches);
                                     fmd_vector_free(tasks[j].partial_matches);
@@ -854,15 +857,18 @@ int fmd_main_query(int argc, char **argv, fmd_query_mode_t mode) {
                                                 tasks[j].exact_matches->size,
                                                 tasks[j].partial_matches->size,
                                                 tasks[j].stats->no_calls_to_advance_fork);
-                                        } else {
-                                            fprintf(foutput, "%s:\n", tasks[j].str->seq);
-                                        }
-                                        no_matching_forks += tasks[j].exact_matches->size;
-                                        no_missing_forks += tasks[j].partial_matches->size;
-                                        for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
-                                            fmd_fork_node_t *fork = tasks[j].exact_matches->data[k];
-                                            fprintf(foutput, "\t(%lld,%lld)\n", fork->sa_lo,fork->sa_hi);
-                                        }
+                                    } else {
+                                        fprintf(foutput, "%s:\n", tasks[j].str->seq);
+                                    }
+                                    no_matching_forks += tasks[j].exact_matches->size;
+                                    no_missing_forks += tasks[j].partial_matches->size;
+                                    for (int_t k = 0; k < tasks[j].exact_matches->size; k++) {
+                                        fmd_fork_node_t *fork = tasks[j].exact_matches->data[k];
+                                        fprintf(foutput, "\t(%lld,%lld)\n", fork->sa_lo,fork->sa_hi);
+                                    } if(!tasks[j].exact_matches->size) {
+                                        fprintf(foutput, "\t-\n");
+                                    }
+
                                     fmd_vector_free(tasks[j].exact_matches);
                                     fmd_vector_free(tasks[j].partial_matches);
                                     fmd_string_free(tasks[j].str);
@@ -1130,25 +1136,32 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
             char *outbuf = calloc(FMD_MAIN_QUERY_BUF_LEN, sizeof(char));
             int_t outbuf_size = FMD_MAIN_QUERY_BUF_LEN;
             typedef struct walk_task_ {
-                fmd_string_t *str;
-                void *metadata;
                 vid_t v;
                 int_t o;
                 fmd_vector_t *walks;
             } walk_task_t;
+            typedef struct walk_block_ {
+                fmd_string_t *str;
+                fmd_bs_t *encoded_str;
+                walk_task_t *tasks;
+                int_t no_tasks;
+            } walk_block_t;
             #ifdef FMD_OMP
             omp_set_num_threads((int)num_threads);
             #endif
-            walk_task_t *tasks = calloc(batch_size, sizeof(walk_task_t));
-            fmd_string_t **strings = calloc(batch_size, sizeof(fmd_string_t*));
-            fmd_bs_t **enc_strs = calloc(batch_size, sizeof(fmd_bs_t*));
-            fmd_string_t *last_printed = NULL;
-            fmd_string_t *current_string = NULL;
-            fmd_bs_t *current_encoded_string = NULL;
+            walk_block_t *blocks = calloc(batch_size, sizeof(walk_block_t));
+            for(int_t b = 0; b < batch_size; b++) {
+                blocks[b].tasks = calloc(batch_size, sizeof(walk_task_t));
+            }
             bool exit_flag = false;
+            bool iter_first = true;
+            bool carryover = false;
+            fmd_string_t *last_printed_string = NULL;
 
             while(true) {
                 i = 0;
+                j = 0;
+                iter_first = true;
                 while (i < batch_size && fgets(buf, FMD_MAIN_QUERY_BUF_LEN, finput)) {
                     int_t len = (int_t)strlen(buf);
                     if(buf[len-1] == '\n') buf[len-1] = 0; // get rid of the end line character
@@ -1156,113 +1169,159 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                         exit_flag = true;
                         break;
                     }
-                    // parse the line here
-                    if (buf[0] != '\t') { // string label
+                    if (buf[0] != '\t') { // end of previous block, start of a new block
+                        // finalize previous block if necessary
+                        if (!iter_first) {
+                            // encode the string if necessary
+                            if (blocks[j].no_tasks) {
+                                fmd_bs_t *encoded_query;
+                                int_t bits_per_char = fmd_ceil_log2(encoded_graph->alphabet_size);
+                                int_t no_words_in_encoding = 1 + (blocks[j].str->size * bits_per_char - 1) / WORD_NUM_BITS;
+                                fmd_bs_init_reserve(&encoded_query, no_words_in_encoding);
+                                word_t idx = 0;
+                                for(int_t q = 0; q < blocks[j].str->size; q++) {
+                                    fmd_bs_write_word(encoded_query, idx, (word_t)encoded_graph->encoding_table[blocks[j].str->seq[q]], bits_per_char);
+                                    idx += bits_per_char;
+                                }
+                                blocks[j].encoded_str = encoded_query;
+                            }
+                            ++j;
+                        } else if (carryover) {
+                            fmd_string_free(blocks[j].str);
+                            fmd_bs_free(blocks[j].encoded_str);
+                            blocks[j].encoded_str = NULL;
+                        }
+                        // parse the string for the new block
                         buf[len-2] = 0; // get rid of the colon
-                        if(i == 0 && current_string) { // string was exhausted in the last batch
-                            j = 0;
-                            fmd_string_free(current_string);
-                            fmd_bs_free(current_encoded_string);
-                        }
-                        fmd_string_init_cstr(&current_string, buf);
-                        strings[j] = current_string;
-                        // metadata: compare in the encoded domain for faster traversal
-                        fmd_bs_t *encoded_query;
-                        int_t bits_per_char = fmd_ceil_log2(encoded_graph->alphabet_size);
-                        int_t no_words_in_encoding = 1 + (current_string->size * bits_per_char - 1) / WORD_NUM_BITS;
-                        fmd_bs_init_reserve(&encoded_query, no_words_in_encoding);
-                        word_t idx = 0;
-                        for(int_t q = 0; q < current_string->size; q++) {
-                            fmd_bs_write_word(encoded_query, idx, (word_t)encoded_graph->encoding_table[current_string->seq[q]], bits_per_char);
-                            idx += bits_per_char;
-                        }
-                        enc_strs[j] = encoded_query;
-                        current_encoded_string = encoded_query;
-                        ++j;
+                        fmd_string_init_cstr(&blocks[j].str, buf);
                         ++strings_processed;
                     } else { // v,o pair
-                        if (sscanf(buf, "\t(v:%llu,o:%lld)", &tasks[i].v, &tasks[i].o) == 2) {
-                            tasks[i].str = current_string;
-                            tasks[i].metadata = current_encoded_string;
-                            roots_processed++;
+                        vid_t v = -1;
+                        int_t o = -1;
+                        if (buf[0] == '\t'&& buf[1] == '-') {
+                            ++roots_processed;
+                            ++i;
+                        }
+                        else if (sscanf(buf, "\t(v:%llu,o:%lld)", &v, &o) == 2) {
+                            blocks[j].tasks[blocks[j].no_tasks].v = v;
+                            blocks[j].tasks[blocks[j].no_tasks].o = o;
+                            blocks[j].tasks[blocks[j].no_tasks].walks = NULL;
+                            ++blocks[j].no_tasks;
+                            ++roots_processed;
                             ++i;
                         }
                     }
+                    iter_first = false;
+                }
+                if (!iter_first) { // encode the last block
+                    if(blocks[j].no_tasks) {
+                        fmd_bs_t *encoded_query;
+                        int_t bits_per_char = fmd_ceil_log2(encoded_graph->alphabet_size);
+                        int_t no_words_in_encoding = 1 + (blocks[j].str->size * bits_per_char - 1) / WORD_NUM_BITS;
+                        fmd_bs_init_reserve(&encoded_query, no_words_in_encoding);
+                        word_t idx = 0;
+                        for (int_t q = 0; q < blocks[j].str->size; q++) {
+                            fmd_bs_write_word(encoded_query, idx,
+                                              (word_t) encoded_graph->encoding_table[blocks[j].str->seq[q]],
+                                              bits_per_char);
+                            idx += bits_per_char;
+                        }
+                        blocks[j].encoded_str = encoded_query;
+                    }
+                    ++j;
                 }
 
+
                 clock_gettime(CLOCK_REALTIME, &t1);
+                // flatten blocks to tasks
                 #ifdef FMD_OMP
                 omp_set_num_threads((int)num_threads);
                 #endif
-                #pragma omp parallel for default(none) shared(encoded_graph, tasks, i)
-                for(int_t k = 0; k < i; k++) {
-                    fmd_encoded_graph_walk_string(encoded_graph,
-                                                  tasks[k].str,
-                                                  tasks[k].v,
-                                                  tasks[k].o,
-                                                  tasks[k].metadata,
-                                                  fmd_encoded_graph_walk_extend_default,
-                                                  &tasks[k].walks);
+                #pragma omp parallel default(none) shared(j, blocks, encoded_graph)
+                {
+                    #pragma omp single
+                    {
+                        for (int_t b = 0; b < j; b++) {
+                            for (int_t t = 0; t < blocks[b].no_tasks; t++) {
+                                #pragma omp task default(none) shared(j, blocks, encoded_graph, b, t)
+                                {
+                                    fmd_encoded_graph_walk_string(encoded_graph,
+                                                                  blocks[b].str,
+                                                                  blocks[b].tasks[t].v,
+                                                                  blocks[b].tasks[t].o,
+                                                                  blocks[b].encoded_str,
+                                                                  fmd_encoded_graph_walk_extend_default,
+                                                                  &blocks[b].tasks[t].walks);
+                                }
+                            }
+                        }
+                    }
+                    #pragma omp taskwait
                 }
 
                 clock_gettime(CLOCK_REALTIME, &t2);
                 walk_process_time += to_sec(t1,t2);
-
-                for(int_t k = 0; k < i; k++) {
-                    if(last_printed != tasks[k].str) {
-                        fprintf(foutput, "%s:\n", tasks[k].str->seq);
-                        last_printed = tasks[k].str;
+                for(int_t b = 0; b < j; b++) {
+                    if(last_printed_string != blocks[b].str) {
+                        fprintf(foutput, "%s:\n", blocks[b].str->seq);
+                        last_printed_string = blocks[b].str;
                     }
-                    walks_processed += tasks[k].walks->size;
-                    for(int_t l = 0; l < tasks[k].walks->size; l++) {
-                        fmd_walk_t *walk = tasks[k].walks->data[l];
-                        int_t start_offset = walk->head->graph_lo;
-                        int_t end_offset = walk->tail->graph_hi;
-                        fmd_walk_node_t *n = walk->head;
-                        char tmp[256];
-                        int_t outbuf_len = 0;
-                        while(n != walk->dummy) {
-                            int_t s = sprintf(tmp, "%ld", n->vid);
-                            while (s + outbuf_len + 1  >= outbuf_size) {
-                                outbuf = realloc(outbuf, (outbuf_size*=2));
+                    if(blocks[b].no_tasks) {
+                        for (int_t t = 0; t < blocks[b].no_tasks; t++) {
+                            walks_processed += blocks[b].tasks[t].walks->size;
+                            for (int_t l = 0; l < blocks[b].tasks[t].walks->size; l++) {
+                                fmd_walk_t *walk = blocks[b].tasks[t].walks->data[l];
+                                int_t start_offset = walk->head->graph_lo;
+                                int_t end_offset = walk->tail->graph_hi;
+                                fmd_walk_node_t *n = walk->head;
+                                char tmp[256];
+                                int_t outbuf_len = 0;
+                                while (n != walk->dummy) {
+                                    int_t s = sprintf(tmp, "%lld", n->vid);
+                                    while (s + outbuf_len + 1 >= outbuf_size) {
+                                        outbuf = realloc(outbuf, (outbuf_size *= 2));
+                                    }
+                                    memcpy(outbuf + outbuf_len, tmp, s);
+                                    outbuf_len += s + 1;
+                                    outbuf[outbuf_len - 1] = ':';
+                                    n = n->next;
+                                }
+                                outbuf[outbuf_len - 1] = '\0';
+                                fprintf(foutput, "\t(%lld,%lld);%s\n", start_offset, end_offset, outbuf);
                             }
-                            memcpy(outbuf + outbuf_len, tmp, s);
-                            outbuf_len += s+1;
-                            outbuf[outbuf_len-1] = ':';
-                            n = n->next;
+                            fmd_vector_free(blocks[b].tasks[t].walks);
+                            blocks[b].tasks[t].walks = NULL;
                         }
-                        outbuf[outbuf_len-1] = '\0';
-                        fprintf(foutput, "\t(%ld,%ld);%s\n",start_offset,end_offset,outbuf);
+                        blocks[b].no_tasks = 0;
+                    } else {
+                        fprintf(foutput, "\t-\n");
                     }
-                    if (!tasks[k].walks->size) {
-                        fprintf(foutput, "-\n");
+                    if(b != j-1) {
+                        fmd_string_free(blocks[b].str);
+                        fmd_bs_free(blocks[b].encoded_str);
+                        blocks[b].str = NULL;
+                        blocks[b].encoded_str = NULL;
                     }
-                    fmd_vector_free(tasks[k].walks);
                 }
-                // cleanup, free all except the last
-                for(int_t k = 0 ; k < j - 1; k++) {
-                    fmd_string_free(strings[k]);
-                    fmd_bs_free(enc_strs[k]);
-                    strings[k] = NULL;
-                    enc_strs[k] = NULL;
+
+                // move the contents of the last block to the first index
+                blocks[0].str = blocks[j-1].str;
+                blocks[0].encoded_str = blocks[j-1].encoded_str;
+                if(j > 1) { // self swap
+                    blocks[j - 1].str = NULL;
+                    blocks[j - 1].encoded_str = NULL;
                 }
-                // the last string may be cut-off
-                strings[0] = current_string;//strings[j];
-                enc_strs[0] = current_encoded_string;//enc_strs[j];
-                j = 1;
+                carryover = true;
                 if(exit_flag)
                     break;
-            }
-            if(current_string) {
-                fmd_string_free(current_string);
-                fmd_bs_free(current_encoded_string);
             }
 
             free(buf);
             free(outbuf);
-            free(tasks);
-            free(strings);
-            free(enc_strs);
+            for(int_t b = 0; b < batch_size; b++) {
+                free(blocks[b].tasks);
+            }
+            free(blocks);
             fmd_encoded_graph_free(encoded_graph);
 
             if(verbose) {
@@ -1273,9 +1332,7 @@ int fmd_main_decode(int argc, char **argv, fmd_decode_mode_t mode) {
                 fprintf(stderr, "[fmd:decode] Walks: Time elapsed assembling walks: %lf\n",walk_process_time);
                 fprintf(stderr, "[fmd:decode] Walks: Time per root: %lf\n",(double) walk_process_time / (double) roots_processed);
                 fprintf(stderr, "[fmd:decode] Walks: Roots per second: %lf\n",(double) roots_processed / (double) walk_process_time);
-
             }
-
             break;
         }
         default:
