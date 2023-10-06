@@ -29,6 +29,7 @@
 
 typedef uint64_t count_t;
 
+#define FMD_FMI_MAX_ALPHABET_SIZE 256
 #define FMD_FMI_ALPHABET_SIZE_BIT_LENGTH 40
 #define FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH 40
 #define FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH 40
@@ -46,9 +47,9 @@ typedef struct fmd_fmi_ {
     int_t isa_sample_rate;     // sampling rate of the suffix array
     int_t no_bits_per_char;    // number of bits used per char
     int_t alphabet_size;       // the encoding will always be ceil(log2 |alphabet_size|) per char
-    fmd_vector_t *alphabet;    // vector storing the characters in the alphabet in sorted order
-    fmd_table_t *c2e;          // char to encoding
-    fmd_table_t *e2c;          // encoding to char
+    int_t *alphabet;           // vector storing the characters in the alphabet in sorted order
+    int_t *c2e;                // char to encoding
+    int_t *e2c;                // encoding to char
     count_t *char_counts;      // the array storing cumulative character count for FMI querying
     fmd_bs_t *bits;            // buffer storing everything, including the members of this struct for serializability
     // not stored in bits, helper fields
@@ -80,13 +81,6 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
 count_t fmd_fmi_query_count(fmd_fmi_t *fmi, fmd_string_t *string);
 fmd_vector_t *fmd_fmi_query_locate(fmd_fmi_t *fmi, fmd_string_t *string);
 
-// helpers
-typedef struct fmd_fmi_init_charset_flatten_p_ {
-    fmd_vector_t *chars;
-    fmd_table_t *e2c;
-    fmd_table_t *c2e;
-} fmd_fmi_init_charset_flatten_p_t;
-void fmd_fmi_init_charset_flatten(void *key, void *value, void *params); //(*ftrav_kv)(void *key, void *value, void *p);
 typedef struct fmd_fmi_init_isa_write_p_ {
     fmd_bs_t *bits;
     word_t isa_sampling_rate;

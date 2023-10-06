@@ -59,68 +59,44 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
      * Step 1 - Construct a dictionary for characters and character counts
     **************************************************************************/
     /******************************************************
-    * Step 1a - Initialize tables and alphabet
+    * Step 1a - Tabulate unique characters
     ******************************************************/
-    fmd_vector_init(&f->alphabet, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
-    if(!f->alphabet) {
-        free(f);
-        *fmi = NULL;
-        return;
-    }
-    // init tables
-    fmd_table_init(&f->c2e, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    if(!f->c2e) {
-        fmd_vector_free(f->alphabet);
-        free(f);
-        *fmi = NULL;
-        return;
-    }
-    fmd_table_init(&f->e2c, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    if(!f->e2c) {
-        fmd_vector_free(f->alphabet);
-        fmd_table_free(f->c2e);
-        free(f);
-        *fmi = NULL;
-        return;
-    }
-    /******************************************************
-    * Step 1b - Insert unique characters into a tree
-    ******************************************************/
-    fmd_tree_t *char_set;
-    fmd_tree_init(&char_set, &prm_fstruct, &prm_fstruct);
-    fmd_tree_insert(char_set, (void*)FMD_STRING_TERMINATOR, (void*)1);
-    if(!char_set) {
-        fmd_vector_free(f->alphabet);
-        fmd_table_free(f->c2e);
-        fmd_table_free(f->e2c);
-        free(f);
-        *fmi = NULL;
-        return;
-    }
+    char occ[FMD_FMI_MAX_ALPHABET_SIZE];
+    memset(occ, 0, FMD_FMI_MAX_ALPHABET_SIZE);
     for(int_t i = 0; i < string->size; i++) {
         char_t c = string->seq[i];
-        fmd_tree_insert(char_set, (void*)c, 0);
+        occ[c] = 1;
     }
     /******************************************************
-    * Step 1c - Flatten tree into a sorted list
+    * Step 1b - Fill encoding and decoding tables
     ******************************************************/
-    fmd_fmi_init_charset_flatten_p_t trav_params;
-    trav_params.chars = f->alphabet;
-    trav_params.e2c = f->e2c;
-    trav_params.c2e = f->c2e;
-    fmd_tree_inorder(char_set, &trav_params, fmd_fmi_init_charset_flatten);
-    fmd_tree_free(char_set);
-    f->alphabet_size = f->alphabet->size;
+    int_t alphabet_size = 0;
+    for(int_t i = 0; i < FMD_FMI_MAX_ALPHABET_SIZE; i++) {
+        alphabet_size += occ[i];
+    }
+    f->alphabet_size = alphabet_size;
     f->no_bits_per_char = fmd_ceil_log2(f->alphabet_size);
+    f->alphabet = calloc(alphabet_size, sizeof(int_t));
+    f->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    f->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    int_t t = 0;
+    for(int_t i = 0; i < FMD_FMI_MAX_ALPHABET_SIZE; i++) {
+        if(occ[i]) {
+            f->alphabet[t] = i;
+            f->c2e[i] = t;
+            f->e2c[t] = i;
+            t++;
+        }
+    }
     /**************************************************************************
     * Step 2 - Compute the suffix array and the BWT of the input and sample
     *************************************************************************/
     fmd_tree_t *sa_tree;
     fmd_tree_init(&sa_tree, &prm_fstruct, &prm_fstruct); // tree sort
     if(!sa_tree) {
-        fmd_vector_free(f->alphabet);
-        fmd_table_free(f->c2e);
-        fmd_table_free(f->e2c);
+        free(f->alphabet);
+        free(f->c2e);
+        free(f->e2c);
         free(f);
         *fmi = NULL;
         return;
@@ -142,9 +118,9 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     fmd_bs_init(&bits);
     if(!bits) {
         fmd_string_free(bwt);
-        fmd_vector_free(f->alphabet);
-        fmd_table_free(f->c2e);
-        fmd_table_free(f->e2c);
+        free(f->alphabet);
+        free(f->c2e);
+        free(f->e2c);
         free(f);
         *fmi = NULL;
         return;
@@ -164,11 +140,10 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     /******************************************************
     * Step 3b - Write the alphabet
     ******************************************************/
-    for(int_t i = 0; i < f->alphabet->size; i++) {
-        fmd_bs_write_word(bits, widx, (word_t)f->alphabet->data[i], FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH);
+    for(int_t i = 0; i < f->alphabet_size; i++) {
+        fmd_bs_write_word(bits, widx, (word_t)f->alphabet[i], FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH);
         widx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
-        word_t encoding;
-        fmd_table_lookup(f->c2e, f->alphabet->data[i], &encoding);
+        word_t encoding = f->c2e[f->alphabet[i]];
         fmd_bs_write_word(bits, widx, encoding, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH);
         widx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
     }
@@ -214,17 +189,6 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     }
     int_t sa_bv_occ_size = sa_bv_no_blocks << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
     widx+=sa_bv_occ_size;
-
-    //DEBUG
-    /*
-    for(int_t i = 0; i < sa_bv_occ_size; i++) {
-        word_t bit;
-        fmd_bs_read_word(bits, f->sa_bv_start_offset + i, 1, &bit);
-        printf("%llu",bit);
-    }
-    printf("\n");
-     */
-    // END DEBUG
     /****************************
     * Align to word boundary
     ****************************/
@@ -243,8 +207,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
         int_t s = i * (int_t)f->no_chars_per_block;
         int_t e = MIN2((i + 1) * (int_t)f->no_chars_per_block,bwt->size);
         for(int_t j = s; j < e; j++) {
-            int_t enc;
-            bool found = fmd_table_lookup(f->c2e, (void*)bwt->seq[j], (void*)&enc);
+            int_t enc = f->c2e[bwt->seq[j]];
             ++block_count[enc];
             fmd_bs_write_word(bits, widx, enc, f->no_bits_per_char);
             widx += f->no_bits_per_char;
@@ -297,15 +260,6 @@ fmd_vector_t *fmd_fmi_query_locate(fmd_fmi_t *fmi, fmd_string_t *string) {
     return fmd_fmi_sa(fmi, &query);
 }
 
-// helpers
-void fmd_fmi_init_charset_flatten(void *key, void *value, void *params) {
-    fmd_fmi_init_charset_flatten_p_t *p = (fmd_fmi_init_charset_flatten_p_t*)params;
-    word_t encoding = p->chars->size;
-    fmd_table_insert(p->c2e, key, (void*)encoding);
-    fmd_table_insert(p->e2c, (void*)encoding, key);
-    fmd_vector_append(p->chars, key);
-}
-
 void fmd_fmi_init_isa_write(void *key, void *value, void *params) {
     // key: rank, value: offset
     int_t rank = (int_t)key;
@@ -325,13 +279,7 @@ bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
     word_t encoding;
-    bool found = fmd_table_lookup(fmi->c2e, (void*)qr->pattern->seq[qr->pos], &encoding);
-    if(!found) {
-        qr->lo = 0;
-        qr->hi = 0;
-        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
-        return false;
-    }
+    encoding = fmi->c2e[qr->pattern->seq[qr->pos]];
     count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(fmi,encoding, qr->lo-1) : 0ull;
     count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(fmi,encoding, qr->hi-1) : 0ull;
     uint64_t base = fmi->char_counts[encoding];
@@ -345,13 +293,7 @@ bool fmd_fmi_query_precedence_range(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr, char_t c, 
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
     word_t encoding;
-    bool found = fmd_table_lookup(fmi->c2e, (void*)c, &encoding);
-    if(!found) {
-        qr->lo = 0;
-        qr->hi = 0;
-        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
-        return false;
-    }
+    encoding = fmi->c2e[qr->pattern->seq[qr->pos]];
     count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(fmi,encoding, qr->lo-1) : 0ull;
     count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(fmi,encoding, qr->hi-1) : 0ull;
     uint64_t base = fmi->char_counts[encoding];
@@ -463,9 +405,12 @@ fmd_fmi_t* fmd_fmi_copy(fmd_fmi_t* fmi) {
     f->isa_sample_rate = fmi->isa_sample_rate;
     f->no_bits_per_char = fmi->no_bits_per_char;
     f->alphabet_size = fmi->alphabet_size;
-    f->alphabet = fmd_vector_copy(fmi->alphabet);
-    f->c2e = fmd_table_copy(fmi->c2e);
-    f->e2c = fmd_table_copy(fmi->e2c);
+    f->alphabet = calloc(fmi->alphabet_size, sizeof(int_t));
+    memcpy(f->alphabet, fmi->alphabet, sizeof(int_t) * fmi->alphabet_size);
+    f->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    memcpy(f->c2e, fmi->c2e, sizeof(int_t) * FMD_FMI_MAX_ALPHABET_SIZE);
+    f->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    memcpy(f->e2c, fmi->e2c, sizeof(int_t) * FMD_FMI_MAX_ALPHABET_SIZE);
     f->char_counts = calloc(f->alphabet_size, sizeof(count_t));
     memcpy(f->char_counts, fmi->char_counts, sizeof(count_t)*f->alphabet_size);
     f->bv_start_offset = fmi->bv_start_offset;
@@ -476,9 +421,9 @@ fmd_fmi_t* fmd_fmi_copy(fmd_fmi_t* fmi) {
 
 void fmd_fmi_free(fmd_fmi_t *fmi) {
     if(fmi) {
-        fmd_vector_free(fmi->alphabet);
-        fmd_table_free(fmi->c2e);
-        fmd_table_free(fmi->e2c);
+        free(fmi->alphabet);
+        free(fmi->c2e);
+        free(fmi->e2c);
         free(fmi->char_counts);
         fmd_bs_free(fmi->bits);
         free(fmi);
@@ -487,9 +432,9 @@ void fmd_fmi_free(fmd_fmi_t *fmi) {
 
 void fmd_fmi_free_disown(fmd_fmi_t *fmi) {
     if(fmi) {
-        fmd_vector_free(fmi->alphabet);
-        fmd_table_free(fmi->c2e);
-        fmd_table_free(fmi->e2c);
+        free(fmi->alphabet);
+        free(fmi->c2e);
+        free(fmi->e2c);
         free(fmi->char_counts);
         fmd_bs_free_disown(fmi->bits);
         free(fmi);
