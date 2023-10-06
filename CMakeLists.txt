@@ -3,8 +3,9 @@ project(fmd C)
 
 set(CMAKE_C_STANDARD 99)
 
-set(BUILD_OPENMP ON)
+set(BUILD_OPENMP OFF)
 set(BUILD_MARCH_NATIVE_FLAG OFF)
+set(BUILD_BUILTIN_POPCOUNT ON)
 
 set(BUILD_TESTS OFF)
 set(BUILD_DEBUG OFF)
@@ -80,6 +81,10 @@ if(BUILD_OPENMP)
         #set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
         set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
     endif()
+endif()
+
+if(BUILD_BUILTIN_POPCOUNT)
+    add_definitions(-DFMD_BUILTIN_POPCOUNT)
 endif()
 
 ################################################################################

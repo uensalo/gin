@@ -72,9 +72,13 @@ static inline void fmd_swap(void **a, void **b) {
 }
 
 static int64_t fmd_popcount64(uint64_t x) {
+#ifdef FMD_BUILTIN_POPCOUNT
+    return (int64_t)__builtin_popcountll(x);
+#else
     x -= ((x >> 1) & 0x5555555555555555ull);
     x = (x & 0x3333333333333333ull) + (x >> 2 & 0x3333333333333333ull);
     return (int64_t)(((x + (x >> 4)) & 0xf0f0f0f0f0f0f0full) * 0x101010101010101ull >> 56);
+#endif
 }
 
 static int64_t fmd_ceil_log2(uint64_t x) {
