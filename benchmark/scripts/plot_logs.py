@@ -389,6 +389,65 @@ def plot_baseline(directory_name, output_filename, scale=None, title=False, xlab
     plt.close()
 
 
+
+def plot_baseline_simple(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
+    # Check if directory exists
+    if not all([os.path.exists(directory_name + suffix) for suffix in ['_baseline_plain', '_baseline_permutation', '_baseline_cache', '_baseline_cache_permutation']]):
+        print(f"Baselines for {directory_name} not found!")
+        return
+
+    # Parse the four types of benchmarks
+    find_df_plain, _, _, _ = parse_directory_logs(directory_name + '_baseline_plain')
+    find_df_perm, _, _, _ = parse_directory_logs(directory_name + '_baseline_permutation')
+    find_df_cache, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache')
+    find_df_cache_permutation, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache_permutation')
+
+    dfs = {
+        "plain": find_df_plain,
+        "permutation": find_df_perm,
+        "cache": find_df_cache,
+        "cache+permutation": find_df_cache_permutation
+    }
+
+    plt.figure(figsize=(12, 8))
+
+    # Create a color map for the different query lengths
+    unique_lengths = sorted(find_df_plain['length'].unique())
+    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
+
+    benchmark_colors = {
+        "plain": "blue",
+        "permutation": "green",
+        "cache": "red",
+        "cache+permutation": "purple"
+    }
+
+    # Plot each benchmark data
+    for benchmark, df in dfs.items():
+        sorted_df = df.sort_values(by='length')
+        plt.loglog(sorted_df['length'], sorted_df['queries_per_second'], 'o-', color=benchmark_colors[benchmark], label=benchmark)
+
+    # If a scale is provided, set the x and y limits
+    if scale:
+        plt.xlim(scale[0])
+        plt.ylim(scale[1])
+
+    plt.legend(loc='upper right', title="Index")
+
+    plt.xticks(fontsize=12)
+    plt.yticks(fontsize=12)
+
+    if xlabel:
+        plt.xlabel('Regular query length (bp)', fontsize=14)
+    if ylabel:
+        plt.ylabel('Queries matched per second', fontsize=14)
+    if title:
+        plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+    plt.grid(True, which="both", ls="--", c='0.65')
+    plt.savefig(output_filename, format='png', bbox_inches='tight')
+    plt.close()
+
+
 def tabulate_decode(directory_name, output_filename):
     # Check if directory exists
     if not os.path.exists(directory_name):
@@ -425,6 +484,9 @@ if __name__ == '__main__':
 
     plot_baseline('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline.png', baseline_scale, ylabel=True) #a
     plot_baseline('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline.png', baseline_scale) #b
+
+    plot_baseline_simple('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline_simple.png', baseline_scale, ylabel=True) #?
+    plot_baseline_simple('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline_simple.png', baseline_scale) #?
 
     plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', principal_scale, xlabel=True, ylabel=True) #c
     plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', principal_scale, xlabel=True) #d
