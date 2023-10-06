@@ -93,11 +93,13 @@ int test(int no_vertices, int no_edges, int minl, int maxl, int rank_sample_rate
         fmd_string_init_cstr(&query, querycstr);
         free(querycstr);
         fmd_vector_t *found, *dead_ends;
+        fmd_fmd_stats_t s;
         clock_gettime(CLOCK_REALTIME, &t1);
-        fmd_fmd_query_locate_paths(fmd, query, &found, &dead_ends);
+        fmd_fmd_query_find(fmd, NULL, query, -1, &found, &dead_ends, &s);
         clock_gettime(CLOCK_REALTIME, &t2);
         time_elapsed += (double)(t2.tv_sec - t1.tv_sec) + (double)(t2.tv_nsec - t1.tv_nsec) / 1e9;
-        fmd_fmd_locate_paths_result_free(found, dead_ends);
+        fmd_vector_free(found);
+        fmd_vector_free(dead_ends);
         fmd_string_free(query);
     }
 

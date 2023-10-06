@@ -37,9 +37,11 @@ int main() {
     char *querycstr = "TAC";
     fmd_string_init_cstr(&query, querycstr);
     fmd_vector_t *paths, *dead_ends;
-    fmd_fmd_query_locate_paths(fmd, query, &paths, &dead_ends);
+    fmd_fmd_stats_t s;
+    fmd_fmd_query_find(fmd, NULL, query, -1, &paths, &dead_ends, &s);
 
-    fmd_fmd_locate_paths_result_free(paths,dead_ends);
+    fmd_vector_free(paths);
+    fmd_vector_free(dead_ends);
     fmd_fmd_free(fmd);
     fmd_string_free(query);
     fmd_graph_free(g);

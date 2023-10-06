@@ -59,6 +59,7 @@ int main() {
     rgfa_free(rgfa);
 
 
+
     timestamp(); printf("Enumerating constraint sets for depth=%ld\n", depth);
     fmd_vector_t *constraint_sets;
     fmd_constraint_set_enumerate(&constraint_sets, graph, 4);
@@ -66,7 +67,7 @@ int main() {
 
     timestamp(); printf("Configuring annealing...\n");
     fmd_annealing_t *ann;
-    fmd_annealing_configure(&ann, graph, constraint_sets, 0, 1.5, 1, 10);
+    fmd_annealing_configure(&ann, graph, constraint_sets, NULL, 0, 1.5, 1, 10);
     timestamp(); printf("Annealing configured, running optimization...\n");
 
     struct timespec t1,t2;

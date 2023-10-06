@@ -32,7 +32,7 @@ int main() {
     fmd_graph_t *g = graph_1();
 
     fmd_vector_t *constraints;
-    fmd_constraint_set_enumerate(&constraints, g, 1);
+    fmd_constraint_set_enumerate(&constraints, g, 1, true);
 
     for(int_t i = 0; i < constraints->size; i++) {
         fmd_constraint_set_t *s = constraints->data[i];
@@ -73,7 +73,8 @@ int main() {
     int_t forks;
     fmd_string_t *query;
     fmd_string_init_cstr(&query, "GG");
-    fmd_fmd_query_locate_paths_stats(fmd_optim, query, &paths, &dead, &forks);
+    fmd_fmd_stats_t s;
+    fmd_fmd_query_find(fmd_optim, NULL, query, -1, &paths, &dead, &s);
 
     int_t count = 0;
     for(int_t i = 0; i < paths->size; i++) {
@@ -83,7 +84,7 @@ int main() {
 
     printf("no forks optim: %d, count = %d\n", forks, count);
 
-    fmd_fmd_query_locate_paths_stats(fmd, query, &paths, &dead, &forks);
+    fmd_fmd_query_find(fmd_optim, NULL, query, -1, &paths, &dead, &s);
 
     count = 0;
     for(int_t i = 0; i < paths->size; i++) {

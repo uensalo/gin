@@ -60,6 +60,6 @@ int main(int argc, char *argv[]) {
         time += t2.tv_sec - t1.tv_sec + (t2.tv_nsec - t1.tv_nsec) * 1e-9;
         no_queries++;
     }
-    fprintf(stdout, "Queries per second: %lf", no_queries / time);
+    fprintf(stdout, "Queries per second: %lf\n", no_queries / time);
     return 0;
 }

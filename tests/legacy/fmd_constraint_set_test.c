@@ -34,7 +34,7 @@ int main() {
 
     fmd_graph_t *g = g1();
     fmd_vector_t *constraints;
-    fmd_constraint_set_enumerate(&constraints, g, 1);
+    fmd_constraint_set_enumerate(&constraints, g, 4, true);
 
     for(int_t i = 0; i < constraints->size; i++) {
         fmd_constraint_set_t *s = constraints->data[i];
