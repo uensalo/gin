@@ -63,6 +63,9 @@ typedef struct fmd_fmd_ {
     char_t c_1; // character marking the end of a vertex
     fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
     fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
+    int_t *alphabet;
+    int_t alphabet_size;
+    int_t no_chars;
     sdsl_csa *graph_fmi; // fm-index of the graph encoding
     fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
 } fmd_fmd_t;
