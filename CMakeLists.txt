@@ -10,6 +10,8 @@ set(BUILD_BUILTIN_POPCOUNT ON)
 set(BUILD_TESTS OFF)
 set(BUILD_DEBUG OFF)
 
+set(BUILD_SDSL OFF)
+
 if(BUILD_DEBUG)
     add_link_options(-fsanitize=address)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
