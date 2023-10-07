@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.20)
-project(fmd C)
+project(fmd C CXX)
 
 set(CMAKE_C_STANDARD 99)
 
@@ -10,7 +10,7 @@ set(BUILD_BUILTIN_POPCOUNT ON)
 set(BUILD_TESTS OFF)
 set(BUILD_DEBUG OFF)
 
-set(BUILD_SDSL OFF)
+set(BUILD_SDSL ON)
 
 if(BUILD_DEBUG)
     add_link_options(-fsanitize=address)
@@ -23,12 +23,12 @@ else()
     endif()
 endif()
 
-set(PROJECT_ROOT_DIR   ${CMAKE_SOURCE_DIR})
-set(PROJECT_SOURCE_DIR ${PROJECT_ROOT_DIR}/src)
-set(PROJECT_HEADER_DIR ${PROJECT_ROOT_DIR}/include)
-set(PROJECT_EXTERN_DIR ${PROJECT_ROOT_DIR}/extern)
-set(PROJECT_TESTS_DIR  ${PROJECT_ROOT_DIR}/tests)
-set(PROJECT_PARSER_DIR ${PROJECT_ROOT_DIR}/parsers)
+set(PROJECT_ROOT_DIR    ${CMAKE_SOURCE_DIR})
+set(PROJECT_SOURCE_DIR  ${PROJECT_ROOT_DIR}/src)
+set(PROJECT_HEADER_DIR  ${PROJECT_ROOT_DIR}/include)
+set(PROJECT_EXTERN_DIR  ${PROJECT_ROOT_DIR}/extern)
+set(PROJECT_TESTS_DIR   ${PROJECT_ROOT_DIR}/tests)
+set(PROJECT_WRAPPER_DIR ${PROJECT_ROOT_DIR}/wrapper)
 ################################################################################
 # library file definitions
 ################################################################################
@@ -42,7 +42,6 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_min_heap.c
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
     ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
-    ${PROJECT_SOURCE_DIR}/fmd_fmd.c
     ${PROJECT_SOURCE_DIR}/fmd_constraint_set.c
     ${PROJECT_SOURCE_DIR}/fmd_annealing.c
     ${PROJECT_SOURCE_DIR}/fmd_encoded_graph.c
@@ -58,7 +57,6 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_min_heap.h
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
-    ${PROJECT_HEADER_DIR}/fmd_fmd.h
     ${PROJECT_HEADER_DIR}/fmd_constraint_set.h
     ${PROJECT_HEADER_DIR}/fmd_annealing.h
     ${PROJECT_HEADER_DIR}/fmd_encoded_graph.h
@@ -66,6 +64,16 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/permutation_parser.h
     ${PROJECT_HEADER_DIR}/fmdg_parser.h
 )
+
+if(BUILD_SDSL)
+    list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/fmd_fmd_sdsl.c)
+    list(APPEND C_FILES ${PROJECT_HEADER_DIR}/fmd_fmd_sdsl.h)
+    list(APPEND C_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.cpp)
+    list(APPEND C_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.h)
+else()
+    list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/fmd_fmd.c)
+    list(APPEND C_FILES ${PROJECT_HEADER_DIR}/fmd_fmd.h)
+endif()
 
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
 add_library(fmd_lib_static STATIC ${C_FILES} ${H_FILES})
@@ -94,16 +102,23 @@ endif()
 ################################################################################
 add_subdirectory(${PROJECT_EXTERN_DIR}/)
 
-# divsufsort
+# divsufsortf
 target_include_directories(
-        divsufsort  PUBLIC ${PROJECT_EXTERN_DIR}/divsufsort/include/
+        divsufsortf  PUBLIC ${PROJECT_EXTERN_DIR}/divsufsort/include/
 )
-target_link_libraries(fmd_lib        PUBLIC divsufsort)
-target_link_libraries(fmd_lib_static PUBLIC divsufsort_static)
+target_link_libraries(fmd_lib        PUBLIC divsufsortf)
+target_link_libraries(fmd_lib_static PUBLIC divsufsortf_static)
 
 # math
 target_link_libraries(fmd_lib PUBLIC m)
 target_link_libraries(fmd_lib_static PUBLIC m)
+
+#sdsl
+if(BUILD_SDSL)
+    target_link_libraries(fmd_lib PUBLIC sdsl)
+    target_link_libraries(fmd_lib_static PUBLIC sdsl)
+    add_definitions(-DFMD_SDSL)
+endif()
 ################################################################################
 # executables
 ################################################################################
