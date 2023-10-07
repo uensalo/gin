@@ -6,9 +6,10 @@ typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::hyb_vector<>>> csa_type;
 
 extern "C" {
 
-void* csa_wt_build(const char* str) {
+void* csa_wt_build(const char* str, uint64_t size) {
     csa_type* csa = new csa_type();
-    sdsl::construct_im(*csa, std::string(str));
+    sdsl::construct_im(*csa, str, 1);
+    //printf("%ld\n", csa->size());
     return static_cast<void*>(csa);
 }
 
@@ -37,9 +38,10 @@ void csa_wt_to_buffer(void* obj_handle, uint8_t **data, uint64_t *size) {
     *size = serialized_data.size();
 
     uint64_t padded_size = (1 + (((*size) - 1) >> 3)) << 3;
+    uint64_t padded_words = padded_size >> 3;
 
     // Allocate memory for the buffer
-    *data = (uint8_t*) calloc(padded_size, sizeof(uint8_t));
+    *data = (uint8_t*) calloc(padded_words, sizeof(uint64_t));
     if (!*data) {
         *size = 0;
         return; // Memory allocation failed
@@ -60,10 +62,10 @@ void* csa_wt_from_buffer(uint8_t *data, uint64_t size) {
     return static_cast<void*>(csa);
 }
 
-size_t csa_wt_bwt_length(void* obj_handle) {
+int64_t csa_wt_bwt_length(void* obj_handle) {
     if (!obj_handle) return 0;
-
     csa_type* csa = static_cast<csa_type*>(obj_handle);
+    //printf("%ld\n",csa->size());
     return csa->size(); // This returns the length of the BWT (and the original string).
 }
 
@@ -72,26 +74,33 @@ void csa_wt_populate_alphabet(void* obj_handle, int64_t ** alphabet, int64_t *al
 
     csa_type* csa = static_cast<csa_type*>(obj_handle);
 
+    // Create a temporary vector to store the unique characters present in the BWT
     std::vector<int64_t> temp_alphabet;
-    for (int64_t ch = 0; ch < 256; ++ch) { // Assuming extended ASCII for simplicity
-        if (csa->char2comp[ch] != 0xFF) { // 0xFF indicates the character is not present
-            temp_alphabet.push_back(ch);
+
+    // Iterate over the possible characters and check if they exist in the BWT using the char2comp array
+    for (int64_t ch = 0; ch < csa->sigma; ++ch) {
+        int64_t actual_char = csa->comp2char[ch];
+        if (actual_char != 0xFF) {
+            temp_alphabet.push_back(actual_char);
         }
     }
 
     *alphabet_size = static_cast<int64_t>(temp_alphabet.size());
 
-    // Allocate memory for the alphabet using calloc
+    // Allocate memory for the alphabet
     *alphabet = (int64_t*) calloc(*alphabet_size, sizeof(int64_t));
     if (!*alphabet) {
         *alphabet_size = 0;
         return;  // Memory allocation failed
     }
 
-    // Populate the alphabet
-    for (int64_t i = 0; i < *alphabet_size; ++i) {
-        (*alphabet)[i] = temp_alphabet[i];
-    }
+    // Copy the characters from the temporary vector to the allocated array
+    std::copy(temp_alphabet.begin(), temp_alphabet.end(), *alphabet);
+}
+
+int64_t csa_wt_char_sa_base(void* obj_handle, char c) {
+    csa_type* csa = static_cast<csa_type*>(obj_handle);
+    return csa->C[csa->char2comp[c]];
 }
 
 void csa_wt_free(void* obj_handle) {

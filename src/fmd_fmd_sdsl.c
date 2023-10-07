@@ -87,6 +87,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     assert(permutation->size == graph->vertex_list->size);
     assert(c_0 < c_1);
     f->permutation = fmd_vector_copy(permutation);
+    fmd_vector_free(permutation);
     /**************************************************************************
     * Step 1 - Compute the graph encoding and the permutation encodings
     **************************************************************************/
@@ -98,9 +99,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     * Step 1b - Map the inverse of perm. to codewords
     ******************************************************/
     fmd_vector_t *inverse_permutation;
-    fmd_vector_init(&inverse_permutation, permutation->size, &prm_fstruct);
-    for(int_t i = 0; i < permutation->size; i++) {
-        inverse_permutation->data[(int_t)permutation->data[i]] = (void*)i;
+    fmd_vector_init(&inverse_permutation, f->permutation->size, &prm_fstruct);
+    for(int_t i = 0; i < f->permutation->size; i++) {
+        inverse_permutation->data[(int_t)f->permutation->data[i]] = (void*)i;
         //fmd_table_insert(cword_map, permutation->data[i], (void*)i);
     }
     /******************************************************
@@ -127,7 +128,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /**************************************************************************
     * Step 2 - Compute the suffix array of the encoding and build an FMI
     **************************************************************************/
-    f->graph_fmi = csa_wt_build(graph_encoding->seq);
+    f->graph_fmi = csa_wt_build(graph_encoding->seq, graph_encoding->size);
     csa_wt_populate_alphabet(f->graph_fmi, &f->alphabet, &f->alphabet_size);
     f->no_chars = csa_wt_bwt_length(f->graph_fmi);
     /**************************************************************************
@@ -144,10 +145,11 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_vector_init(&c_1_bucket, V, &prm_fstruct);
     // split in two loops for better cache performance
     csa_wt_sa(f->graph_fmi, (uint64_t*)c_0_bucket->data, 1, V);
-    csa_wt_sa(f->graph_fmi, (uint64_t*)c_0_bucket->data, V+1, 2*V);
+    csa_wt_sa(f->graph_fmi, (uint64_t*)c_1_bucket->data, V+1, 2*V);
+    c_0_bucket->size = V;
+    c_1_bucket->size = V;
     // at this point, sa is no longer needed as slices are extracted
     fmd_string_free(graph_encoding);
-    //free(sa); // frees gigs of memory :)
     /******************************************************
     * Step 3b - Compute rank translation tables
     ******************************************************/
@@ -237,7 +239,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     f->r2r_tree = inverval_merge_tree;
     // if(!interval_merge_tree...
     // free the list structure storing interval lists, but not the lists themselves
-    kv_pairs->f = &prm_fstruct;
+    //kv_pairs->f = &prm_fstruct;
     fmd_vector_free(kv_pairs);
     fmd_vector_free(inverse_permutation);
     /******************************************************
@@ -252,6 +254,7 @@ void fmd_fmd_free(fmd_fmd_t *fmd) {
         fmd_vector_free(fmd->bwt_to_vid);
         csa_wt_free(fmd->graph_fmi);
         fmd_imt_free(fmd->r2r_tree);
+        free(fmd->alphabet);
         free(fmd);
     }
 }
@@ -605,7 +608,10 @@ void fmd_fmd_decoder_init(fmd_fmd_decoder_t **dec, fmd_fmd_t *fmd) {
     fmd_fmi_qr_t qr;
     qr.lo = 1;
     qr.hi = V + 1;
-    fmd_vector_t *bases_permuted = fmd_fmi_sa(fmd->graph_fmi, &qr);
+
+    fmd_vector_t *bases_permuted;//
+    fmd_vector_init(&bases_permuted, V, &prm_fstruct);
+    csa_wt_sa(fmd->graph_fmi, (uint64_t*)bases_permuted->data, qr.lo, qr.hi-1);// = fmd_fmi_sa(fmd->graph_fmi, &qr);
     for(int_t i = 0; i < V; i++) { // code below actually sorts the array :)
         d->vertex_bases->data[(vid_t)fmd->bwt_to_vid->data[i]] = bases_permuted->data[i];
     }
@@ -631,7 +637,9 @@ void fmd_fmd_decoder_decode_one(fmd_fmd_decoder_t *dec, int_t sa_lo, int_t sa_hi
     fmd_fmi_qr_t whole_rec;
     whole_rec.lo = sa_lo;
     whole_rec.hi = sa_lo + no_to_decode;
-    fmd_vector_t *T = fmd_fmi_sa(dec->fmd->graph_fmi, &whole_rec);
+    fmd_vector_t *T;
+    fmd_vector_init(&T, no_to_decode, &prm_fstruct);//= fmd_fmi_sa(dec->fmd->graph_fmi, &whole_rec);
+    csa_wt_sa(dec->fmd->graph_fmi, (uint64_t*)T->data, sa_lo, sa_hi-1);
 
 #pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
     for(int_t i = 0; i < no_to_decode; i++) {
@@ -1228,13 +1236,13 @@ void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
 }
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *pattern) {
-    fmd_fmi_t *fmi = fmd->graph_fmi;
+    sdsl_csa *fmi = fmd->graph_fmi;
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
-    word_t encoding = fmi->c2e[pattern->seq[fork->pos]];
-    count_t rank_lo_m_1 = fork->sa_lo ? fmd_fmi_rank(fmi,encoding, fork->sa_lo-1) : 0ull;
-    count_t rank_hi_m_1 = fork->sa_hi ? fmd_fmi_rank(fmi,encoding, fork->sa_hi-1) : 0ull;
-    uint64_t base = fmi->char_counts[encoding];
+    //word_t encoding = fmi->c2e[pattern->seq[fork->pos]];
+    count_t rank_lo_m_1 = fork->sa_lo ? csa_wt_rank(fmi,fork->sa_lo, pattern->seq[fork->pos]) : 0ull;
+    count_t rank_hi_m_1 = fork->sa_hi ? csa_wt_rank(fmi,fork->sa_hi, pattern->seq[fork->pos]) : 0ull;
+    uint64_t base = csa_wt_char_sa_base(fmi, pattern->seq[fork->pos]);
     fork->sa_lo = (int_t)(base + rank_lo_m_1);
     fork->sa_hi = (int_t)(base + rank_hi_m_1);
     --fork->pos;
@@ -1242,13 +1250,12 @@ bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *p
 }
 
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *fork, char_t c, int_t *lo, int_t *hi) {
-    fmd_fmi_t *fmi = fmd->graph_fmi;
+    sdsl_csa *fmi = fmd->graph_fmi;
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
-    word_t encoding = fmi->c2e[c];
-    count_t rank_lo_m_1 = fork->sa_lo ? fmd_fmi_rank(fmi,encoding, fork->sa_lo-1) : 0ull;
-    count_t rank_hi_m_1 = fork->sa_hi ? fmd_fmi_rank(fmi,encoding, fork->sa_hi-1) : 0ull;
-    uint64_t base = fmi->char_counts[encoding];
+    count_t rank_lo_m_1 = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
+    count_t rank_hi_m_1 = fork->sa_hi ? csa_wt_rank(fmi, fork->sa_hi, c) : 0ull;
+    uint64_t base = csa_wt_char_sa_base(fmi, c);
     *lo = (int_t)(base + rank_lo_m_1);
     *hi = (int_t)(base + rank_hi_m_1);
     return true;
@@ -1331,7 +1338,7 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     /**************************************************************************
     * Step 3 - Reconstruct the FMI from the bitstream
     **************************************************************************/
-    word_t fmi_no_bits;
+    word_t fmi_no_bits = 0;
     fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
     ridx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
     // read padded words into buffer
