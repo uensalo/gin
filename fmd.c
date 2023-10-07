@@ -19,7 +19,7 @@
  */
 #ifdef FMD_SDSL
 #include "fmd_fmd_sdsl.h"
-#elif
+#else
 #include "fmd_fmd.h"
 #endif
 

@@ -1,2 +1,1 @@
-add_subdirectory(divsufsortf)
 add_subdirectory(sdsl)

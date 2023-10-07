@@ -67,7 +67,7 @@ size_t csa_wt_bwt_length(void* obj_handle) {
     return csa->size(); // This returns the length of the BWT (and the original string).
 }
 
-void csa_populate_alphabet(void* obj_handle, int64_t ** alphabet, int64_t *alphabet_size) {
+void csa_wt_populate_alphabet(void* obj_handle, int64_t ** alphabet, int64_t *alphabet_size) {
     if (!obj_handle || !alphabet || !alphabet_size) return;
 
     csa_type* csa = static_cast<csa_type*>(obj_handle);

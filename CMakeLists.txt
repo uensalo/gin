@@ -102,12 +102,22 @@ endif()
 ################################################################################
 add_subdirectory(${PROJECT_EXTERN_DIR}/)
 
-# divsufsortf
-target_include_directories(
-        divsufsortf  PUBLIC ${PROJECT_EXTERN_DIR}/divsufsort/include/
-)
-target_link_libraries(fmd_lib        PUBLIC divsufsortf)
-target_link_libraries(fmd_lib_static PUBLIC divsufsortf_static)
+# divsufsort
+# Find divsufsort headers
+find_path(DIVSUFSORT_INCLUDE_DIR divsufsort.h)
+include_directories(${DIVSUFSORT_INCLUDE_DIR})
+
+# Find divsufsort library
+find_library(DIVSUFSORT_LIBRARY divsufsort64)
+if(NOT DIVSUFSORT_LIBRARY)
+    message(FATAL_ERROR "Divsufsort library not found")
+endif()
+#target_link_libraries(fmd_lib PUBLIC ${DIVSUFSORT_LIBRARY})
+target_link_libraries(fmd_lib_static PUBLIC divsufsort64)
+target_link_libraries(fmd_lib_static PUBLIC divsufsort)
+
+target_link_libraries(fmd_lib PUBLIC divsufsort64)
+target_link_libraries(fmd_lib PUBLIC divsufsort)
 
 # math
 target_link_libraries(fmd_lib PUBLIC m)
