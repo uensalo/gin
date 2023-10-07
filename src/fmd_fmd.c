@@ -98,9 +98,6 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     ******************************************************/
     fmd_vector_t *inverse_permutation;
     fmd_vector_init(&inverse_permutation, permutation->size, &prm_fstruct);
-    //fmd_table_t *cword_map;
-    //fmd_table_init(&cword_map, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    // if(!cword_map...)
     for(int_t i = 0; i < permutation->size; i++) {
         inverse_permutation->data[(int_t)permutation->data[i]] = (void*)i;
         //fmd_table_insert(cword_map, permutation->data[i], (void*)i);
@@ -122,12 +119,10 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_string_concat_mut(graph_encoding, ((fmd_vertex_t*)graph->vertex_list->data[i])->label);
         fmd_string_append(graph_encoding, c_1);
         int_t pcode_idx = (int_t)inverse_permutation->data[i];
-        //fmd_table_lookup(cword_map, (void*)i, (void*)&pcode_idx);
         fmd_string_concat_mut(graph_encoding, (fmd_string_t*)(cwords->data[pcode_idx]));
     }
     // free obsolete stuff
     fmd_vector_free(cwords);
-    //fmd_table_free(cword_map);
     /**************************************************************************
     * Step 2 - Compute the suffix array of the encoding and build an FMI
     **************************************************************************/
@@ -979,13 +974,14 @@ void fmd_fmd_cache_init_helper_trav1(void *key, void *value, void *params) {
     fmd_table_t **cache_tables = p->cache_tables;
     fmd_string_t *base = (fmd_string_t*)key;
     fmd_vector_t *matching_forks = (fmd_vector_t*)value;
-    fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
+    int_t *alphabet = fmd->graph_fmi->alphabet;
+    int_t alphabet_size = fmd->graph_fmi->alphabet_size;
     // for all extensions, advance the forks once
     // set functions of the original list to copy only the references
-    for(int i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet->size; i++) {
+    for(int i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet_size; i++) {
         // get extension
         fmd_string_t *extension;
-        char_t ch = (char_t)alphabet->data[i];
+        char_t ch = (char_t)alphabet[i];
         fmd_string_init(&extension, base->size+1);
         fmd_string_append(extension, ch);
         fmd_string_concat_mut(extension, base);
@@ -1050,9 +1046,10 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     **********************************************************************/
     int_t init_lo = 0;
     int_t init_hi = fmd->graph_fmi->no_chars;
-    fmd_vector_t *alphabet = fmd->graph_fmi->alphabet;
-    for(int_t i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet->size; i++) { // first five characters are RESERVED.
-        char_t ch = (char_t)alphabet->data[i];
+    int_t *alphabet = fmd->graph_fmi->alphabet;
+    int_t alphabet_size = fmd->graph_fmi->alphabet_size;
+    for(int_t i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet_size; i++) { // first five characters are RESERVED.
+        char_t ch = (char_t)alphabet[i];
         fmd_string_t *str;
         fmd_string_init(&str, 1);
         fmd_string_append(str, ch);
@@ -1362,20 +1359,20 @@ void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char
     /******************************************************
     * Step 2b - Read the alphabet
     ******************************************************/
-    fmd_vector_init(&fmi->alphabet, fmi->alphabet_size, &prm_fstruct);
-    fmd_table_init(&fmi->e2c, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    fmd_table_init(&fmi->c2e, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    fmi->alphabet = calloc(fmi->alphabet_size, sizeof(int_t));
+    fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
     for(int_t i = 0; i < fmi->alphabet_size; i++) {
         word_t alphabet_char, encoding;
         fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
         ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
-        fmd_vector_append(fmi->alphabet, (void*)alphabet_char);
+        fmi->alphabet[i] = (int_t)alphabet_char;
 
         fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
         ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
 
-        fmd_table_insert(fmi->c2e, (void*)alphabet_char, (void*)encoding);
-        fmd_table_insert(fmi->e2c, (void*)encoding, (void*)alphabet_char);
+        fmi->c2e[alphabet_char] = (int_t)encoding;
+        fmi->e2c[encoding] = (int_t)alphabet_char;
     }
     /****************************
     * Align to word boundary
@@ -1452,14 +1449,7 @@ bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *p
     fmd_fmi_t *fmi = fmd->graph_fmi;
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
-    word_t encoding;
-    bool found = fmd_table_lookup(fmi->c2e, (void*)pattern->seq[fork->pos], &encoding);
-    if(!found) {
-        fork->sa_lo = 0;
-        fork->sa_hi = 0;
-        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
-        return false;
-    }
+    word_t encoding = fmi->c2e[pattern->seq[fork->pos]];
     count_t rank_lo_m_1 = fork->sa_lo ? fmd_fmi_rank(fmi,encoding, fork->sa_lo-1) : 0ull;
     count_t rank_hi_m_1 = fork->sa_hi ? fmd_fmi_rank(fmi,encoding, fork->sa_hi-1) : 0ull;
     uint64_t base = fmi->char_counts[encoding];
@@ -1473,14 +1463,7 @@ bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *fork, char_t
     fmd_fmi_t *fmi = fmd->graph_fmi;
     // traverse the LF-mapping
     // compute the rank of the symbol for lo-1 and hi-1
-    word_t encoding;
-    bool found = fmd_table_lookup(fmi->c2e, (void*)c, &encoding);
-    if(!found) {
-        fork->sa_lo = 0;
-        fork->sa_hi = 0;
-        //fprintf(stderr,"[fmd_fmi_advance_query]: encoding not found in dictionary, query is NIL\n");
-        return false;
-    }
+    word_t encoding = fmi->c2e[c];
     count_t rank_lo_m_1 = fork->sa_lo ? fmd_fmi_rank(fmi,encoding, fork->sa_lo-1) : 0ull;
     count_t rank_hi_m_1 = fork->sa_hi ? fmd_fmi_rank(fmi,encoding, fork->sa_hi-1) : 0ull;
     uint64_t base = fmi->char_counts[encoding];
@@ -1595,20 +1578,20 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     /******************************************************
     * Step 3b - Read the alphabet
     ******************************************************/
-    fmd_vector_init(&graph_fmi->alphabet, graph_fmi->alphabet_size, &prm_fstruct);
-    fmd_table_init(&graph_fmi->e2c, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
-    fmd_table_init(&graph_fmi->c2e, FMD_HT_INIT_SIZE, &prm_fstruct, &prm_fstruct);
+    graph_fmi->alphabet = calloc(graph_fmi->alphabet_size, sizeof(int_t));
+    graph_fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    graph_fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
     for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
         word_t alphabet_char, encoding;
         fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
         ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
-        fmd_vector_append(graph_fmi->alphabet, (void*)alphabet_char);
+        graph_fmi->alphabet[i] = (int_t)alphabet_char;
 
         fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
         ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
 
-        fmd_table_insert(graph_fmi->c2e, (void*)alphabet_char, (void*)encoding);
-        fmd_table_insert(graph_fmi->e2c, (void*)encoding, (void*)alphabet_char);
+        graph_fmi->c2e[alphabet_char] = (int_t)encoding;
+        graph_fmi->e2c[encoding] = (int_t)alphabet_char;
     }
     /****************************
     * Align to word boundary
