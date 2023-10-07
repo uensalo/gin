@@ -16,7 +16,7 @@ void* csa_wt_build(const char* str, uint64_t size) {
 uint64_t csa_wt_rank(void* obj_handle, uint64_t pos, char c) {
     if(!obj_handle) return -1; // or some error indicator
     csa_type* csa = static_cast<csa_type*>(obj_handle);
-    return csa->bwt.rank(pos, c);
+    return csa->wavelet_tree.rank(pos, c);
 }
 
 void csa_wt_sa(void* obj_handle, uint64_t *buf, uint64_t start, uint64_t end) {

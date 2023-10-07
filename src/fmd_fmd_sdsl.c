@@ -1237,27 +1237,23 @@ void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *pattern) {
     sdsl_csa *fmi = fmd->graph_fmi;
-    // traverse the LF-mapping
-    // compute the rank of the symbol for lo-1 and hi-1
-    //word_t encoding = fmi->c2e[pattern->seq[fork->pos]];
-    count_t rank_lo_m_1 = fork->sa_lo ? csa_wt_rank(fmi,fork->sa_lo, pattern->seq[fork->pos]) : 0ull;
-    count_t rank_hi_m_1 = fork->sa_hi ? csa_wt_rank(fmi,fork->sa_hi, pattern->seq[fork->pos]) : 0ull;
-    uint64_t base = csa_wt_char_sa_base(fmi, pattern->seq[fork->pos]);
-    fork->sa_lo = (int_t)(base + rank_lo_m_1);
-    fork->sa_hi = (int_t)(base + rank_hi_m_1);
+    char c = pattern->seq[fork->pos];
+    count_t rank_lo = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
+    count_t rank_hi = csa_wt_rank(fmi, fork->sa_hi, c);
+    uint64_t base = csa_wt_char_sa_base(fmi, c);
+    fork->sa_lo = (int_t)(base + rank_lo);
+    fork->sa_hi = (int_t)(base + rank_hi);
     --fork->pos;
     return true;
 }
 
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *fork, char_t c, int_t *lo, int_t *hi) {
     sdsl_csa *fmi = fmd->graph_fmi;
-    // traverse the LF-mapping
-    // compute the rank of the symbol for lo-1 and hi-1
-    count_t rank_lo_m_1 = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
-    count_t rank_hi_m_1 = fork->sa_hi ? csa_wt_rank(fmi, fork->sa_hi, c) : 0ull;
+    count_t rank_lo = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
+    count_t rank_hi = csa_wt_rank(fmi, fork->sa_hi, c);
     uint64_t base = csa_wt_char_sa_base(fmi, c);
-    *lo = (int_t)(base + rank_lo_m_1);
-    *hi = (int_t)(base + rank_hi_m_1);
+    *lo = (int_t)(base + rank_lo);
+    *hi = (int_t)(base + rank_hi);
     return true;
 }
 
