@@ -17,8 +17,7 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#include "fmd_fmd_sdsl.h"
-#include "../wrapper/sdsl_wrapper.h"
+#include "legacy/fmd_fmd_ih.h"
 
 
 fmd_fork_node_t *fmd_fork_node_init(int_t sa_lo, int_t sa_hi,
@@ -78,7 +77,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /**************************************************************************
     * Step 0 - If no permutation is provided, generate an identity permutation
     **************************************************************************/
+    bool permutation_alloc = false;
     if(!permutation) {
+        permutation_alloc = true;
         fmd_vector_init(&permutation, graph->vertex_list->size, &prm_fstruct);
         for(int_t i = 0; i < graph->vertex_list->size; i++) {
             fmd_vector_append(permutation, (void*)i);
@@ -87,7 +88,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     assert(permutation->size == graph->vertex_list->size);
     assert(c_0 < c_1);
     f->permutation = fmd_vector_copy(permutation);
-    fmd_vector_free(permutation);
+    if(permutation_alloc) {
+        fmd_vector_free(permutation);
+    }
     /**************************************************************************
     * Step 1 - Compute the graph encoding and the permutation encodings
     **************************************************************************/
@@ -102,7 +105,6 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_vector_init(&inverse_permutation, f->permutation->size, &prm_fstruct);
     for(int_t i = 0; i < f->permutation->size; i++) {
         inverse_permutation->data[(int_t)f->permutation->data[i]] = (void*)i;
-        //fmd_table_insert(cword_map, permutation->data[i], (void*)i);
     }
     /******************************************************
     * Step 1c - Finally, create the graph encoding
@@ -128,9 +130,41 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /**************************************************************************
     * Step 2 - Compute the suffix array of the encoding and build an FMI
     **************************************************************************/
-    f->graph_fmi = csa_wt_build(graph_encoding->seq, graph_encoding->size);
-    csa_wt_populate_alphabet(f->graph_fmi, &f->alphabet, &f->alphabet_size);
-    f->no_chars = csa_wt_bwt_length(f->graph_fmi);
+    fmd_fmi_t *fmi;
+    int64_t *sa = calloc(graph_encoding->size+1, sizeof(uint64_t));
+    // if(!sa...)
+    divsufsort64((sauchar_t*)graph_encoding->seq, (saidx64_t*)sa, graph_encoding->size+1);
+    fmd_fmi_init_with_sa(&fmi,graph_encoding,sa,rank_sample_rate,isa_sample_rate);
+    // if(!fmi...)
+    f->graph_fmi = fmi;
+    // DEBUG PURPOSES
+    /*
+    printf("S: %s%c\n", graph_encoding->seq,'\0');
+    printf("F: ");
+    for(int_t i = 0; i < graph_encoding->size+1; i++) {
+        printf("%c", graph_encoding->seq[sa[i]]);
+    }
+    printf("\n");
+    // DEBUG PURPOSES
+    printf("L: ");
+    for(int_t i = 0; i < graph_encoding->size+1; i++) {
+        if (sa[i]) printf("%c", graph_encoding->seq[sa[i]-1]);
+        else printf("%c", '\0');
+    }
+    printf("\n");
+    printf("i:  ");
+    for(int_t i = 0; i < graph_encoding->size+1; i++) {
+        printf("%d ", i);
+    }
+    printf("\n");
+    printf("SA: ");
+    for(int_t i = 0; i < graph_encoding->size+1; i++) {
+        printf("%d ", sa[i]);
+    }
+    printf("\n");
+    */
+    // END DEBUG PURPOSES
+
     /**************************************************************************
     * Step 3 - Compute the query range translation index
     **************************************************************************/
@@ -144,12 +178,20 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_vector_init(&c_0_bucket, V, &prm_fstruct);
     fmd_vector_init(&c_1_bucket, V, &prm_fstruct);
     // split in two loops for better cache performance
-    csa_wt_sa(f->graph_fmi, (uint64_t*)c_0_bucket->data, 1, V);
-    csa_wt_sa(f->graph_fmi, (uint64_t*)c_1_bucket->data, V+1, 2*V);
-    c_0_bucket->size = V;
-    c_1_bucket->size = V;
+    for(int_t i = 1; i <= V; i++) {
+        //c_0_bucket->data[i] = (void*)sa[i];
+        fmd_vector_append(c_0_bucket, (void*)sa[i]);
+        // DEBUG PURPOSES
+        //assert(graph_encoding->seq[sa[i]] == c_0);
+    }
+    for(int_t i = V+1; i <= 2*V; i++) {
+        fmd_vector_append(c_1_bucket, (void*)sa[i]);
+        // DEBUG PURPOSES
+        //assert(graph_encoding->seq[sa[i]] == c_1);
+    }
     // at this point, sa is no longer needed as slices are extracted
     fmd_string_free(graph_encoding);
+    free(sa); // frees gigs of memory :)
     /******************************************************
     * Step 3b - Compute rank translation tables
     ******************************************************/
@@ -157,6 +199,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_vector_t *c_0_bwt_to_text_tmp, *c_1_bwt_to_text, *c_1_text_to_bwt;
     fmd_vector_argsort(&c_0_bwt_to_text_tmp, c_0_bucket);
     fmd_vector_argsort(&c_1_bwt_to_text, c_1_bucket);
+
 
     // DEBUG PURPOSES
     fmd_vector_t *c_0_bwt_to_text;
@@ -203,6 +246,16 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
         fmd_vector_t *bwt_neighbor_intervals;
         fmd_vector_init(&bwt_neighbor_intervals, neighbors->size, &fmd_fstruct_imt_interval);
         if(neighbors_bwt_idx->size) {
+            // DEBUG PURPOSES
+            /*
+            printf("bwt-range of %d: ", vid);
+            for(int_t k = 0; k < neighbors_bwt_idx->size; k++) {
+                printf("%d ", neighbors_bwt_idx->data[k]);
+            }
+            printf("\n");
+             */
+             // END OF DEBUG PURPOSES
+
             // sort and compact neighbors_bwt_idx into intervals
             fmd_vector_sort(neighbors_bwt_idx);
             // compaction start
@@ -233,6 +286,18 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /******************************************************
     * Step 3d - Now, actually construct the tree
     ******************************************************/
+    // DEBUG PURPOSES
+    /*
+    for(int_t i = 0; i < kv_pairs->size; i++) {
+        printf("%d : [ ", i);
+        fmd_vector_t *intervals = kv_pairs->data[i];
+        for(int_t j = 0; j < intervals->size; j++) {
+            fmd_imt_interval_t *interval = intervals->data[j];
+            printf("[%d,%d]  ",interval->lo, interval->hi);
+        }
+        printf("]\n");
+    }
+     */
     // END OF DEBUG PURPOSES
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, V, kv_pairs);
@@ -252,15 +317,14 @@ void fmd_fmd_free(fmd_fmd_t *fmd) {
     if(fmd) {
         fmd_vector_free(fmd->permutation);
         fmd_vector_free(fmd->bwt_to_vid);
-        csa_wt_free(fmd->graph_fmi);
+        fmd_fmi_free(fmd->graph_fmi);
         fmd_imt_free(fmd->r2r_tree);
-        free(fmd->alphabet);
         free(fmd);
     }
 }
 
 int fmd_fmd_comp(fmd_fmd_t *f1, fmd_fmd_t *f2) {
-    int c1 = csa_wt_comp(f1->graph_fmi, f2->graph_fmi);
+    int c1 = fmd_fmi_comp(f1->graph_fmi, f2->graph_fmi);
     int c2 = fmd_imt_comp(f1->r2r_tree, f2->r2r_tree);
     int c3 = fmd_vector_comp(f1->permutation, f2->permutation);
     int c4 = fmd_vector_comp(f1->bwt_to_vid, f2->bwt_to_vid);
@@ -280,28 +344,28 @@ void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_fork
 
     // create initial task to fire
     int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
-    int_t init_hi = fmd->no_chars;
+    int_t init_hi = fmd->graph_fmi->no_chars;
     fmd_fork_node_t *root_fork = fmd_fork_node_init(init_lo, init_hi,
                                                     string->size-1,
                                                     ROOT);
 #ifdef FMD_OMP
     omp_set_num_threads((int)num_threads);
 #endif
-#pragma omp parallel default(none) shared(fmd,root_fork,leaves,graveyard,max_forks,string)
+    #pragma omp parallel default(none) shared(fmd,root_fork,leaves,graveyard,max_forks,string)
     {
-#pragma omp single nowait
+        #pragma omp single nowait
         {
             fmd_fmd_query_find_dfs_process_fork(fmd,root_fork,max_forks,string,leaves,graveyard);
         }
     }
-#pragma omp taskwait
+    #pragma omp taskwait
     *paths = leaves;
     *dead_ends = graveyard;
 }
 
 void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches) {
     bool continue_flag = true;
-#pragma omp critical(exact_match)
+    #pragma omp critical(exact_match)
     {
         if(max_forks != -1 && exact_matches->size >= max_forks) {
             continue_flag = false;
@@ -327,9 +391,9 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
             for (int_t i = 0; i < incoming_sa_intervals->size; i++) {
                 fmd_imt_interval_t *interval = incoming_sa_intervals->data[i];
                 fmd_fork_node_t *new_fork = fmd_fork_node_init(V+1+interval->lo, V+2+interval->hi,
-                                                               fork->pos, MAIN);
+                                                                 fork->pos, MAIN);
                 // fire subtask
-#pragma omp task default(none) shared(fmd, new_fork, exact_matches, partial_matches, max_forks, pattern)
+                #pragma omp task default(none) shared(fmd, new_fork, exact_matches, partial_matches, max_forks, pattern)
                 fmd_fmd_query_find_dfs_process_fork(fmd, new_fork, max_forks, pattern, exact_matches, partial_matches);
             }
             fork = royal_node;
@@ -343,13 +407,13 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
     if (fork->type != DEAD && fork->type != LEAF) {
         if (fork->sa_lo >= fork->sa_hi) {
             fork->type = DEAD;
-#pragma omp critical(partial_match)
+            #pragma omp critical(partial_match)
             {
                 fmd_vector_append(partial_matches, fork);
             }
         } else {
             fork->type = LEAF;
-#pragma omp critical(exact_match)
+            #pragma omp critical(exact_match)
             {
                 if(max_forks == -1 || exact_matches->size < max_forks) {
                     fmd_vector_append(exact_matches, fork);
@@ -359,7 +423,7 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
             }
         }
     } else {
-#pragma omp critical(partial_match)
+        #pragma omp critical(partial_match)
         {
             fmd_vector_append(partial_matches, fork);
         }
@@ -390,7 +454,7 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
                 fmd_fork_node_t *new_fork = fmd_fork_node_init(V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                MAIN);
-#pragma omp critical(forks_append)
+                #pragma omp critical(forks_append)
                 {
                     fmd_vector_append(new_forks, new_fork);
                 }
@@ -410,13 +474,13 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     fmd_vector_t *next_iter_forks;
     fmd_vector_init(&next_iter_forks, forks->size + merged->size, &fmd_fstruct_fork_node);
     // advance and filter previous queries
-#pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
+    #pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
     for(int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
         if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
+            #pragma omp critical(partial_matches_append)
             {
                 fmd_vector_append(*partial_matches, fork);
             }
@@ -424,25 +488,25 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
             if(*t==1) {
                 fork->type = LEAF;
             }
-#pragma omp critical(next_iter_queries_append)
+            #pragma omp critical(next_iter_queries_append)
             {
                 fmd_vector_append(next_iter_forks, fork);
             }
         }
     }
     // advance and filter next forks
-#pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks, t)
+    #pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks, t)
     for (int_t i = 0; i < merged->size; i++) {
         fmd_fork_node_t *fork = merged->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
         if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
+            #pragma omp critical(partial_matches_append)
             {
                 fmd_vector_append(*partial_matches, fork);
             }
         } else {
-#pragma omp critical(next_iter_queries_append)
+            #pragma omp critical(next_iter_queries_append)
             {
                 fmd_vector_append(next_iter_forks, fork);
             }
@@ -509,7 +573,7 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd,
 
         // create the initial fork
         int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
-        int_t init_hi = fmd->no_chars;
+        int_t init_hi = fmd->graph_fmi->no_chars;
         fmd_fork_node_t *root = fmd_fork_node_init(init_lo, init_hi,
                                                    string->size - 1,
                                                    ROOT);
@@ -565,6 +629,147 @@ void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **m
     *merged_forks = merged;
 }
 
+/*
+void fmd_fmd_advance_fork_match(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    for(int_t i = 0; i < al->forks->size; i++) {
+        fmd_fork_node_t *fork = al->forks->data[i];
+        fmd_fmd_advance_fork(fmd, fork, pattern);
+    }
+    fmd_string_append(&al->edits, FMD_ALIGN_MATCH);
+    --al->pos;
+}
+
+void fmd_fmd_advance_fork_mismatch(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    int_t S = fmd->graph_fmi->alphabet->size - FMD_FMD_NO_RESERVED_CHARS - 1;
+    char_t cur_char = pattern->seq[al->pos];
+    fmd_vector_t *mismatch_forks;
+    fmd_vector_init(&mismatch_forks, al->forks->size * S, &fmd_fstruct_fork_node);
+    for(int_t i = FMD_FMD_NO_RESERVED_CHARS; i < fmd->graph_fmi->alphabet->size; i++) {
+        if(cur_char == (char_t)fmd->graph_fmi->alphabet->data[i]) {
+            continue;
+        }
+        for(int_t j = 0; j < al->forks->size; j++) {
+            fmd_fork_node_t *orig_fork = al->forks->data[j];
+            fmd_fork_node_t *fork = fmd_fork_node_copy(orig_fork);
+            fmd_fmd_advance_fork(fmd, fork, pattern);
+            fmd_vector_append(mismatch_forks, fork);
+        }
+    }
+    fmd_vector_free(al->forks);
+    al->forks = mismatch_forks;
+    fmd_string_append(&al->edits, FMD_ALIGN_MISMATCH);
+    ++al->no_edits.mismatches;
+    --al->pos;
+}
+void fmd_fmd_advance_fork_deletion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    for(int_t i = 0; i < al->forks->size; i++) {
+        fmd_fork_node_t *fork = al->forks->data[i];
+        --fork->pos;
+    }
+    ++al->no_edits.mismatches;
+    --al->pos;
+}
+
+void fmd_fmd_advance_fork_insertion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits) {
+    return;
+}
+
+
+void fmd_fmd_align_step(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
+                        int_t max_mismatches, int_t max_deletions, int_t max_insertions,
+                        int_t max_forks, int_t *t,
+                        fmd_vector_t **forks) {
+    return;
+}
+
+void fmd_fmd_align(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
+                   int_t max_mismatches, int_t max_deletions, int_t max_insertions,
+                   int_t max_forks,
+                   fmd_vector_t **paths) {
+    return;
+}
+ */
+
+/*
+void fmd_fmd_topologise_fork(fmd_fork_node_t *fork, fmd_string_t *query, fmd_match_chain_t **chain) {
+    fmd_match_chain_t *match_chain;
+    fmd_fmd_match_chain_init(&match_chain);
+    fmd_fork_node_t *cur_fork = fork;
+    int_t start = 0;
+    int_t end = -1;
+    int_t cur_sa_lo = -1;
+    int_t cur_sa_hi = -1;
+    bool terminate = false;
+    bool cache_encountered = false;
+    while(!terminate) {
+        switch (cur_fork->type) {
+            case CACH: {
+                cache_encountered = true;
+                ++end;
+                break;
+            }
+            case LEAF: {
+                cur_sa_lo = cur_fork->sa_lo;
+                cur_sa_hi = cur_fork->sa_hi;
+                break;
+            }
+            case ROOT: {
+                end = query->size;
+                fmd_string_t *subs;
+                fmd_string_substring(query, start, end, &subs);
+                fmd_fmd_match_chain_append(match_chain, subs, cur_sa_lo, cur_sa_hi);
+                start = end;
+                terminate = true;
+                break;
+            }
+            case FALT: {
+                end = cache_encountered ? end+1 : ((fmd_fork_node_t*)(cur_fork->parent))->pos+1;
+                fmd_string_t *subs;
+                fmd_string_substring(query, start, end, &subs);
+                fmd_fmd_match_chain_append(match_chain, subs, cur_sa_lo, cur_sa_hi);
+                start = end;
+                cur_fork = (fmd_fork_node_t*)cur_fork->parent;
+                cur_sa_lo = cur_fork->sa_lo;
+                cur_sa_hi = cur_fork->sa_hi;
+                break;
+            }
+            default: {
+                break;
+            }
+        }
+        cur_fork = (fmd_fork_node_t*)cur_fork->parent;
+        if(!cur_fork) terminate = true;
+    }
+    *chain = match_chain;
+}
+
+void fmd_fmd_topologise_forks(fmd_string_t *query, fmd_vector_t *input_matches, fmd_vector_t **match_chains, int_t *count) {
+    if(!query || !input_matches->size) {
+        fmd_vector_init(match_chains, 1, &fmd_fstruct_match_list);
+    }
+    fmd_vector_t *matches;
+    fmd_vector_init(&matches, input_matches->size, &fmd_fstruct_match_list);
+
+    int_t total_count = 0;
+
+    for(int_t i = 0; i < input_matches->size; i++) {
+        fmd_match_chain_t *match_chain;
+        fmd_fork_node_t *fork = input_matches->data[i];
+        //if(!fork) break;
+        total_count += fork->sa_hi - fork->sa_lo;
+        fmd_fmd_topologise_fork(fork, query, &match_chain);
+        fmd_vector_append(matches, match_chain);
+    }
+    *match_chains = matches;
+    *count = total_count;
+}
+
+void fmd_fmd_topologise_forks_free(fmd_vector_t *match_lists) {
+    if(!match_lists) return;
+    fmd_vector_free(match_lists);
+}
+ */
+
 void fmd_decoded_match_init(fmd_decoded_match_t **dec, vid_t vid, int_t offset) {
     fmd_decoded_match_t *d = calloc(1, sizeof(fmd_decoded_match_t));
     d->vid = vid;
@@ -608,10 +813,7 @@ void fmd_fmd_decoder_init(fmd_fmd_decoder_t **dec, fmd_fmd_t *fmd) {
     fmd_fmi_qr_t qr;
     qr.lo = 1;
     qr.hi = V + 1;
-
-    fmd_vector_t *bases_permuted;//
-    fmd_vector_init(&bases_permuted, V, &prm_fstruct);
-    csa_wt_sa(fmd->graph_fmi, (uint64_t*)bases_permuted->data, qr.lo, qr.hi-1);
+    fmd_vector_t *bases_permuted = fmd_fmi_sa(fmd->graph_fmi, &qr);
     for(int_t i = 0; i < V; i++) { // code below actually sorts the array :)
         d->vertex_bases->data[(vid_t)fmd->bwt_to_vid->data[i]] = bases_permuted->data[i];
     }
@@ -637,11 +839,9 @@ void fmd_fmd_decoder_decode_one(fmd_fmd_decoder_t *dec, int_t sa_lo, int_t sa_hi
     fmd_fmi_qr_t whole_rec;
     whole_rec.lo = sa_lo;
     whole_rec.hi = sa_lo + no_to_decode;
-    fmd_vector_t *T;
-    fmd_vector_init(&T, no_to_decode, &prm_fstruct);
-    csa_wt_sa(dec->fmd->graph_fmi, (uint64_t*)T->data, sa_lo, sa_hi-1);
+    fmd_vector_t *T = fmd_fmi_sa(dec->fmd->graph_fmi, &whole_rec);
 
-#pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
+    #pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
     for(int_t i = 0; i < no_to_decode; i++) {
         // find the closest preceding vid in text space via binary search
         int_t lo = 0;
@@ -764,8 +964,8 @@ void fmd_fmd_cache_init_helper_trav1(void *key, void *value, void *params) {
     fmd_table_t **cache_tables = p->cache_tables;
     fmd_string_t *base = (fmd_string_t*)key;
     fmd_vector_t *matching_forks = (fmd_vector_t*)value;
-    int_t *alphabet = fmd->alphabet;
-    int_t alphabet_size = fmd->alphabet_size;
+    int_t *alphabet = fmd->graph_fmi->alphabet;
+    int_t alphabet_size = fmd->graph_fmi->alphabet_size;
     // for all extensions, advance the forks once
     // set functions of the original list to copy only the references
     for(int i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet_size; i++) {
@@ -835,9 +1035,9 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     * Step 1 - Seed the cache with length 1 queries
     **********************************************************************/
     int_t init_lo = 0;
-    int_t init_hi = fmd->no_chars;
-    int_t *alphabet = fmd->alphabet;
-    int_t alphabet_size = fmd->alphabet_size;
+    int_t init_hi = fmd->graph_fmi->no_chars;
+    int_t *alphabet = fmd->graph_fmi->alphabet;
+    int_t alphabet_size = fmd->graph_fmi->alphabet_size;
     for(int_t i = FMD_FMD_NO_RESERVED_CHARS; i < alphabet_size; i++) { // first five characters are RESERVED.
         char_t ch = (char_t)alphabet[i];
         fmd_string_t *str;
@@ -886,15 +1086,22 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     * rearrange the value list to match the ranks of the special character
     * c_0
     **********************************************************************/
-    sdsl_csa *key_fmi = csa_wt_build(encode_params.key_encoding->seq, encode_params.key_encoding->size);
+    // first construct the suffix array
+    int64_t *sa = calloc(encode_params.key_encoding->size+1, sizeof(uint64_t));
+    divsufsort64((sauchar_t*)encode_params.key_encoding->seq, (saidx64_t*)sa, encode_params.key_encoding->size+1);
+    // then construct the FM-index
+    fmd_fmi_t *key_fmi;
+    fmd_fmi_init_with_sa(&key_fmi,
+                         encode_params.key_encoding,
+                         sa,
+                         FMD_FMD_CACHE_FMI_DEFAULT_RANK_RATE,
+                         encode_params.key_encoding->size+1);
     fmd_string_free(encode_params.key_encoding);
-    uint64_t *sa = calloc(c->no_entries, sizeof(uint64_t));//printf("%s\n", encode_params.key_encoding->seq);
-    csa_wt_sa(key_fmi, sa, 1, c->no_entries);
     // now rearrange the items
     fmd_vector_t *rearranged_values, *args;
     fmd_vector_init(&rearranged_values, c->no_entries, &prm_fstruct);
-    for(int_t i = 0; i < c->no_entries; i++) {
-        rearranged_values->data[i] = (void*)sa[i];
+    for(int_t i = 1; i <= c->no_entries; i++) {
+        rearranged_values->data[i-1] = (void*)sa[i];
     }
     rearranged_values->size = c->no_entries;
     free(sa);
@@ -906,7 +1113,7 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
         rearranged_values->data[(int_t)args->data[i]] = interval_list;
 
         no_value_bytes += (FMD_FMD_CACHE_FORK_CARDINALITY_BIT_LENGTH >> 3) +
-                          interval_list->size * (FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH >> 2);
+                           interval_list->size * (FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH >> 2);
     }
     fmd_vector_free(args);
     /**********************************************************************
@@ -954,36 +1161,38 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     fmd_vector_free(encode_params.values);
     c->key_fmi = key_fmi;
     c->item_offsets = word_offsets;
-    c->key_fmi_size_in_bits = csa_wt_size_in_bytes(key_fmi) << 3;
+    c->key_fmi_size_in_bits = key_fmi->no_bits;
     c->value_buffer_size_in_bits = (int_t)no_words_value_bits << WORD_LOG_BITS;
+    c->disk_buffer = NULL;
     *cache = c;
 }
 
 bool fmd_fmd_cache_advance_query(fmd_fmd_cache_t *cache, fmd_fmd_cache_qr_t *qr) {
-    char c = qr->pattern->seq[qr->pos];
-    count_t rank_lo = qr->lo ? csa_wt_rank(cache->key_fmi, qr->lo, c) : 0ull;
-    count_t rank_hi = csa_wt_rank(cache->key_fmi, qr->hi, c);
-    uint64_t base = csa_wt_char_sa_base(cache->key_fmi, c);
-    qr->lo = (int_t)(base + rank_lo);
-    qr->hi = (int_t)(base + rank_hi);
+    word_t encoding = cache->key_fmi->c2e[qr->pattern->seq[qr->pos]];
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(cache->key_fmi,encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(cache->key_fmi,encoding, qr->hi-1) : 0ull;
+    uint64_t base = cache->key_fmi->char_counts[encoding];
+    qr->lo = (int_t)(base + rank_lo_m_1);
+    qr->hi = (int_t)(base + rank_hi_m_1);
     --qr->pos;
-    return true;
+    return qr->hi > qr->lo;
 }
 
 bool fmd_fmd_cache_query_precedence_range(fmd_fmd_cache_t *cache, fmd_fmd_cache_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
-    count_t rank_lo = qr->lo ? csa_wt_rank(cache->key_fmi, qr->lo, c) : 0ull;
-    count_t rank_hi = csa_wt_rank(cache->key_fmi, qr->hi, c);
-    uint64_t base = csa_wt_char_sa_base(cache->key_fmi, c);
-    *lo = (int_t)(base + rank_lo);
-    *hi = (int_t)(base + rank_hi);
-    return true;
+    word_t encoding = cache->key_fmi->c2e[c];
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(cache->key_fmi, encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(cache->key_fmi, encoding, qr->hi-1) : 0ull;
+    uint64_t base = cache->key_fmi->char_counts[encoding];
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
+    return *hi > *lo;
 }
 
 void fmd_fmd_cache_lookup(fmd_fmd_cache_t *cache, fmd_string_t *string, int_t start_pos, int_t max_forks, fmd_vector_t **cached_forks) {
     fmd_vector_t *forks;
     fmd_fmd_cache_qr_t query;
     query.lo = 0;
-    query.hi = csa_wt_bwt_length(cache->key_fmi);//cache->key_fmi->no_chars+1;
+    query.hi = cache->key_fmi->no_chars+1;
     query.pos = string->size-1;
     query.pattern = string;
     while(query.pos > -1) {
@@ -1058,20 +1267,12 @@ void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **b
     /**************************************************************************
     * Step 2 - Write the FMI bitstream
     **************************************************************************/
-    uint8_t *fmi_buf = NULL;
-    uint64_t fmi_buf_size = 0;
-    csa_wt_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
-    int_t fmi_buf_size_in_bits = (int_t)fmi_buf_size << 3;
-    fmd_bs_write_word(bs, widx, (word_t)fmi_buf_size_in_bits, FMD_FMD_FMI_NO_BITS_BIT_LENGTH);
-    widx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
-    int_t padded_no_bits = (1 + ((fmi_buf_size_in_bits-1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
-    int_t fmi_buf_no_padded_words = padded_no_bits >> WORD_LOG_BITS;
-    word_t *fmi_buf_word = (word_t*)fmi_buf;
-    for(int_t i = 0; i < fmi_buf_no_padded_words; i++) {
-        fmd_bs_write_word(bs, widx, fmi_buf_word[i], WORD_NUM_BITS);
+    int_t fmi_no_words = (int_t)(1 +((cache->key_fmi_size_in_bits-1)>>WORD_LOG_BITS)); // word align
+    for(int_t i = 0; i < fmi_no_words; i++) {
+        fmd_bs_write_word(bs, widx, (word_t)cache->key_fmi->bits->words[i], WORD_NUM_BITS);
         widx += WORD_NUM_BITS;
     }
-    free(fmi_buf);
+    // word align
     widx  = (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /**************************************************************************
     * Step 3 - Write the item buffer
@@ -1126,73 +1327,157 @@ void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char
     /**************************************************************************
     * Step 1 - Parse item word offsets
     **************************************************************************/
-    cache->item_offsets = calloc(cache->no_entries, sizeof(word_t));
-    memcpy(cache->item_offsets, bs->words + (ridx >> WORD_LOG_BITS), cache->no_entries * sizeof(word_t));
+    cache->item_offsets = bs->words + (ridx >> WORD_LOG_BITS);
     ridx += no_entries * WORD_NUM_BITS;
+    // word align
     ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /**************************************************************************
     * Step 2 - Parse FMI bitstream
     **************************************************************************/
-    word_t fmi_no_bits = 0;
-    fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
-    ridx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
-    // read padded words into buffer
-    int_t fmi_buf_size_bytes = (int_t)fmi_no_bits >> 3;
-    int_t fmi_buf_size_words_padded = 1 + (((int_t)fmi_no_bits - 1) >> WORD_LOG_BITS);
-    uint8_t *fmi_buf = calloc(fmi_buf_size_words_padded, sizeof(word_t));
-    uint64_t fmi_buf_size = fmi_buf_size_bytes;
-    word_t *fmi_buf_word = (word_t*)fmi_buf;
-    for(int_t i = 0; i < fmi_buf_size_words_padded; i++) {
-        word_t word = 0;
-        fmd_bs_read_word(bs, ridx, WORD_NUM_BITS, &word);
-        fmi_buf_word[i] = word;
-        ridx += WORD_NUM_BITS;
-    }
-    cache->key_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
-    free(fmi_buf);
+    fmd_fmi_t *fmi = calloc(1, sizeof(fmd_fmi_t));
+    int_t fmi_no_words = (int_t)(1 +((cache->key_fmi_size_in_bits-1)>>WORD_LOG_BITS)); // word align
+    uint_t fmi_ridx_start = ridx;
+
+    fmd_bs_t *fmi_bits = calloc(1, sizeof(fmd_bs_t));
+    fmi_bits->cap_in_words = fmi_no_words;
+    fmi_bits->words = bs->words + (ridx >> WORD_LOG_BITS);
+    fmi->bits = fmi_bits;
     // word align
     ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /******************************************************
+    * Step 2a - Read the FMI header
+    ******************************************************/
+    word_t no_chars, no_chars_per_block, isa_sample_rate, alphabet_size;
+    fmd_bs_read_word(bs, ridx, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &no_chars);
+    ridx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH, &no_chars_per_block);
+    ridx += FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &isa_sample_rate);
+    ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_SIZE_BIT_LENGTH, &alphabet_size);
+    ridx += FMD_FMI_ALPHABET_SIZE_BIT_LENGTH;
+
+    fmi->no_chars = (int_t)no_chars;
+    fmi->no_chars_per_block = (int_t)no_chars_per_block;
+    fmi->isa_sample_rate = (int_t)isa_sample_rate;
+    fmi->alphabet_size = (int_t)alphabet_size;
+    fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
+    /******************************************************
+    * Step 2b - Read the alphabet
+    ******************************************************/
+    fmi->alphabet = calloc(fmi->alphabet_size, sizeof(int_t));
+    fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    for(int_t i = 0; i < fmi->alphabet_size; i++) {
+        word_t alphabet_char, encoding;
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
+        ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
+        fmi->alphabet[i] = (int_t)alphabet_char;
+
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
+        ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
+
+        fmi->c2e[alphabet_char] = (int_t)encoding;
+        fmi->e2c[encoding] = (int_t)alphabet_char;
+    }
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 2c - Copy the bits field, then set pointers to
+    * suffix array entries and occupancy bitvector
+    ******************************************************/
+    fmi->sa_start_offset = (int_t)(ridx) - (int_t)fmi_ridx_start;
+    ridx += (1+fmi->no_chars/fmi->isa_sample_rate)*FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+    fmi->sa_bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    int_t sa_bv_occ_size = (1+(fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
+    ridx += sa_bv_occ_size;
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 2d - Copy the actual bitvector and the caches
+    ******************************************************/
+    fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
+        word_t read_bits;
+        uint_t offset = i * WORD_NUM_BITS;
+        fmd_bs_read_word(bs, fmi_ridx_start + offset, WORD_NUM_BITS, &read_bits);
+        fmd_bs_write_word(fmi_bits, offset, read_bits, WORD_NUM_BITS);
+    }
+    fmi->no_bits = (int_t)cache->key_fmi_size_in_bits;
+    /******************************************************
+    * Step 2e - Compute the cumulative sum from last block
+    ******************************************************/
+    fmi->char_counts = calloc(fmi->alphabet_size, sizeof(count_t));
+    count_t cum = 0;
+    uint_t rank_cache_idx = fmi->no_bits - fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+    for(int_t i = 0; i < fmi->alphabet_size; i++) {
+        word_t count = 0;
+        fmi->char_counts[i] = cum;
+        fmd_bs_read_word(fmi->bits, rank_cache_idx + i * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &count);
+        cum += (count_t)count;
+    }
+    /******************************************************
+    * Step 2f - Finalize reading the FMI
+    ******************************************************/
+    /* Don't forget to set ridx accordingly */
+    ridx = fmi_ridx_start + fmi_bits->cap_in_words * WORD_NUM_BITS;
+    /******************************************************
     * Step 3 - Parse the values
     ******************************************************/
-    // compute the number of remaining words
-    word_t no_value_buffer_words = (word_t)(value_buffer_size_in_bits) >> WORD_LOG_BITS;
-    cache->items = calloc(no_value_buffer_words, sizeof(word_t));
-    memcpy(cache->items, bs->words + (ridx >> WORD_LOG_BITS), no_value_buffer_words * sizeof(word_t));
+    cache->key_fmi = fmi;
+    cache->items = bs->words + (ridx >> WORD_LOG_BITS);
+    cache->disk_buffer = (unsigned char*)bs->words;
     /******************************************************
     * Step 4 - Cleanup
     ******************************************************/
-    fmd_bs_free(bs);
+    fmd_bs_free_disown(bs);
     *cachew = cache;
 }
 
 void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
     if(!cache) return;
-    csa_wt_free(cache->key_fmi);
-    free(cache->items);
-    free(cache->item_offsets);
+    if(cache->disk_buffer) {
+        fmd_fmi_free_disown(cache->key_fmi);
+        free(cache->disk_buffer);
+    } else {
+        fmd_fmi_free(cache->key_fmi);
+        free(cache->items);
+        free(cache->item_offsets);
+    }
     free(cache);
 }
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *pattern) {
-    sdsl_csa *fmi = fmd->graph_fmi;
-    char c = pattern->seq[fork->pos];
-    count_t rank_lo = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
-    count_t rank_hi = csa_wt_rank(fmi, fork->sa_hi, c);
-    uint64_t base = csa_wt_char_sa_base(fmi, c);
-    fork->sa_lo = (int_t)(base + rank_lo);
-    fork->sa_hi = (int_t)(base + rank_hi);
+    fmd_fmi_t *fmi = fmd->graph_fmi;
+    // traverse the LF-mapping
+    // compute the rank of the symbol for lo-1 and hi-1
+    word_t encoding = fmi->c2e[pattern->seq[fork->pos]];
+    count_t rank_lo_m_1 = fork->sa_lo ? fmd_fmi_rank(fmi,encoding, fork->sa_lo-1) : 0ull;
+    count_t rank_hi_m_1 = fork->sa_hi ? fmd_fmi_rank(fmi,encoding, fork->sa_hi-1) : 0ull;
+    uint64_t base = fmi->char_counts[encoding];
+    fork->sa_lo = (int_t)(base + rank_lo_m_1);
+    fork->sa_hi = (int_t)(base + rank_hi_m_1);
     --fork->pos;
     return fork->sa_hi > fork->sa_lo;
 }
 
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *fork, char_t c, int_t *lo, int_t *hi) {
-    sdsl_csa *fmi = fmd->graph_fmi;
-    count_t rank_lo = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
-    count_t rank_hi = csa_wt_rank(fmi, fork->sa_hi, c);
-    uint64_t base = csa_wt_char_sa_base(fmi, c);
-    *lo = (int_t)(base + rank_lo);
-    *hi = (int_t)(base + rank_hi);
+    fmd_fmi_t *fmi = fmd->graph_fmi;
+    // traverse the LF-mapping
+    // compute the rank of the symbol for lo-1 and hi-1
+    word_t encoding = fmi->c2e[c];
+    count_t rank_lo_m_1 = fork->sa_lo ? fmd_fmi_rank(fmi,encoding, fork->sa_lo-1) : 0ull;
+    count_t rank_hi_m_1 = fork->sa_hi ? fmd_fmi_rank(fmi,encoding, fork->sa_hi-1) : 0ull;
+    uint64_t base = fmi->char_counts[encoding];
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
     return *hi > *lo;
 }
 
@@ -1273,25 +1558,102 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     /**************************************************************************
     * Step 3 - Reconstruct the FMI from the bitstream
     **************************************************************************/
-    word_t fmi_no_bits = 0;
+    word_t fmi_no_bits;
     fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
     ridx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
-    // read padded words into buffer
-    int_t fmi_buf_size_bytes = (int_t)fmi_no_bits >> 3;
-    int_t fmi_buf_size_words_padded = 1 + (((int_t)fmi_no_bits - 1) >> WORD_LOG_BITS);
-    uint8_t *fmi_buf = calloc(fmi_buf_size_words_padded, sizeof(word_t));
-    uint64_t fmi_buf_size = fmi_buf_size_bytes;
-    word_t *fmi_buf_word = (word_t*)fmi_buf;
-    for(int_t i = 0; i < fmi_buf_size_words_padded; i++) {
-        word_t word = 0;
-        fmd_bs_read_word(bs, ridx, WORD_NUM_BITS, &word);
-        fmi_buf_word[i] = word;
-        ridx += WORD_NUM_BITS;
+    fmd_fmi_t *graph_fmi = calloc(1, sizeof(fmd_fmi_t));
+    uint_t fmi_ridx_start = ridx;
+    /******************************************************
+    * Step 3a - Read the header
+    ******************************************************/
+    word_t no_chars, no_chars_per_block, isa_sample_rate, alphabet_size;
+    fmd_bs_read_word(bs, ridx, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &no_chars);
+    ridx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH, &no_chars_per_block);
+    ridx += FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &isa_sample_rate);
+    ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_SIZE_BIT_LENGTH, &alphabet_size);
+    ridx += FMD_FMI_ALPHABET_SIZE_BIT_LENGTH;
+
+    graph_fmi->no_chars = (int_t)no_chars;
+    graph_fmi->no_chars_per_block = (int_t)no_chars_per_block;
+    graph_fmi->isa_sample_rate = (int_t)isa_sample_rate;
+    graph_fmi->alphabet_size = (int_t)alphabet_size;
+    graph_fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
+    /******************************************************
+    * Step 3b - Read the alphabet
+    ******************************************************/
+    graph_fmi->alphabet = calloc(graph_fmi->alphabet_size, sizeof(int_t));
+    graph_fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    graph_fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
+        word_t alphabet_char, encoding;
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
+        ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
+        graph_fmi->alphabet[i] = (int_t)alphabet_char;
+
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
+        ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
+
+        graph_fmi->c2e[alphabet_char] = (int_t)encoding;
+        graph_fmi->e2c[encoding] = (int_t)alphabet_char;
     }
-    fmd->graph_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
-    csa_wt_populate_alphabet(fmd->graph_fmi, &fmd->alphabet, &fmd->alphabet_size);
-    fmd->no_chars = csa_wt_bwt_length(fmd->graph_fmi);
-    free(fmi_buf);
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 3c - Copy the bits field, then set pointers to
+    * suffix array entries and occupancy bitvector
+    ******************************************************/
+    fmd_bs_t *fmi_bits;
+    fmd_bs_init(&fmi_bits);
+    fmd_bs_fit(fmi_bits, fmi_no_bits);
+    graph_fmi->sa_start_offset = (int_t)(ridx) - (int_t)fmi_ridx_start;
+    ridx += (1+graph_fmi->no_chars/graph_fmi->isa_sample_rate)*FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+    graph_fmi->sa_bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    int_t sa_bv_occ_size = (1+(graph_fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
+    ridx += sa_bv_occ_size;
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 3d - Copy the actual bitvector and the caches
+    ******************************************************/
+    graph_fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
+        word_t read_bits;
+        uint_t offset = i * WORD_NUM_BITS;
+        fmd_bs_read_word(bs, fmi_ridx_start + offset, WORD_NUM_BITS, &read_bits);
+        fmd_bs_write_word(fmi_bits, offset, read_bits, WORD_NUM_BITS);
+    }
+    fmd_bs_fit(fmi_bits, fmi_no_bits);
+    graph_fmi->bits = fmi_bits;
+    graph_fmi->no_bits = (int_t)fmi_no_bits;
+    /******************************************************
+    * Step 3e - Compute the cumulative sum from last block
+    ******************************************************/
+    graph_fmi->char_counts = calloc(graph_fmi->alphabet_size, sizeof(count_t));
+    count_t cum = 0;
+    uint_t rank_cache_idx = graph_fmi->no_bits - graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+    for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
+        word_t count;
+        graph_fmi->char_counts[i] = cum;
+        fmd_bs_read_word(graph_fmi->bits, rank_cache_idx + i * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &count);
+        cum += (count_t)count;
+    }
+    /******************************************************
+    * Step 3f - Finalize reading the FMI
+    ******************************************************/
+    /* Don't forget to set ridx accordingly */
+    fmd->graph_fmi = graph_fmi;
+    ridx = fmi_ridx_start + fmi_bits->cap_in_words * WORD_NUM_BITS;
+
     /**************************************************************************
     * Step 4 - Construct the interval-merge tree from the leaves
     **************************************************************************/
@@ -1367,25 +1729,15 @@ void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64
     /**************************************************************************
     * Step 3 - Write the FMI of the graph encoding
     **************************************************************************/
-    /**************************************************************************
-    * Step 4 - Write the FMI bitstream
-    **************************************************************************/
-    uint8_t *fmi_buf = NULL;
-    uint64_t fmi_buf_size = 0;
-    csa_wt_to_buffer(fmd->graph_fmi, &fmi_buf, &fmi_buf_size);
-    int_t fmi_buf_size_in_bits = (int_t)fmi_buf_size << 3;
-    fmd_bs_write_word(bs, widx, (word_t)fmi_buf_size_in_bits, FMD_FMD_FMI_NO_BITS_BIT_LENGTH);
+    fmd_bs_write_word(bs, widx, (word_t)fmd->graph_fmi->no_bits, FMD_FMD_FMI_NO_BITS_BIT_LENGTH);
     widx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
-    int_t padded_no_bits = (1 + ((fmi_buf_size_in_bits-1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
-    int_t fmi_buf_no_padded_words = padded_no_bits >> WORD_LOG_BITS;
-    word_t *fmi_buf_word = (word_t*)fmi_buf;
-    for(int_t i = 0; i < fmi_buf_no_padded_words; i++) {
-        fmd_bs_write_word(bs, widx, fmi_buf_word[i], WORD_NUM_BITS);
+    fmd_bs_fit(fmd->graph_fmi->bits, fmd->graph_fmi->no_bits);
+    for(int_t i = 0; i < fmd->graph_fmi->bits->cap_in_words; i++) {
+        fmd_bs_write_word(bs, widx, (word_t)fmd->graph_fmi->bits->words[i], WORD_NUM_BITS);
         widx += WORD_NUM_BITS;
     }
-    free(fmi_buf);
     /**************************************************************************
-    * Step 5 - Write the IMT bitstream
+    * Step 4 - Write the IMT bitstream
     **************************************************************************/
     /* Reserve space for the IMT encoding bit length */
     widx += FMD_FMD_IMT_NO_BITS_BIT_LENGTH;
@@ -1393,11 +1745,11 @@ void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64
     fmd_fmd_serialize_to_buffer_imt_helper(fmd->r2r_tree->root, bs, &widx);
     fmd_bs_write_word(bs, prev_widx - FMD_FMD_IMT_NO_BITS_BIT_LENGTH, widx - prev_widx, FMD_FMD_IMT_NO_BITS_BIT_LENGTH);
     /**************************************************************************
-    * Step 6 - Write total length in the beginning
+    * Step 5 - Write total length in the beginning
     **************************************************************************/
     fmd_bs_write_word(bs, 0, widx, FMD_FMD_NO_BITS_BIT_LENGTH);
     /**************************************************************************
-    * Step 7 - Return
+    * Step 6 - Return
     **************************************************************************/
     fmd_bs_fit(bs, widx);
     word_t *buf;

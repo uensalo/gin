@@ -10,7 +10,7 @@ set(BUILD_BUILTIN_POPCOUNT OFF)
 set(BUILD_TESTS OFF)
 set(BUILD_DEBUG OFF)
 
-set(BUILD_SDSL ON)
+set(BUILD_SDSL OFF)
 
 if(BUILD_DEBUG)
     add_link_options(-fsanitize=address)
@@ -41,6 +41,7 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_graph.c
     ${PROJECT_SOURCE_DIR}/fmd_min_heap.c
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
+    ${PROJECT_SOURCE_DIR}/fmd_fmd.c
     ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
     ${PROJECT_SOURCE_DIR}/fmd_constraint_set.c
     ${PROJECT_SOURCE_DIR}/fmd_annealing.c
@@ -56,6 +57,7 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_graph.h
     ${PROJECT_HEADER_DIR}/fmd_min_heap.h
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
+    ${PROJECT_HEADER_DIR}/fmd_fmd.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
     ${PROJECT_HEADER_DIR}/fmd_constraint_set.h
     ${PROJECT_HEADER_DIR}/fmd_annealing.h
@@ -66,13 +68,8 @@ set(H_FILES
 )
 
 if(BUILD_SDSL)
-    list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/fmd_fmd_sdsl.c)
-    list(APPEND H_FILES ${PROJECT_HEADER_DIR}/fmd_fmd_sdsl.h)
     list(APPEND C_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.cpp)
     list(APPEND H_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.h)
-else()
-    list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/fmd_fmd.c)
-    list(APPEND H_FILES ${PROJECT_HEADER_DIR}/fmd_fmd.h)
 endif()
 
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
