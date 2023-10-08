@@ -77,7 +77,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     /**************************************************************************
     * Step 0 - If no permutation is provided, generate an identity permutation
     **************************************************************************/
+    bool permutation_alloc = false;
     if(!permutation) {
+        permutation_alloc = true;
         fmd_vector_init(&permutation, graph->vertex_list->size, &prm_fstruct);
         for(int_t i = 0; i < graph->vertex_list->size; i++) {
             fmd_vector_append(permutation, (void*)i);
@@ -86,6 +88,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     assert(permutation->size == graph->vertex_list->size);
     assert(c_0 < c_1);
     f->permutation = fmd_vector_copy(permutation);
+    if(permutation_alloc) {
+        fmd_vector_free(permutation);
+    }
     /**************************************************************************
     * Step 1 - Compute the graph encoding and the permutation encodings
     **************************************************************************/
@@ -97,9 +102,9 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     * Step 1b - Map the inverse of perm. to codewords
     ******************************************************/
     fmd_vector_t *inverse_permutation;
-    fmd_vector_init(&inverse_permutation, permutation->size, &prm_fstruct);
-    for(int_t i = 0; i < permutation->size; i++) {
-        inverse_permutation->data[(int_t)permutation->data[i]] = (void*)i;
+    fmd_vector_init(&inverse_permutation, f->permutation->size, &prm_fstruct);
+    for(int_t i = 0; i < f->permutation->size; i++) {
+        inverse_permutation->data[(int_t)f->permutation->data[i]] = (void*)i;
         //fmd_table_insert(cword_map, permutation->data[i], (void*)i);
     }
     /******************************************************
@@ -314,7 +319,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     f->r2r_tree = inverval_merge_tree;
     // if(!interval_merge_tree...
     // free the list structure storing interval lists, but not the lists themselves
-    kv_pairs->f = &prm_fstruct;
+    //kv_pairs->f = &prm_fstruct;
     fmd_vector_free(kv_pairs);
     fmd_vector_free(inverse_permutation);
     /******************************************************
@@ -1177,24 +1182,43 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     *cache = c;
 }
 
+bool fmd_fmd_cache_advance_query(fmd_fmd_cache_t *cache, fmd_fmd_cache_qr_t *qr) {
+    word_t encoding = cache->key_fmi->c2e[qr->pattern->seq[qr->pos]];
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(cache->key_fmi,encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(cache->key_fmi,encoding, qr->hi-1) : 0ull;
+    uint64_t base = cache->key_fmi->char_counts[encoding];
+    qr->lo = (int_t)(base + rank_lo_m_1);
+    qr->hi = (int_t)(base + rank_hi_m_1);
+    --qr->pos;
+    return qr->hi > qr->lo;
+}
+
+bool fmd_fmd_cache_query_precedence_range(fmd_fmd_cache_t *cache, fmd_fmd_cache_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
+    word_t encoding = cache->key_fmi->c2e[c];
+    count_t rank_lo_m_1 = qr->lo ? fmd_fmi_rank(cache->key_fmi, encoding, qr->lo-1) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? fmd_fmi_rank(cache->key_fmi, encoding, qr->hi-1) : 0ull;
+    uint64_t base = cache->key_fmi->char_counts[encoding];
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
+    return *hi > *lo;
+}
+
 void fmd_fmd_cache_lookup(fmd_fmd_cache_t *cache, fmd_string_t *string, int_t start_pos, int_t max_forks, fmd_vector_t **cached_forks) {
     fmd_vector_t *forks;
-    fmd_fmi_qr_t query;
+    fmd_fmd_cache_qr_t query;
     query.lo = 0;
     query.hi = cache->key_fmi->no_chars+1;
     query.pos = string->size-1;
     query.pattern = string;
     while(query.pos > -1) {
-        bool non_empty = fmd_fmi_advance_query(cache->key_fmi, &query);
-        if(!non_empty) {
+        if(!fmd_fmd_cache_advance_query(cache, &query)) {
             fmd_vector_init(&forks, 0, &fmd_fstruct_fork_node);
             *cached_forks = forks;
             return;
         }
     }
     int_t lo, hi;
-    fmd_fmi_query_precedence_range(cache->key_fmi, &query, FMD_FMD_DEFAULT_c_0, &lo, &hi);
-    if(lo >= hi) {
+    if(!fmd_fmd_cache_query_precedence_range(cache, &query, FMD_FMD_DEFAULT_c_0, &lo, &hi)) {
         fmd_vector_init(&forks, 0, &fmd_fstruct_fork_node);
         *cached_forks = forks;
         return;
@@ -1456,7 +1480,7 @@ bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *p
     fork->sa_lo = (int_t)(base + rank_lo_m_1);
     fork->sa_hi = (int_t)(base + rank_hi_m_1);
     --fork->pos;
-    return true;
+    return fork->sa_hi > fork->sa_lo;
 }
 
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *fork, char_t c, int_t *lo, int_t *hi) {
@@ -1469,7 +1493,7 @@ bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *fork, char_t
     uint64_t base = fmi->char_counts[encoding];
     *lo = (int_t)(base + rank_lo_m_1);
     *hi = (int_t)(base + rank_hi_m_1);
-    return true;
+    return *hi > *lo;
 }
 
 fmd_vector_t *fmd_fmd_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords) {

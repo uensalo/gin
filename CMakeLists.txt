@@ -4,8 +4,8 @@ project(fmd C CXX)
 set(CMAKE_C_STANDARD 99)
 
 set(BUILD_OPENMP OFF)
-set(BUILD_MARCH_NATIVE_FLAG ON)
-set(BUILD_BUILTIN_POPCOUNT ON)
+set(BUILD_MARCH_NATIVE_FLAG OFF)
+set(BUILD_BUILTIN_POPCOUNT OFF)
 
 set(BUILD_TESTS OFF)
 set(BUILD_DEBUG OFF)
@@ -67,12 +67,12 @@ set(H_FILES
 
 if(BUILD_SDSL)
     list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/fmd_fmd_sdsl.c)
-    list(APPEND C_FILES ${PROJECT_HEADER_DIR}/fmd_fmd_sdsl.h)
+    list(APPEND H_FILES ${PROJECT_HEADER_DIR}/fmd_fmd_sdsl.h)
     list(APPEND C_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.cpp)
-    list(APPEND C_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.h)
+    list(APPEND H_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.h)
 else()
     list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/fmd_fmd.c)
-    list(APPEND C_FILES ${PROJECT_HEADER_DIR}/fmd_fmd.h)
+    list(APPEND H_FILES ${PROJECT_HEADER_DIR}/fmd_fmd.h)
 endif()
 
 add_library(fmd_lib        SHARED ${C_FILES} ${H_FILES})
@@ -112,7 +112,7 @@ find_library(DIVSUFSORT_LIBRARY divsufsort64)
 if(NOT DIVSUFSORT_LIBRARY)
     message(FATAL_ERROR "Divsufsort library not found")
 endif()
-#target_link_libraries(fmd_lib PUBLIC ${DIVSUFSORT_LIBRARY})
+
 target_link_libraries(fmd_lib_static PUBLIC divsufsort64)
 target_link_libraries(fmd_lib_static PUBLIC divsufsort)
 

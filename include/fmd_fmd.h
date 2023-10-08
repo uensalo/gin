@@ -140,10 +140,18 @@ typedef struct fmd_fmd_cache_encode_p_ {
     fmd_string_t *key_encoding; // the resulting encoding will be written here
     fmd_vector_t *values;       // the values will be written here
 } fmd_fmd_cache_encode_p_t;
+typedef struct fmd_fmd_cache_qr_ {
+    int_t lo;
+    int_t hi;
+    int_t pos;
+    fmd_string_t *pattern;
+} fmd_fmd_cache_qr_t;
 void fmd_fmd_cache_init_step(fmd_fmd_t *fmd, fmd_string_t *string, fmd_vector_t **cur_forks, fmd_vector_t **partial_matches);
 void fmd_fmd_cache_init_helper_trav1(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
 void fmd_fmd_cache_init_helper_trav2(void* key, void* value, void* params); //(*ftrav_kv)(void *key, void *value, void *p);
 void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth);
+bool fmd_fmd_cache_advance_query(fmd_fmd_cache_t *fmi, fmd_fmd_cache_qr_t *qr);
+bool fmd_fmd_cache_query_precedence_range(fmd_fmd_cache_t *fmi, fmd_fmd_cache_qr_t *qr, char_t c, int_t *lo, int_t *hi);
 void fmd_fmd_cache_lookup(fmd_fmd_cache_t *cache, fmd_string_t *string, int_t start_pos, int_t max_forks, fmd_vector_t **cached_forks);
 int_t fmd_fmd_cache_size(fmd_fmd_cache_t *cache);
 

@@ -1,6 +1,7 @@
 #include <sdsl/suffix_arrays.hpp>
 #include <sdsl/wavelet_trees.hpp>
 #include <vector>
+#include "../wrapper/sdsl_wrapper.h"
 
 typedef sdsl::csa_wt<sdsl::wt_huff<sdsl::hyb_vector<>>> csa_type;
 
@@ -13,7 +14,7 @@ void* csa_wt_build(const char* str, uint64_t size) {
     return static_cast<void*>(csa);
 }
 
-uint64_t csa_wt_rank(void* obj_handle, uint64_t pos, char c) {
+int64_t csa_wt_rank(void* obj_handle, uint64_t pos, char c) {
     if(!obj_handle) return -1; // or some error indicator
     csa_type* csa = static_cast<csa_type*>(obj_handle);
     return csa->wavelet_tree.rank(pos, c);
@@ -103,12 +104,18 @@ int64_t csa_wt_char_sa_base(void* obj_handle, char c) {
     return csa->C[csa->char2comp[c]];
 }
 
+int64_t csa_wt_size_in_bytes(void* obj_handle) {
+    if (!obj_handle) return 0;
+    csa_type* csa = static_cast<csa_type*>(obj_handle);
+    return (int64_t)sdsl::size_in_bytes(*csa);
+}
+
 void csa_wt_free(void* obj_handle) {
     csa_type* csa = static_cast<csa_type*>(obj_handle);
     delete csa;
 }
 
-bool csa_wt_comp(void* obj_handle1, void* obj_handle2) {
+int csa_wt_comp(void* obj_handle1, void* obj_handle2) {
     if (!obj_handle1 || !obj_handle2) return false;
 
     csa_type* csa1 = static_cast<csa_type*>(obj_handle1);
