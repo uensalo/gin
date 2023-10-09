@@ -97,14 +97,14 @@ endif()
 # build dependencies first
 add_subdirectory(${PROJECT_EXTERN_DIR}/)
 
-add_library(fmd_lib SHARED ${C_FILES} ${H_FILES})
+#add_library(fmd_lib SHARED ${C_FILES} ${H_FILES})
 add_library(fmd_lib_static STATIC ${C_FILES} ${H_FILES})
 
 # Specify where the project should look for headers
-target_include_directories(
-    fmd_lib PUBLIC ${PROJECT_HEADER_DIR}
-    fmd_lib PUBLIC ${CMAKE_BINARY_DIR}/extern/libdivsufsort/include
-)
+#target_include_directories(
+#    fmd_lib PUBLIC ${PROJECT_HEADER_DIR}
+#    fmd_lib PUBLIC ${CMAKE_BINARY_DIR}/extern/libdivsufsort/include
+#)
 target_include_directories(
     fmd_lib_static PUBLIC ${PROJECT_HEADER_DIR}
     fmd_lib_static PUBLIC ${CMAKE_BINARY_DIR}/extern/libdivsufsort/include
@@ -115,21 +115,24 @@ target_include_directories(
 ################################################################################
 
 # divsufsort
-target_link_libraries(fmd_lib PUBLIC divsufsort)
+#target_link_libraries(fmd_lib PUBLIC divsufsort)
 target_link_libraries(fmd_lib_static PUBLIC divsufsort)
-target_link_libraries(fmd_lib PUBLIC divsufsort64)
+#target_link_libraries(fmd_lib PUBLIC divsufsort64)
 target_link_libraries(fmd_lib_static PUBLIC divsufsort64)
 
 # math
-target_link_libraries(fmd_lib PUBLIC m)
+#target_link_libraries(fmd_lib PUBLIC m)
 target_link_libraries(fmd_lib_static PUBLIC m)
 
 #sdsl
 if(BUILD_SDSL)
+    #target_include_directories(
+    #    fmd_lib PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
+    #)
     target_include_directories(
-        fmd_lib PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
+            fmd_lib_static PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
     )
-    target_link_libraries(fmd_lib PUBLIC sdsl)
+    #target_link_libraries(fmd_lib PUBLIC sdsl)
     target_link_libraries(fmd_lib_static PUBLIC sdsl)
     add_definitions(-DFMD_SDSL)
 endif()
