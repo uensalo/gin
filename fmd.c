@@ -18,6 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #include "fmd_fmd.h"
+
 #include "fmd_annealing.h"
 #include <getopt.h>
 #include <time.h>

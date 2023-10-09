@@ -22,10 +22,11 @@
 #include "fmd_common.h"
 #include "fmd_graph.h"
 #include "fmd_interval_merge_tree.h"
-#include "fmd_fmi.h"
 #include "fmd_table.h"
 #include "fmd_vector.h"
 #include "fmd_tree.h"
+#include "fmd_bitstream.h"
+#include "fmd_fmi.h"
 #include "assert.h"
 
 // separator characters
@@ -55,23 +56,17 @@
 #define FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH 64
 #define FMD_FMD_CACHE_FMI_DEFAULT_RANK_RATE 16
 
-#ifdef FMD_SDSL
 typedef void* sdsl_csa;
-#endif
 
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
     char_t c_1; // character marking the end of a vertex
     fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
     fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
-#ifdef FMD_SDSL
     int_t *alphabet;
     int_t alphabet_size;
     int_t no_chars;
     sdsl_csa *graph_fmi; // fm-index of the graph encoding
-#else
-    fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
-#endif
     fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
 } fmd_fmd_t;
 
@@ -134,15 +129,9 @@ typedef struct fmd_fmd_cache_ { // implements an "FM-table"
     int_t key_fmi_size_in_bits; // word aligned
     int_t value_buffer_size_in_bits; // word aligned
     word_t *item_offsets;
-    word_t *items;
     // payload:
-#ifdef FMD_SDSL
     sdsl_csa *key_fmi;
-#else
-    fmd_fmi_t *key_fmi;
-    // not stored, derived
-    unsigned char *disk_buffer;
-#endif
+    word_t *items;
 } fmd_fmd_cache_t;
 typedef struct fmd_fmd_cache_helper_p_ {
     fmd_fmd_cache_t *cache;
@@ -189,7 +178,6 @@ void fmd_fmd_cache_free(fmd_fmd_cache_t *cache);
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *qr, fmd_string_t *pattern);
 bool fmd_fmd_fork_precedence_range(fmd_fmd_t *fmd, fmd_fork_node_t *qr, char_t c, int_t *lo, int_t *hi);
 
-
 // legacy, or for debugging purposes
 void fmd_fmd_query_find_dfs(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, int_t num_threads);
 void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, int_t max_forks, fmd_string_t *pattern, fmd_vector_t *exact_matches, fmd_vector_t *partial_matches);
@@ -198,48 +186,6 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
 void fmd_fmd_query_find_bootstrapped(fmd_fmd_t *fmd, fmd_vector_t *bootstrap, int_t bootstrap_depth, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, fmd_fmd_stats_t *stats);
 void fmd_fmd_query_find(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string, int_t max_forks, fmd_vector_t **paths, fmd_vector_t **dead_ends, fmd_fmd_stats_t **stats);
 void fmd_fmd_compact_forks(fmd_fmd_t *fmd, fmd_vector_t *forks, fmd_vector_t **merged_forks);
-
-/******************************************************************************
- * Inexact matching
- *****************************************************************************/
-/*
-typedef enum fmd_align_edit_code_ {
-   FMD_ALIGN_MATCH = 'M',
-   FMD_ALIGN_MISMATCH = 'X',
-   FMD_ALIGN_DELETE = 'D',
-   FMD_ALIGN_INSERT = 'I'
-} fmd_align_edit_code_t;
-#define FMD_FMD_ALIGN_BITS_PER_EDIT_CODE 2
-
-typedef struct fmd_align_edit_stats_ {
-   int_t mismatches;
-   int_t deletions;
-   int_t insertions;
-   int_t d;
-} fmd_align_edit_stats_t;
-
-typedef struct fmd_align_node_ {
-   fmd_vector_t *forks;
-   int_t pos;
-   fmd_align_edit_stats_t no_edits;
-   fmd_string_t edits;
-} fmd_align_node_t;
-void fmd_fmd_advance_fork_match(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
-void fmd_fmd_advance_fork_mismatch(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
-void fmd_fmd_advance_fork_deletion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
-void fmd_fmd_advance_fork_insertion(fmd_fmd_t *fmd, fmd_align_node_t *al, fmd_string_t *pattern, fmd_align_edit_stats_t max_edits);
-
-
-void fmd_fmd_align_step(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
-                        int_t max_mismatches, int_t max_deletions, int_t max_insertions,
-                        int_t max_forks, int_t *t,
-                        fmd_vector_t **forks);
-
-void fmd_fmd_align(fmd_fmd_t *fmd, fmd_fmd_cache_t *cache, fmd_string_t *string,
-                   int_t max_mismatches, int_t max_deletions, int_t max_insertions,
-                   int_t max_forks,
-                   fmd_vector_t **paths);
-*/
 
 /******************************************************************************
  * Result reporting and decoding

@@ -18,7 +18,7 @@
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
 #ifndef FMD_FMD_FMD_H
-#define FMD_FMD_FMD_H
+#define FMD_FMD_FMD_IH_H
 #include "fmd_common.h"
 #include "fmd_graph.h"
 #include "fmd_interval_merge_tree.h"
@@ -55,23 +55,13 @@
 #define FMD_FMD_CACHE_FORK_BOUNDARY_BIT_LENGTH 64
 #define FMD_FMD_CACHE_FMI_DEFAULT_RANK_RATE 16
 
-#ifdef FMD_SDSL
-typedef void* sdsl_csa;
-#endif
 
 typedef struct fmd_fmd_ {
     char_t c_0; // character marking the beginning of a vertex
     char_t c_1; // character marking the end of a vertex
     fmd_vector_t *permutation; // permutation to make sa ranges as consecutive as possible
     fmd_vector_t *bwt_to_vid; // converts c0 ranks to text ranks, i.e. vids
-#ifdef FMD_SDSL
-    int_t *alphabet;
-    int_t alphabet_size;
-    int_t no_chars;
-    sdsl_csa *graph_fmi; // fm-index of the graph encoding
-#else
     fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
-#endif
     fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
 } fmd_fmd_t;
 
@@ -134,15 +124,11 @@ typedef struct fmd_fmd_cache_ { // implements an "FM-table"
     int_t key_fmi_size_in_bits; // word aligned
     int_t value_buffer_size_in_bits; // word aligned
     word_t *item_offsets;
-    word_t *items;
     // payload:
-#ifdef FMD_SDSL
-    sdsl_csa *key_fmi;
-#else
     fmd_fmi_t *key_fmi;
+    word_t *items;
     // not stored, derived
     unsigned char *disk_buffer;
-#endif
 } fmd_fmd_cache_t;
 typedef struct fmd_fmd_cache_helper_p_ {
     fmd_fmd_cache_t *cache;

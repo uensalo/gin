@@ -63,8 +63,8 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     ******************************************************/
     char occ[FMD_FMI_MAX_ALPHABET_SIZE];
     memset(occ, 0, FMD_FMI_MAX_ALPHABET_SIZE);
-    for(int_t i = 0; i < string->size; i++) {
-        char_t c = string->seq[i];
+    for(int_t i = 0; i < f->no_chars; i++) {
+        uint64_t c = (uint64_t)string->seq[i];
         occ[c] = 1;
     }
     /******************************************************
@@ -286,7 +286,7 @@ bool fmd_fmi_advance_query(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr) {
     qr->lo = (int_t)(base + rank_lo_m_1);
     qr->hi = (int_t)(base + rank_hi_m_1);
     --qr->pos;
-    return true;
+    return qr->hi > qr->lo;
 }
 
 bool fmd_fmi_query_precedence_range(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
@@ -299,7 +299,7 @@ bool fmd_fmi_query_precedence_range(fmd_fmi_t *fmi, fmd_fmi_qr_t *qr, char_t c, 
     uint64_t base = fmi->char_counts[encoding];
     *lo = (int_t)(base + rank_lo_m_1);
     *hi = (int_t)(base + rank_hi_m_1);
-    return true;
+    return *hi > *lo;
 }
 
 count_t fmd_fmi_rank(fmd_fmi_t *fmi, word_t enc, int_t pos) {
