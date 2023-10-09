@@ -124,7 +124,7 @@ int csa_wt_comp(void* obj_handle1, void* obj_handle2) {
     return csa1 == csa2;
 }
 
-size_t csa_wt_hash(void* obj_handle) {
+uint64_t csa_wt_hash(void* obj_handle) {
     if (!obj_handle) return 0;
 
     csa_type* csa = static_cast<csa_type*>(obj_handle);

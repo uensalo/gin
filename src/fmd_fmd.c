@@ -17,11 +17,10 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifdef FMD_SDSL
-#include "legacy/fmd_fmd_sdsl.h"
-#include "../wrapper/sdsl_wrapper.h"
-#else
+
 #include "fmd_fmd.h"
+#ifdef FMD_SDSL
+#include "../wrapper/sdsl_wrapper.h"
 #endif
 
 fmd_fork_node_t *fmd_fork_node_init(int_t sa_lo, int_t sa_hi,

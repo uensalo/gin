@@ -17,7 +17,7 @@ int64_t csa_wt_char_sa_base(void* obj_handle, char c);
 int64_t csa_wt_size_in_bytes(void* obj_handle);
 
 int csa_wt_comp(void* obj_handle1, void* obj_handle2);
-size_t csa_wt_hash(void* obj_handle);
+uint64_t csa_wt_hash(void* obj_handle);
 void csa_wt_free(void* obj_handle);
 void* csa_wt_copy(void* obj_handle);
 
