@@ -292,6 +292,19 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, V, kv_pairs);
     f->r2r_tree = inverval_merge_tree;
+    #ifdef FMD_ORACLE
+    int_t *alphabet;
+    int_t alphabet_size;
+    int_t * c2e;
+    #ifdef FMD_SDSL
+    alphabet = f->alphabet;
+    alphabet_size = f->alphabet_size;
+    #else
+    alphabet = f->graph_fmi->alphabet;
+    alphabet_size = f->graph_fmi->alphabet_size;
+    #endif
+    fmd_oimt_init(f->r2r_tree, graph, inverse_permutation, f->alphabet, f->alphabet_size, &f->oracle_r2r);
+    #endif
     // free the list structure storing interval lists, but not the lists themselves
     //kv_pairs->f = &prm_fstruct;
     fmd_vector_free(kv_pairs);
@@ -313,6 +326,9 @@ void fmd_fmd_free(fmd_fmd_t *fmd) {
         fmd_fmi_free(fmd->graph_fmi);
 #endif
         fmd_imt_free(fmd->r2r_tree);
+#if FMD_ORACLE
+        fmd_oimt_free(fmd->oracle_r2r);
+#endif
         free(fmd);
     }
 }
@@ -442,7 +458,7 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     **********************************************************************/
     fmd_vector_t *new_forks;
     fmd_vector_init(&new_forks, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-#pragma omp parallel for default(none) shared(forks, fmd, max_forks, new_forks, V)
+    #pragma omp parallel for default(none) shared(forks, fmd, max_forks, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
@@ -450,14 +466,18 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
         bool more_to_track = max_forks == -1 || max_forks > forks->size;
         if(more_to_track && c_0_lo < c_0_hi) {
             fmd_vector_t *incoming_sa_intervals;
-            fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
+            #ifdef FMD_ORACLE
+            fmd_oimt_query(fmd->oracle_r2r, c_0_lo - 1, c_0_hi - 2, string->seq[fork->pos], max_forks, &incoming_sa_intervals);
+            #else
+            fmd_imt_query(fmd->oracle_r2r, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
+            #endif
             int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
             for (int_t j = 0; j < no_forks_to_add; j++) {
                 fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
                 fmd_fork_node_t *new_fork = fmd_fork_node_init(V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                MAIN);
-#pragma omp critical(forks_append)
+                #pragma omp critical(forks_append)
                 {
                     fmd_vector_append(new_forks, new_fork);
                 }
@@ -1714,6 +1734,9 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, (int_t)no_vertices, kv_pairs);
     fmd->r2r_tree = inverval_merge_tree;
+#if FMD_ORACLE
+    fmd_oimt_init(fmd->r2r_tree, graph, inverse_permutation, fmd->alphabet, fmd->alphabet_size, &fmd->oracle_r2r);
+#endif
     fmd_vector_free(kv_pairs);
     /**************************************************************************
     * Step 5 - Cleanup and return the reconstructed index

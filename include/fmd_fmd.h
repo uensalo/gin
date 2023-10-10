@@ -22,6 +22,7 @@
 #include "fmd_common.h"
 #include "fmd_graph.h"
 #include "fmd_interval_merge_tree.h"
+#include "fmd_oimt.h"
 #include "fmd_fmi.h"
 #include "fmd_table.h"
 #include "fmd_vector.h"
@@ -73,6 +74,9 @@ typedef struct fmd_fmd_ {
     fmd_fmi_t *graph_fmi; // fm-index of the graph encoding
 #endif
     fmd_imt_t *r2r_tree;  // translates sa ranges to sa ranges of incoming nodes
+#ifdef FMD_ORACLE
+    fmd_oimt_t *oracle_r2r;
+#endif
 } fmd_fmd_t;
 
 void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation, char_t c_0, char_t c_1, int_t rank_sample_rate, int_t isa_sample_rate);

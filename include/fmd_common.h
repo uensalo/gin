@@ -32,6 +32,8 @@
 #define MAX3(a,b,c) (MAX2((MAX2((a),(b))),(c)))
 #define MAX4(a,b,c,d) (MAX2((MAX3((a),(b),(c))),(d)))
 
+#define FMD_MAX_ALPHABET_SIZE 256
+
 typedef uint8_t  byte_t;
 typedef int64_t  int_t;
 typedef uint64_t uint_t;

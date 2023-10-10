@@ -12,7 +12,8 @@ option(BUILD_OPENMP             "Enable OpenMP support"                 OFF)
 option(BUILD_MARCH_NATIVE_FLAG  "Enable -march=native compiler flag"    OFF)
 option(BUILD_BUILTIN_POPCOUNT   "Enable built-in popcount support"      OFF)
 option(BUILD_DEBUG              "Enable debug mode"                     OFF)
-option(BUILD_SDSL               "Enable SDSL support"                   ON )
+option(BUILD_SDSL               "Enable SDSL support"                   OFF)
+option(BUILD_ORACLE             "Enable Oracle-IMT"                     ON )
 option(BUILD_TESTS              "Build test cases"                      OFF)
 
 set(PROJECT_ROOT_DIR    ${CMAKE_SOURCE_DIR})
@@ -35,6 +36,7 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
     ${PROJECT_SOURCE_DIR}/fmd_fmd.c
     ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
+    ${PROJECT_SOURCE_DIR}/fmd_oimt.c
     ${PROJECT_SOURCE_DIR}/fmd_constraint_set.c
     ${PROJECT_SOURCE_DIR}/fmd_annealing.c
     ${PROJECT_SOURCE_DIR}/fmd_encoded_graph.c
@@ -51,6 +53,7 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
     ${PROJECT_HEADER_DIR}/fmd_fmd.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
+    ${PROJECT_HEADER_DIR}/fmd_oimt.h
     ${PROJECT_HEADER_DIR}/fmd_constraint_set.h
     ${PROJECT_HEADER_DIR}/fmd_annealing.h
     ${PROJECT_HEADER_DIR}/fmd_encoded_graph.h
@@ -135,6 +138,11 @@ if(BUILD_SDSL)
     #target_link_libraries(fmd_lib PUBLIC sdsl)
     target_link_libraries(fmd_lib_static PUBLIC sdsl)
     add_definitions(-DFMD_SDSL)
+endif()
+
+#oracle
+if(BUILD_ORACLE)
+    add_definitions(-DFMD_ORACLE)
 endif()
 
 ################################################################################
