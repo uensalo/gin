@@ -295,15 +295,21 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     #ifdef FMD_ORACLE
     int_t *alphabet;
     int_t alphabet_size;
-    int_t * c2e;
+    int_t *vertex_last_char_enc;
     #ifdef FMD_SDSL
     alphabet = f->alphabet;
     alphabet_size = f->alphabet_size;
+    vertex_last_char_enc = calloc(V, sizeof(int_t));
+    csa_wt_bwt(f->graph_fmi, vertex_last_char_enc, V+1, 2*V);
     #else
     alphabet = f->graph_fmi->alphabet;
     alphabet_size = f->graph_fmi->alphabet_size;
+    vertex_last_char_enc = calloc(V, sizeof(int_t));
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = (int_t)fmd_fmi_get(f->graph_fmi, V+1+i);
+    }
     #endif
-    fmd_oimt_init(f->r2r_tree, graph, inverse_permutation, f->alphabet, f->alphabet_size, &f->oracle_r2r);
+    fmd_oimt_init(f->r2r_tree, vertex_last_char_enc, alphabet, alphabet_size, &f->oracle_r2r);
     #endif
     // free the list structure storing interval lists, but not the lists themselves
     //kv_pairs->f = &prm_fstruct;
@@ -1734,9 +1740,25 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, (int_t)no_vertices, kv_pairs);
     fmd->r2r_tree = inverval_merge_tree;
-#if FMD_ORACLE
-    fmd_oimt_init(fmd->r2r_tree, graph, inverse_permutation, fmd->alphabet, fmd->alphabet_size, &fmd->oracle_r2r);
-#endif
+    #ifdef FMD_ORACLE
+    int_t *alphabet;
+    int_t *vertex_last_char_enc;
+    int_t V = fmd->permutation->size;
+    #ifdef FMD_SDSL
+    alphabet = f->alphabet;
+    alphabet_size = f->alphabet_size;
+    vertex_last_char_enc = calloc(V, sizeof(int_t));
+    csa_wt_bwt(f->graph_fmi, vertex_last_char_enc, V+1, 2*V);
+    #else
+    alphabet = fmd->graph_fmi->alphabet;
+    alphabet_size = fmd->graph_fmi->alphabet_size;
+    vertex_last_char_enc = calloc(V, sizeof(int_t));
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = (int_t)fmd_fmi_get(fmd->graph_fmi, V+1+i);
+    }
+    #endif
+    fmd_oimt_init(fmd->r2r_tree, vertex_last_char_enc, alphabet, (int_t)alphabet_size, &fmd->oracle_r2r);
+    #endif
     fmd_vector_free(kv_pairs);
     /**************************************************************************
     * Step 5 - Cleanup and return the reconstructed index

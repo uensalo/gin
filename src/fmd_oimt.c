@@ -1,6 +1,6 @@
 #include "fmd_oimt.h"
 
-void fmd_oimt_init(fmd_imt_t *imt, fmd_graph_t *graph, fmd_vector_t *inverse_permutation, int_t *alphabet, int_t alphabet_size, fmd_oimt_t **oimt) {
+void fmd_oimt_init(fmd_imt_t *imt, int_t *vertex_last_char_enc , int_t *alphabet, int_t alphabet_size, fmd_oimt_t **oimt) {
     fmd_oimt_t *o = calloc(1, sizeof(fmd_oimt_t));
     o->c2e = calloc(FMD_MAX_ALPHABET_SIZE, sizeof(int_t*));
     int_t t = 0;
@@ -8,7 +8,7 @@ void fmd_oimt_init(fmd_imt_t *imt, fmd_graph_t *graph, fmd_vector_t *inverse_per
         o->c2e[alphabet[i]] = t;
         ++t;
     }
-    o->root = fmd_oimt_init_helper(imt->root, graph, inverse_permutation, alphabet, alphabet_size, o->c2e);
+    o->root = fmd_oimt_init_helper(imt->root, vertex_last_char_enc, alphabet, alphabet_size);
     o->no_keys = imt->no_keys;
     memcpy(o->alphabet, alphabet, alphabet_size * sizeof(int_t));
     o->alphabet_size = alphabet_size;
@@ -16,11 +16,9 @@ void fmd_oimt_init(fmd_imt_t *imt, fmd_graph_t *graph, fmd_vector_t *inverse_per
 }
 
 fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt_node,
-                                      fmd_graph_t *graph,
-                                      fmd_vector_t *inverse_permutation,
+                                      int_t *vertex_last_char_enc,
                                       int_t *alphabet,
-                                      int_t alphabet_size,
-                                      int_t *c2e) {
+                                      int_t alphabet_size) {
     if(!imt_node) return NULL;
     fmd_oimt_node_t *o = calloc(1, sizeof(fmd_oimt_node_t));
     o->lo = imt_node->lo;
@@ -35,11 +33,9 @@ fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt_node,
     for(int_t i = 0; i < imt_node->intervals->size; i++) {
         fmd_imt_interval_t *interval = imt_node->intervals->data[i];
         for(int_t j = interval->lo; j<= interval->hi; j++) {
-            fmd_vertex_t *v = graph->vertex_list->data[(int_t)inverse_permutation->data[j]];
-            char_t last = v->label->seq[v->label->size-1];
             fmd_imt_interval_t* single;
             fmd_imt_interval_init(&single,j,j);
-            fmd_vector_append(tmp_lists[c2e[last]], single);
+            fmd_vector_append(tmp_lists[vertex_last_char_enc[j]], single);
         }
     }
     for(int_t i = 0; i < alphabet_size; i++) {
@@ -47,8 +43,8 @@ fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt_node,
         fmd_vector_free(tmp_lists[i]);
     }
     free(tmp_lists);
-    o->left = fmd_oimt_init_helper((fmd_imt_node_t*)imt_node->left, graph, inverse_permutation, alphabet, alphabet_size, c2e);
-    o->right = fmd_oimt_init_helper((fmd_imt_node_t*)imt_node->right, graph, inverse_permutation, alphabet, alphabet_size, c2e);
+    o->left = fmd_oimt_init_helper((fmd_imt_node_t*)imt_node->left, vertex_last_char_enc, alphabet, alphabet_size);
+    o->right = fmd_oimt_init_helper((fmd_imt_node_t*)imt_node->right, vertex_last_char_enc, alphabet, alphabet_size);
     return o;
 }
 
