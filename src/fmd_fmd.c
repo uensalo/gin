@@ -300,7 +300,17 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     alphabet = f->alphabet;
     alphabet_size = f->alphabet_size;
     vertex_last_char_enc = calloc(V, sizeof(int_t));
-    csa_wt_bwt(f->graph_fmi, vertex_last_char_enc, V+1, 2*V);
+    csa_wt_bwt(f->graph_fmi, (uint64_t*)vertex_last_char_enc, V+1, 2*V);
+    int_t *c2e = calloc(FMD_MAX_ALPHABET_SIZE, sizeof(int_t));
+    int_t t = 0;
+    for(int_t i = 0; i < alphabet_size; i++) {
+        c2e[alphabet[i]] = t;
+        t++;
+    }
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = c2e[vertex_last_char_enc[i]];
+    }
+    free(c2e);
     #else
     alphabet = f->graph_fmi->alphabet;
     alphabet_size = f->graph_fmi->alphabet_size;
@@ -1745,10 +1755,20 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     int_t *vertex_last_char_enc;
     int_t V = fmd->permutation->size;
     #ifdef FMD_SDSL
-    alphabet = f->alphabet;
-    alphabet_size = f->alphabet_size;
+    alphabet = fmd->alphabet;
+    int_t alphabet_size = fmd->alphabet_size;
     vertex_last_char_enc = calloc(V, sizeof(int_t));
-    csa_wt_bwt(f->graph_fmi, vertex_last_char_enc, V+1, 2*V);
+    csa_wt_bwt(fmd->graph_fmi, (uint64_t*)vertex_last_char_enc, V+1, 2*V);
+    int_t *c2e = calloc(FMD_MAX_ALPHABET_SIZE, sizeof(int_t));
+    int_t t = 0;
+    for(int_t i = 0; i < alphabet_size; i++) {
+        c2e[alphabet[i]] = t;
+        t++;
+    }
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = c2e[vertex_last_char_enc[i]];
+    }
+    free(c2e);
     #else
     alphabet = fmd->graph_fmi->alphabet;
     alphabet_size = fmd->graph_fmi->alphabet_size;
