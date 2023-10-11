@@ -4,6 +4,7 @@ void fmd_oimt_init(fmd_imt_t *imt, int_t *vertex_last_char_enc, int_t *alphabet,
     fmd_oimt_t *o = calloc(1, sizeof(fmd_oimt_t));
     o->root = fmd_oimt_init_helper(imt->root, vertex_last_char_enc, alphabet, alphabet_size);
     o->no_keys = imt->no_keys;
+    o->alphabet = calloc(alphabet_size, sizeof(int_t));
     memcpy(o->alphabet, alphabet, alphabet_size * sizeof(int_t));
     o->alphabet_size = alphabet_size;
     *oimt = o;
@@ -18,7 +19,7 @@ fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt_node,
     o->lo = imt_node->lo;
     o->hi = imt_node->hi;
     // partition the alphabet
-    o->interval_buckets = calloc(alphabet_size, sizeof(fmd_vector_t));
+    o->interval_buckets = calloc(alphabet_size, sizeof(fmd_vector_t*));
     fmd_vector_t **tmp_lists = calloc(alphabet_size, sizeof(fmd_vector_t*));
     for(int_t i = 0; i < alphabet_size; i++) {
         fmd_vector_init(&tmp_lists[i], FMD_VECTOR_INIT_SIZE, &fmd_fstruct_imt_interval);
@@ -44,7 +45,7 @@ fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt_node,
 
 void fmd_oimt_query(fmd_oimt_t *oimt, int_t start, int_t end, int_t enc, int_t no_max_intervals, fmd_vector_t **intervals) {
     fmd_vector_t *merge_list;
-    fmd_vector_init(&merge_list, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_vector);
+    fmd_vector_init(&merge_list, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
 
     int_t no_cur_intervals = 0;
     fmd_oimt_query_helper(oimt->root, start, end, enc, no_max_intervals, &no_cur_intervals, merge_list);
@@ -59,7 +60,7 @@ void fmd_oimt_query_helper(fmd_oimt_node_t *node, int_t lo, int_t hi, int_t enc,
         return;
     }
     if(lo == node->lo && hi == node->hi) {
-        fmd_vector_append(merge_list, node->interval_buckets[enc]); // important to return a copy for memory management purposes
+        fmd_vector_append(merge_list, node->interval_buckets[enc]);
         *no_cur_intervals += node->interval_buckets[enc]->size;
     } else {
         int_t split = (node->lo + node->hi) / 2;
