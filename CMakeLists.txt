@@ -8,13 +8,13 @@ set(CMAKE_BUILD_TYPE "Release")
 
 set(CMAKE_C_STANDARD 99)
 
-option(BUILD_OPENMP             "Enable OpenMP support"                 OFF)
-option(BUILD_MARCH_NATIVE_FLAG  "Enable -march=native compiler flag"    OFF)
-option(BUILD_BUILTIN_POPCOUNT   "Enable built-in popcount support"      OFF)
-option(BUILD_DEBUG              "Enable debug mode"                     OFF)
-option(BUILD_SDSL               "Enable SDSL support"                   OFF)
-option(BUILD_ORACLE             "Enable Oracle-IMT"                     ON )
-option(BUILD_TESTS              "Build test cases"                      OFF)
+set(BUILD_OPENMP             "Enable OpenMP support"                 OFF)
+set(BUILD_MARCH_NATIVE_FLAG  "Enable -march=native compiler flag"    OFF)
+set(BUILD_BUILTIN_POPCOUNT   "Enable built-in popcount support"      OFF)
+set(BUILD_DEBUG              "Enable debug mode"                     OFF)
+set(BUILD_SDSL               "Enable SDSL support"                   ON)
+set(BUILD_ORACLE             "Enable Oracle-IMT"                     ON)
+set(BUILD_TESTS              "Build test cases"                      OFF)
 
 set(PROJECT_ROOT_DIR    ${CMAKE_SOURCE_DIR})
 set(PROJECT_SOURCE_DIR  ${PROJECT_ROOT_DIR}/src)
@@ -133,7 +133,7 @@ if(BUILD_SDSL)
     #    fmd_lib PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
     #)
     target_include_directories(
-            fmd_lib_static PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
+        fmd_lib_static PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
     )
     #target_link_libraries(fmd_lib PUBLIC sdsl)
     target_link_libraries(fmd_lib_static PUBLIC sdsl)
