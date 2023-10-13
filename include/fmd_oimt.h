@@ -27,7 +27,7 @@ void fmd_oimt_free(fmd_oimt_t *oimt);
 //void fmd_oimt_comp(fmd_oimt_t *o1, fmd_oimt_t *o2);
 
 fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt, int_t *vertex_last_char_enc, int_t *alphabet, int_t alphabet_size);
-void fmd_oimt_query(fmd_oimt_t *oimt, int_t start, int_t end, int_t enc, int_t no_max_intervals, fmd_vector_t **intervals);
+void fmd_oimt_query(fmd_oimt_t *oimt, int_t start, int_t end, char_t c, int_t no_max_intervals, fmd_vector_t **intervals);
 void fmd_oimt_query_helper(fmd_oimt_node_t *node, int_t lo, int_t hi, int_t enc, int_t no_max_intervals, int_t *no_cur_intervals, fmd_vector_t *merge_list);
 void fmd_oimt_free_helper(fmd_oimt_node_t *node, int_t alphabet_size);
 

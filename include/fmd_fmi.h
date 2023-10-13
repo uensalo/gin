@@ -30,6 +30,7 @@
 typedef uint64_t count_t;
 
 #define FMD_FMI_MAX_ALPHABET_SIZE 256
+#define FMD_FMI_NO_BITS_BIT_LENGTH 64
 #define FMD_FMI_ALPHABET_SIZE_BIT_LENGTH 40
 #define FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH 40
 #define FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH 40
@@ -107,5 +108,10 @@ static fmd_fstruct_t fmd_fstruct_fmi = {
         (ffree)fmd_fmi_free,
         (fcopy)fmd_fmi_copy
 };
+
+// sdsl-like interface
+void fmd_fmi_serialize_from_buffer(unsigned char *buf, uint64_t buf_size, fmd_fmi_t **fmd_ret);
+void fmd_fmi_serialize_to_buffer(fmd_fmi_t *fmd, unsigned char **buf_ret, uint64_t *buf_size_re);
+void fmd_fmi_bwt(fmd_fmi_t *fmi, uint64_t *buf, uint64_t start, uint64_t end);
 
 #endif //FMD_FMD_FMI_H

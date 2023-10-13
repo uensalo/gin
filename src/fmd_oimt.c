@@ -7,6 +7,13 @@ void fmd_oimt_init(fmd_imt_t *imt, int_t *vertex_last_char_enc, int_t *alphabet,
     o->alphabet = calloc(alphabet_size, sizeof(int_t));
     memcpy(o->alphabet, alphabet, alphabet_size * sizeof(int_t));
     o->alphabet_size = alphabet_size;
+
+    int_t t = 0;
+    o->c2e = calloc(FMD_MAX_ALPHABET_SIZE, sizeof(int_t));
+    for(int_t i = 0; i < alphabet_size; i++) {
+        o->c2e[alphabet[i]] = t;
+        t++;
+    }
     *oimt = o;
 }
 
@@ -43,12 +50,12 @@ fmd_oimt_node_t *fmd_oimt_init_helper(fmd_imt_node_t *imt_node,
     return o;
 }
 
-void fmd_oimt_query(fmd_oimt_t *oimt, int_t start, int_t end, int_t enc, int_t no_max_intervals, fmd_vector_t **intervals) {
+void fmd_oimt_query(fmd_oimt_t *oimt, int_t start, int_t end, char_t c, int_t no_max_intervals, fmd_vector_t **intervals) {
     fmd_vector_t *merge_list;
     fmd_vector_init(&merge_list, FMD_VECTOR_INIT_SIZE, &prm_fstruct);
 
     int_t no_cur_intervals = 0;
-    fmd_oimt_query_helper(oimt->root, start, end, enc, no_max_intervals, &no_cur_intervals, merge_list);
+    fmd_oimt_query_helper(oimt->root, start, end, oimt->c2e[c], no_max_intervals, &no_cur_intervals, merge_list);
 
     fmd_vector_t *merged = fmd_imt_multiway_merge_intervals(merge_list, no_max_intervals);
     fmd_vector_free(merge_list);
