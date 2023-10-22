@@ -2,6 +2,7 @@ import os
 import re
 import pandas as pd
 import matplotlib.pyplot as plt
+from matplotlib.colors import ListedColormap
 from decimal import Decimal
 
 
@@ -173,19 +174,22 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
     unique_lengths = sorted(find_df['length'].unique())
     length_cmap = plt.get_cmap('tab10', len(unique_lengths))
 
-    # Plot the data grouped by query length with regular lines
-    for qlength in unique_lengths:
-        subset = find_df[find_df['length'] == qlength]
-        subset = subset.sort_values(by='cache')
-        plt.loglog(subset['number_fork_advances_per_query'], subset['characters_per_second'], '-o', color=length_cmap(unique_lengths.index(qlength)), label=f'{qlength}')
-
-    # Connect data points of the same cache size with dashed lines
+    # Create a color map for the different cache sizes
     caches = sorted(find_df['cache'].unique())
-    cache_cmap = plt.get_cmap('Dark2', len(caches))
+    distinct_colors = ["#e6194b", "#3cb44b", "#ffe119", "#4363d8", "#f58231", "#911eb4", "#46f0f0", "#f032e6", "#bcf60c", "#fabebe", "#008080", "#e6beff", "#9a6324"]
+    cache_cmap = ListedColormap(distinct_colors[:len(caches)])
+
+    # Plot the data grouped by cache size with regular lines
     for cache in caches:
         subset = find_df[find_df['cache'] == cache]
         subset = subset.sort_values(by='length')
-        plt.loglog(subset['number_fork_advances_per_query'], subset['characters_per_second'], '--', color=cache_cmap(caches.index(cache)))
+        plt.loglog(subset['number_fork_advances_per_query'], subset['characters_per_second'], '--o', color=cache_cmap(caches.index(cache)), label=f'{cache}')
+
+    # Overlay points based on their query length color
+    for qlength in unique_lengths:
+        subset = find_df[find_df['length'] == qlength]
+        subset = subset.sort_values(by='cache')
+        plt.loglog(subset['number_fork_advances_per_query'], subset['characters_per_second'], '-', color=length_cmap(unique_lengths.index(qlength)))
 
     # Set the x and y scales to be logarithmic
     plt.xscale('log')
@@ -197,10 +201,10 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
         plt.ylim(scale[1])
 
     # Create the legends with explicit positioning
-    cache_handles = [plt.Line2D([0], [0], color=cache_cmap(i), linestyle='--', label=f'{cache}') for i, cache in enumerate(caches)]
-    legend1 = plt.legend(handles=cache_handles, loc='lower left', title="Cache Size")
+    length_handles = [plt.Line2D([0], [0], color=length_cmap(i), lw=2, label=f'{qlength}') for i, qlength in enumerate(unique_lengths)]
+    legend1 = plt.legend(handles=length_handles, loc='lower left', title="Query Length")
     plt.gca().add_artist(legend1)  # To make sure first legend is not overwritten by the second
-    legend2 = plt.legend(loc='lower left', bbox_to_anchor=(0.1, 0), title="Query Length")
+    legend2 = plt.legend(loc='lower left', bbox_to_anchor=(0.1175, 0), title="Cache Size")
 
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
@@ -208,14 +212,12 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
     if xlabel:
         plt.xlabel('Average effective query length (bp)', fontsize=14)
     if ylabel:
-        plt.ylabel('Characters matched per second', fontsize=14)  # Updated ylabel
+        plt.ylabel('Characters matched per second', fontsize=14)
     if title:
         plt.title(f"Effective query length vs characters matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
-
-
 
 def plot_fm_gap_cache(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
@@ -500,7 +502,7 @@ def tabulate_decode(directory_name, output_filename):
 
 
 if __name__ == '__main__':
-    principal_scale = ((1e1,5e5),(1,1e8))
+    principal_scale = ((1e1,5e5),(1e2,1e7))
     baseline_scale = ((1e1,5e5),(1,5e5))
     baseline_simple_scale = ((1e1,6e3),(1,1e8))
     fm_gap_cache_scale = ((-1,13),(1e-2,5e5))
