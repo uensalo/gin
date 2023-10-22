@@ -389,56 +389,75 @@ def plot_baseline(directory_name, output_filename, scale=None, title=False, xlab
     plt.close()
 
 
-
 def plot_baseline_simple(directory_name, output_filename, scale=None, title=False, xlabel=False, ylabel=False):
     # Check if directory exists
     if not all([os.path.exists(directory_name + suffix) for suffix in ['_baseline_plain', '_baseline_permutation', '_baseline_cache', '_baseline_cache_permutation']]):
         print(f"Baselines for {directory_name} not found!")
         return
 
-    # Parse the four types of benchmarks
+    # Parse the benchmarks
     find_df_plain, _, _, _ = parse_directory_logs(directory_name + '_baseline_plain')
     find_df_perm, _, _, _ = parse_directory_logs(directory_name + '_baseline_permutation')
     find_df_cache, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache')
     find_df_cache_permutation, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache_permutation')
+    find_df_sdsl_hybrid, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache_permutation_sdsl')
+    find_df_sdsl_rrr, _, _, _ = parse_directory_logs(directory_name + '_baseline_cache_permutation_rrr')
 
     dfs = {
         "plain": find_df_plain,
         "permutation": find_df_perm,
         "cache": find_df_cache,
-        "cache+permutation": find_df_cache_permutation
+        "native": find_df_cache_permutation,
+        "sdsl-hybrid": find_df_sdsl_hybrid,
+        "sdsl-rrr": find_df_sdsl_rrr
     }
 
     plt.figure(figsize=(12, 8))
-
-    # Create a color map for the different query lengths
-    unique_lengths = sorted(find_df_plain['length'].unique())
-    length_cmap = plt.get_cmap('tab10', len(unique_lengths))
 
     benchmark_colors = {
         "plain": "blue",
         "permutation": "green",
         "cache": "red",
-        "cache+permutation": "purple"
+        "native": "purple",
+        "sdsl-hybrid": "cyan",
+        "sdsl-rrr": "magenta"
     }
+
+    lines_baseline = []
+    lines_cache_permutation = []
 
     # Plot each benchmark data
     for benchmark, df in dfs.items():
         sorted_df = df.sort_values(by='length')
-        plt.loglog(sorted_df['length'], sorted_df['queries_per_second'], 'o-', color=benchmark_colors[benchmark], label=benchmark)
+        line, = plt.loglog(sorted_df['length'], sorted_df['queries_per_second'], 'o-', color=benchmark_colors[benchmark], label=benchmark)
+
+        if benchmark in ["plain", "permutation", "cache"]:
+            lines_baseline.append(line)
+        else:
+            lines_cache_permutation.append(line)
 
     # If a scale is provided, set the x and y limits
     if scale:
         plt.xlim(scale[0])
         plt.ylim(scale[1])
 
-    plt.legend(loc='upper right', title="Index")
+    # Create the baseline legend in the upper right
+    legend_baseline = plt.legend(handles=lines_baseline, loc='upper right', title="Baseline")
+
+    # Add the baseline legend manually to the current Axes so it won't be overwritten by the next legend
+    plt.gca().add_artist(legend_baseline)
+
+    # Get the bounding box of the baseline legend in figure coordinates
+    bbox = legend_baseline.get_window_extent().transformed(plt.gca().transAxes.inverted())
+
+    # Create the cache+permutation legend anchored below the baseline legend
+    plt.legend(handles=lines_cache_permutation, loc='upper right', bbox_to_anchor=(1, bbox.y0), title="Cache & Permutation")
 
     plt.xticks(fontsize=12)
     plt.yticks(fontsize=12)
 
     if xlabel:
-        plt.xlabel('Regular query length (bp)', fontsize=14)
+        plt.xlabel('Query length (bp)', fontsize=14)
     if ylabel:
         plt.ylabel('Queries matched per second', fontsize=14)
     if title:
@@ -479,14 +498,15 @@ def tabulate_decode(directory_name, output_filename):
 if __name__ == '__main__':
     principal_scale = ((1e1,5e5),(1,5e5))
     baseline_scale = ((1e1,5e5),(1,5e5))
+    baseline_simple_scale = ((1e1,6e3),(1,5e5))
     fm_gap_cache_scale = ((-1,13),(1e-2,5e5))
     fm_gap_permuatation_scale = ((0,3800),(1e-2,5e5))
 
     plot_baseline('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline.png', baseline_scale, ylabel=True) #a
     plot_baseline('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline.png', baseline_scale) #b
 
-    plot_baseline_simple('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline_simple.png', baseline_scale, ylabel=True) #?
-    plot_baseline_simple('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline_simple.png', baseline_scale) #?
+    plot_baseline_simple('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline_simple.png', baseline_simple_scale, ylabel=True, xlabel=True) #?
+    plot_baseline_simple('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline_simple.png', baseline_simple_scale, xlabel=True) #?
 
     plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', principal_scale, xlabel=True, ylabel=True) #c
     plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', principal_scale, xlabel=True) #d
