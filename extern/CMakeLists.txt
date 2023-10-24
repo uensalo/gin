@@ -3,12 +3,12 @@ set(LIBDIVSUFSORT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libdivsufsort")
 if(NOT EXISTS "${LIBDIVSUFSORT_PATH}/.git")
     message(STATUS "libdivsufsort not found or not initialized. Initializing and updating...")
     execute_process(
-            COMMAND git submodule update --init --recursive
+            COMMAND git submodule update --init extern/libdivsufsort --recursive
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
             RESULT_VARIABLE GIT_SUBMOD_INIT_RESULT
             )
-    if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-        message(FATAL_ERROR "git submodule update --init failed for libdivsufsort with ${GIT_SUBMOD_RESULT}")
+    if(NOT GIT_SUBMOD_INIT_RESULT EQUAL "0")
+        message(FATAL_ERROR "git submodule update --init extern/libdivsufsort failed for libdivsufsort with ${GIT_SUBMOD_INIT_RESULT}")
     endif()
 endif()
 set(BUILD_SHARED_LIBS OFF CACHE BOOL "Do not build a shared library for libdivsufsort")
@@ -22,7 +22,7 @@ if(BUILD_SDSL)
     if(NOT EXISTS "${SDSL_PATH}/.git")
         message(STATUS "sdsl not found or not initialized. Initializing and updating...")
         execute_process(
-                COMMAND git submodule update --init --recursive
+                COMMAND git submodule update --init extern/sdsl --recursive
                 WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
                 RESULT_VARIABLE GIT_SUBMOD_INIT_RESULT
         )
