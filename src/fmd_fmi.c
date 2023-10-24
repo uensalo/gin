@@ -547,6 +547,7 @@ void fmd_fmi_serialize_from_buffer(unsigned char *buf, uint64_t buf_size, fmd_fm
     /******************************************************
     * Step 6 - Finalize reading the FMI
     ******************************************************/
+    fmd_bs_free(bs);
     *fmi_ret = fmi;
 }
 
