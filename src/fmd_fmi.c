@@ -128,7 +128,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     /******************************************************
     * Step 3a - Write the header
     ******************************************************/
-    int_t widx = 0;
+    int_t widx = FMD_FMI_NO_BITS_BIT_LENGTH; // skip the bits field
     fmd_bs_write_word(bits, widx, f->no_chars, FMD_FMI_CHAR_COUNT_BIT_LENGTH);
     widx+=FMD_FMI_CHAR_COUNT_BIT_LENGTH;
     fmd_bs_write_word(bits, widx, f->no_chars_per_block, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH);
@@ -230,6 +230,7 @@ void fmd_fmi_init_with_sa(fmd_fmi_t **fmi,
     fmd_bs_fit(bits, widx);
     f->bits = bits;
     f->no_bits = widx;
+    fmd_bs_write_word(bits, 0, widx, FMD_FMI_NO_BITS_BIT_LENGTH);
     fmd_string_free(bwt);
     *fmi = f;
 }
@@ -447,4 +448,124 @@ uint_t fmd_fmi_hash(fmd_fmi_t *fmi) {
 
 int fmd_fmi_comp(fmd_fmi_t *f1, fmd_fmi_t *f2) {
     return fmd_bs_comp(f1->bits, f2->bits);
+}
+
+void fmd_fmi_serialize_from_buffer(unsigned char *buf, uint64_t buf_size, fmd_fmi_t **fmi_ret) {
+    fmd_bs_t *bs;
+    fmd_bs_init_from_buffer_copy(buf, buf_size, &bs);
+    word_t ridx = 0;
+    uint_t fmi_ridx_start = 0;
+    word_t fmi_no_bits;
+    fmd_bs_read_word(bs, ridx, FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
+    ridx += FMD_FMI_NO_BITS_BIT_LENGTH;
+    fmd_fmi_t *fmi = calloc(1, sizeof(fmd_fmi_t));
+    fmi->no_bits = (int_t)fmi_no_bits;
+    /******************************************************
+    * Step 1 - Read the header
+    ******************************************************/
+    word_t no_chars, no_chars_per_block, isa_sample_rate, alphabet_size;
+    fmd_bs_read_word(bs, ridx, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &no_chars);
+    ridx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH, &no_chars_per_block);
+    ridx += FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &isa_sample_rate);
+    ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+
+    fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_SIZE_BIT_LENGTH, &alphabet_size);
+    ridx += FMD_FMI_ALPHABET_SIZE_BIT_LENGTH;
+
+    fmi->no_chars = (int_t)no_chars;
+    fmi->no_chars_per_block = (int_t)no_chars_per_block;
+    fmi->isa_sample_rate = (int_t)isa_sample_rate;
+    fmi->alphabet_size = (int_t)alphabet_size;
+    fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
+    /******************************************************
+    * Step 2 - Read the alphabet
+    ******************************************************/
+    fmi->alphabet = calloc(fmi->alphabet_size, sizeof(int_t));
+    fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
+    for(int_t i = 0; i < fmi->alphabet_size; i++) {
+        word_t alphabet_char, encoding;
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
+        ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
+        fmi->alphabet[i] = (int_t)alphabet_char;
+
+        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
+        ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
+
+        fmi->c2e[alphabet_char] = (int_t)encoding;
+        fmi->e2c[encoding] = (int_t)alphabet_char;
+    }
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 3 - Copy the bits field, then set pointers to
+    * suffix array entries and occupancy bitvector
+    ******************************************************/
+    fmd_bs_t *fmi_bits;
+    fmd_bs_init(&fmi_bits);
+    fmd_bs_fit(fmi_bits, fmi_no_bits);
+    fmi->sa_start_offset = (int_t)(ridx) - (int_t)fmi_ridx_start;
+    ridx += (1+fmi->no_chars/fmi->isa_sample_rate)*FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
+    fmi->sa_bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    int_t sa_bv_occ_size = (1+(fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
+    ridx += sa_bv_occ_size;
+    /****************************
+    * Align to word boundary
+    ****************************/
+    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
+    /******************************************************
+    * Step 4 - Copy the actual bitvector and the caches
+    ******************************************************/
+    fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
+    for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
+        word_t read_bits;
+        uint_t offset = i * WORD_NUM_BITS;
+        fmd_bs_read_word(bs, fmi_ridx_start + offset, WORD_NUM_BITS, &read_bits);
+        fmd_bs_write_word(fmi_bits, offset, read_bits, WORD_NUM_BITS);
+    }
+    fmd_bs_fit(fmi_bits, fmi_no_bits);
+    fmi->bits = fmi_bits;
+    fmi->no_bits = (int_t)fmi_no_bits;
+    /******************************************************
+    * Step 5 - Compute the cumulative sum from last block
+    ******************************************************/
+    fmi->char_counts = calloc(fmi->alphabet_size, sizeof(count_t));
+    count_t cum = 0;
+    uint_t rank_cache_idx = fmi->no_bits - fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
+    for(int_t i = 0; i < fmi->alphabet_size; i++) {
+        word_t count;
+        fmi->char_counts[i] = cum;
+        fmd_bs_read_word(fmi->bits, rank_cache_idx + i * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &count);
+        cum += (count_t)count;
+    }
+    /******************************************************
+    * Step 6 - Finalize reading the FMI
+    ******************************************************/
+    fmd_bs_free(bs);
+    *fmi_ret = fmi;
+}
+
+void fmd_fmi_serialize_to_buffer(fmd_fmi_t *fmi, unsigned char **buf_ret, uint64_t *buf_size_re) {
+    if(!fmi->no_bits) {
+        *buf_ret = NULL;
+        *buf_size_re = 0;
+        return;
+    }
+    fmd_bs_fit(fmi->bits, fmi->no_bits);
+    fmd_bs_t *copy = fmd_bs_copy(fmi->bits);
+    *buf_ret = (unsigned char*)copy->words;
+    *buf_size_re = 1 + ((fmi->no_bits - 1) >> 3);
+    fmd_bs_free_disown(copy);
+}
+
+void fmd_fmi_bwt(fmd_fmi_t *fmi, uint64_t *buf, uint64_t start, uint64_t end) {
+    for(uint64_t i = start; i <= end; i++) {
+        buf[i] = fmd_fmi_get(fmi, (int64_t)i);
+    }
 }

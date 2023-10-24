@@ -172,6 +172,7 @@ void fmd_bs_init_no_alloc(fmd_bs_t *bs);
 void fmd_bs_init_reserve(fmd_bs_t **bs, uint64_t no_words);
 void fmd_bs_init_reserve_no_alloc(fmd_bs_t *bs, uint64_t no_words);
 void fmd_bs_init_from_buffer(unsigned char *buf, size_t buf_size, fmd_bs_t **bs);
+void fmd_bs_init_from_buffer_copy(unsigned char *buf, size_t buf_size, fmd_bs_t **bs);
 void fmd_bs_read_word(fmd_bs_t *bs, uint_t bit_idx, uint_t read_size_in_bits, word_t *read_val);
 void fmd_bs_write_word(fmd_bs_t *bs, uint_t bit_idx, word_t write_val, uint_t write_size_in_bits);
 void fmd_bs_fit(fmd_bs_t *bs, uint_t bit_idx);

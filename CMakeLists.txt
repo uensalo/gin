@@ -8,12 +8,13 @@ set(CMAKE_BUILD_TYPE "Release")
 
 set(CMAKE_C_STANDARD 99)
 
-option(BUILD_OPENMP             "Enable OpenMP support"                 OFF)
-option(BUILD_MARCH_NATIVE_FLAG  "Enable -march=native compiler flag"    OFF)
-option(BUILD_BUILTIN_POPCOUNT   "Enable built-in popcount support"      OFF)
-option(BUILD_DEBUG              "Enable debug mode"                     OFF)
-option(BUILD_SDSL               "Enable SDSL support"                   ON )
-option(BUILD_TESTS              "Build test cases"                      OFF)
+set(BUILD_OPENMP             OFF)
+set(BUILD_MARCH_NATIVE_FLAG  OFF)
+set(BUILD_BUILTIN_POPCOUNT   OFF)
+set(BUILD_DEBUG              OFF)
+set(BUILD_SDSL               OFF)
+set(BUILD_ORACLE             OFF)
+set(BUILD_TESTS              OFF)
 
 set(PROJECT_ROOT_DIR    ${CMAKE_SOURCE_DIR})
 set(PROJECT_SOURCE_DIR  ${PROJECT_ROOT_DIR}/src)
@@ -35,6 +36,7 @@ set(C_FILES
     ${PROJECT_SOURCE_DIR}/fmd_fmi.c
     ${PROJECT_SOURCE_DIR}/fmd_fmd.c
     ${PROJECT_SOURCE_DIR}/fmd_interval_merge_tree.c
+    ${PROJECT_SOURCE_DIR}/fmd_oimt.c
     ${PROJECT_SOURCE_DIR}/fmd_constraint_set.c
     ${PROJECT_SOURCE_DIR}/fmd_annealing.c
     ${PROJECT_SOURCE_DIR}/fmd_encoded_graph.c
@@ -51,6 +53,7 @@ set(H_FILES
     ${PROJECT_HEADER_DIR}/fmd_fmi.h
     ${PROJECT_HEADER_DIR}/fmd_fmd.h
     ${PROJECT_HEADER_DIR}/fmd_interval_merge_tree.h
+    ${PROJECT_HEADER_DIR}/fmd_oimt.h
     ${PROJECT_HEADER_DIR}/fmd_constraint_set.h
     ${PROJECT_HEADER_DIR}/fmd_annealing.h
     ${PROJECT_HEADER_DIR}/fmd_encoded_graph.h
@@ -68,6 +71,7 @@ if(BUILD_DEBUG)
     add_link_options(-fsanitize=address)
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS}")
     set(BUILD_OPENMP OFF)
+    set(CMAKE_BUILD_TYPE "Debug")
 else()
     set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -O3 -fPIC")
     if(BUILD_MARCH_NATIVE_FLAG)
@@ -116,9 +120,9 @@ target_include_directories(
 
 # divsufsort
 #target_link_libraries(fmd_lib PUBLIC divsufsort)
-target_link_libraries(fmd_lib_static PUBLIC divsufsort)
+target_link_libraries(fmd_lib_static PUBLIC divsufsortf)
 #target_link_libraries(fmd_lib PUBLIC divsufsort64)
-target_link_libraries(fmd_lib_static PUBLIC divsufsort64)
+target_link_libraries(fmd_lib_static PUBLIC divsufsort64f)
 
 # math
 #target_link_libraries(fmd_lib PUBLIC m)
@@ -135,6 +139,11 @@ if(BUILD_SDSL)
     #target_link_libraries(fmd_lib PUBLIC sdsl)
     target_link_libraries(fmd_lib_static PUBLIC sdsl)
     add_definitions(-DFMD_SDSL)
+endif()
+
+#oracle
+if(BUILD_ORACLE)
+    add_definitions(-DFMD_ORACLE)
 endif()
 
 ################################################################################

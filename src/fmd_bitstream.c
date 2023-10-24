@@ -88,6 +88,25 @@ void fmd_bs_init_from_buffer(unsigned char *buf, size_t buf_size, fmd_bs_t **bs)
     *bs = b;
 }
 
+void fmd_bs_init_from_buffer_copy(unsigned char *buf, size_t buf_size, fmd_bs_t **bs) {
+    fmd_bs_t *b = calloc(1, sizeof(fmd_bs_t));
+    if(!b || !buf_size) {
+        *bs = NULL;
+        return;
+    }
+    int_t no_words = (1 + ((int_t)buf_size - 1) / (int_t)sizeof(word_t));
+    b->words = calloc(no_words, sizeof(word_t));
+    memcpy((unsigned char*)b->words, buf, buf_size);
+    memset((unsigned char*)b->words + buf_size, 0, no_words * sizeof(word_t) - buf_size);
+    if(!b->words) {
+        free(b);
+        *bs = NULL;
+        return;
+    }
+    b->cap_in_words = no_words;
+    *bs = b;
+}
+
 void fmd_bs_read_word(fmd_bs_t *bs, uint_t bit_idx, uint_t read_size_in_bits, word_t *read_val) {
     if(!read_size_in_bits) return;
     uint_t word_idx = bit_idx >> WORD_LOG_BITS;

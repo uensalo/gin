@@ -202,7 +202,7 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     }
     // at this point, sa is no longer needed as slices are extracted
 
-    free(sa); // frees gigs of memory :)
+    free(sa);
 #endif
     fmd_string_free(graph_encoding);
     /******************************************************
@@ -292,6 +292,36 @@ void fmd_fmd_init(fmd_fmd_t** fmd, fmd_graph_t *graph, fmd_vector_t *permutation
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, V, kv_pairs);
     f->r2r_tree = inverval_merge_tree;
+    #ifdef FMD_ORACLE
+    int_t *alphabet;
+    int_t alphabet_size;
+    int_t *vertex_last_char_enc;
+    #ifdef FMD_SDSL
+    alphabet = f->alphabet;
+    alphabet_size = f->alphabet_size;
+    vertex_last_char_enc = calloc(V, sizeof(int_t));
+    csa_wt_bwt(f->graph_fmi, (uint64_t*)vertex_last_char_enc, V+1, 2*V);
+    int_t *c2e = calloc(FMD_MAX_ALPHABET_SIZE, sizeof(int_t));
+    int_t t = 0;
+    for(int_t i = 0; i < alphabet_size; i++) {
+        c2e[alphabet[i]] = t;
+        t++;
+    }
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = c2e[vertex_last_char_enc[i]];
+    }
+    free(c2e);
+    #else
+    alphabet = f->graph_fmi->alphabet;
+    alphabet_size = f->graph_fmi->alphabet_size;
+    vertex_last_char_enc = calloc(V, sizeof(int_t));
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = (int_t)fmd_fmi_get(f->graph_fmi, V+1+i);
+    }
+    #endif
+    fmd_oimt_init(f->r2r_tree, vertex_last_char_enc, alphabet, alphabet_size, &f->oracle_r2r);
+    free(vertex_last_char_enc);
+    #endif
     // free the list structure storing interval lists, but not the lists themselves
     //kv_pairs->f = &prm_fstruct;
     fmd_vector_free(kv_pairs);
@@ -306,13 +336,16 @@ void fmd_fmd_free(fmd_fmd_t *fmd) {
     if(fmd) {
         fmd_vector_free(fmd->permutation);
         fmd_vector_free(fmd->bwt_to_vid);
+        free(fmd->alphabet);
 #ifdef FMD_SDSL
         csa_wt_free(fmd->graph_fmi);
-        free(fmd->alphabet);
 #else
         fmd_fmi_free(fmd->graph_fmi);
 #endif
         fmd_imt_free(fmd->r2r_tree);
+#if FMD_ORACLE
+        fmd_oimt_free(fmd->oracle_r2r);
+#endif
         free(fmd);
     }
 }
@@ -390,7 +423,11 @@ void fmd_fmd_query_find_dfs_process_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, 
                                                              fork->pos,
                                                              MAIN);
             fmd_vector_t *incoming_sa_intervals;
+            #ifdef FMD_ORACLE
+            fmd_oimt_query(fmd->oracle_r2r, c_0_lo - 1, c_0_hi - 2, pattern->seq[fork->pos], max_forks, &incoming_sa_intervals);
+            #else
             fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
+            #endif
             for (int_t i = 0; i < incoming_sa_intervals->size; i++) {
                 fmd_imt_interval_t *interval = incoming_sa_intervals->data[i];
                 fmd_fork_node_t *new_fork = fmd_fork_node_init(V+1+interval->lo, V+2+interval->hi,
@@ -442,7 +479,7 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     **********************************************************************/
     fmd_vector_t *new_forks;
     fmd_vector_init(&new_forks, FMD_VECTOR_INIT_SIZE, &fmd_fstruct_fork_node);
-#pragma omp parallel for default(none) shared(forks, fmd, max_forks, new_forks, V)
+    #pragma omp parallel for default(none) shared(forks, fmd, max_forks, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
@@ -450,14 +487,18 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
         bool more_to_track = max_forks == -1 || max_forks > forks->size;
         if(more_to_track && c_0_lo < c_0_hi) {
             fmd_vector_t *incoming_sa_intervals;
+            #ifdef FMD_ORACLE
+            fmd_oimt_query(fmd->oracle_r2r, c_0_lo - 1, c_0_hi - 2, string->seq[fork->pos], max_forks, &incoming_sa_intervals);
+            #else
             fmd_imt_query(fmd->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
+            #endif
             int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
             for (int_t j = 0; j < no_forks_to_add; j++) {
                 fmd_imt_interval_t *interval = incoming_sa_intervals->data[j];
                 fmd_fork_node_t *new_fork = fmd_fork_node_init(V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                MAIN);
-#pragma omp critical(forks_append)
+                #pragma omp critical(forks_append)
                 {
                     fmd_vector_append(new_forks, new_fork);
                 }
@@ -477,13 +518,13 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
     fmd_vector_t *next_iter_forks;
     fmd_vector_init(&next_iter_forks, forks->size + merged->size, &fmd_fstruct_fork_node);
     // advance and filter previous queries
-#pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
+    #pragma omp parallel for default(none) shared(forks, fmd, partial_matches, next_iter_forks, string, t)
     for(int_t i = 0; i < forks->size; i++) {
         fmd_fork_node_t *fork = forks->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
         if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
+            #pragma omp critical(partial_matches_append)
             {
                 fmd_vector_append(*partial_matches, fork);
             }
@@ -491,25 +532,25 @@ void fmd_fmd_query_find_step(fmd_fmd_t *fmd, fmd_string_t *string, int_t max_for
             if(*t==1) {
                 fork->type = LEAF;
             }
-#pragma omp critical(next_iter_queries_append)
+            #pragma omp critical(next_iter_queries_append)
             {
                 fmd_vector_append(next_iter_forks, fork);
             }
         }
     }
     // advance and filter next forks
-#pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks, t)
+    #pragma omp parallel for default(none) shared(merged,V,fmd,string,partial_matches,next_iter_forks, t)
     for (int_t i = 0; i < merged->size; i++) {
         fmd_fork_node_t *fork = merged->data[i];
         fmd_fmd_advance_fork(fmd, fork, string);
         if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
+            #pragma omp critical(partial_matches_append)
             {
                 fmd_vector_append(*partial_matches, fork);
             }
         } else {
-#pragma omp critical(next_iter_queries_append)
+            #pragma omp critical(next_iter_queries_append)
             {
                 fmd_vector_append(next_iter_forks, fork);
             }
@@ -576,12 +617,7 @@ void fmd_fmd_query_find(fmd_fmd_t *fmd,
 
         // create the initial fork
         int_t init_lo = 0;//1 + V * (2+fmd_ceil_log2(V));
-#ifdef FMD_SDSL
         int_t init_hi = fmd->no_chars;
-#else
-        int_t init_hi = fmd->graph_fmi->no_chars;
-#endif
-
         fmd_fork_node_t *root = fmd_fork_node_init(init_lo, init_hi,
                                                    string->size - 1,
                                                    ROOT);
@@ -1069,7 +1105,6 @@ void fmd_fmd_cache_init(fmd_fmd_cache_t **cache, fmd_fmd_t *fmd, int_t depth) {
     c->key_fmi_size_in_bits = csa_wt_size_in_bytes(key_fmi) << 3;
 #else
     c->key_fmi_size_in_bits = key_fmi->no_bits;
-    c->disk_buffer = NULL;
 #endif
     *cache = c;
 }
@@ -1198,10 +1233,14 @@ void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **b
     /**************************************************************************
     * Step 2 - Write the FMI bitstream
     **************************************************************************/
-#ifdef FMD_SDSL
+
     uint8_t *fmi_buf = NULL;
     uint64_t fmi_buf_size = 0;
+#ifdef FMD_SDSL
     csa_wt_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
+#else
+    fmd_fmi_serialize_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
+#endif
     int_t fmi_buf_size_in_bits = (int_t)fmi_buf_size << 3;
     fmd_bs_write_word(bs, widx, (word_t)fmi_buf_size_in_bits, FMD_FMD_FMI_NO_BITS_BIT_LENGTH);
     widx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
@@ -1213,13 +1252,6 @@ void fmd_fmd_cache_serialize_to_buffer(fmd_fmd_cache_t *cache, unsigned char **b
         widx += WORD_NUM_BITS;
     }
     free(fmi_buf);
-#else
-    int_t fmi_no_words = (int_t)(1 +((cache->key_fmi_size_in_bits-1)>>WORD_LOG_BITS)); // word align
-    for(int_t i = 0; i < fmi_no_words; i++) {
-        fmd_bs_write_word(bs, widx, (word_t)cache->key_fmi->bits->words[i], WORD_NUM_BITS);
-        widx += WORD_NUM_BITS;
-    }
-#endif
     // word align
     widx  = (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /**************************************************************************
@@ -1275,19 +1307,15 @@ void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char
     /**************************************************************************
     * Step 1 - Parse item word offsets
     **************************************************************************/
-#ifdef FMD_SDSL
     cache->item_offsets = calloc(cache->no_entries, sizeof(word_t));
     memcpy(cache->item_offsets, bs->words + (ridx >> WORD_LOG_BITS), cache->no_entries * sizeof(word_t));
-#else
-    cache->item_offsets = bs->words + (ridx >> WORD_LOG_BITS);
-#endif
     ridx += no_entries * WORD_NUM_BITS;
     // word align
     ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /**************************************************************************
     * Step 2 - Parse FMI bitstream
     **************************************************************************/
-#ifdef FMD_SDSL
+
     word_t fmi_no_bits = 0;
     fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
     ridx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
@@ -1303,126 +1331,25 @@ void fmd_fmd_cache_serialize_from_buffer(fmd_fmd_cache_t **cachew, unsigned char
         fmi_buf_word[i] = word;
         ridx += WORD_NUM_BITS;
     }
+#ifdef FMD_SDSL
     cache->key_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
+#else
+    fmd_fmi_serialize_from_buffer(fmi_buf, fmi_buf_size, &cache->key_fmi);
+#endif
     free(fmi_buf);
     // word align
     ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
-#else
-    fmd_fmi_t *fmi = calloc(1, sizeof(fmd_fmi_t));
-    int_t fmi_no_words = (int_t)(1 +((cache->key_fmi_size_in_bits-1)>>WORD_LOG_BITS)); // word align
-    uint_t fmi_ridx_start = ridx;
 
-    fmd_bs_t *fmi_bits = calloc(1, sizeof(fmd_bs_t));
-    fmi_bits->cap_in_words = fmi_no_words;
-    fmi_bits->words = bs->words + (ridx >> WORD_LOG_BITS);
-    fmi->bits = fmi_bits;
-    // word align
-    ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
-    /******************************************************
-    * Step 2a - Read the FMI header
-    ******************************************************/
-    word_t no_chars, no_chars_per_block, isa_sample_rate, alphabet_size;
-    fmd_bs_read_word(bs, ridx, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &no_chars);
-    ridx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
-
-    fmd_bs_read_word(bs, ridx, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH, &no_chars_per_block);
-    ridx += FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH;
-
-    fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &isa_sample_rate);
-    ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
-
-    fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_SIZE_BIT_LENGTH, &alphabet_size);
-    ridx += FMD_FMI_ALPHABET_SIZE_BIT_LENGTH;
-
-    fmi->no_chars = (int_t)no_chars;
-    fmi->no_chars_per_block = (int_t)no_chars_per_block;
-    fmi->isa_sample_rate = (int_t)isa_sample_rate;
-    fmi->alphabet_size = (int_t)alphabet_size;
-    fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
-    /******************************************************
-    * Step 2b - Read the alphabet
-    ******************************************************/
-    fmi->alphabet = calloc(fmi->alphabet_size, sizeof(int_t));
-    fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
-    fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
-    for(int_t i = 0; i < fmi->alphabet_size; i++) {
-        word_t alphabet_char, encoding;
-        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
-        ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
-        fmi->alphabet[i] = (int_t)alphabet_char;
-
-        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
-        ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
-
-        fmi->c2e[alphabet_char] = (int_t)encoding;
-        fmi->e2c[encoding] = (int_t)alphabet_char;
-    }
-    /****************************
-    * Align to word boundary
-    ****************************/
-    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
-    /******************************************************
-    * Step 2c - Copy the bits field, then set pointers to
-    * suffix array entries and occupancy bitvector
-    ******************************************************/
-    fmi->sa_start_offset = (int_t)(ridx) - (int_t)fmi_ridx_start;
-    ridx += (1+fmi->no_chars/fmi->isa_sample_rate)*FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
-    fmi->sa_bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
-    int_t sa_bv_occ_size = (1+(fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
-    ridx += sa_bv_occ_size;
-    /****************************
-    * Align to word boundary
-    ****************************/
-    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
-    /******************************************************
-    * Step 2d - Copy the actual bitvector and the caches
-    ******************************************************/
-    fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
-    for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
-        word_t read_bits;
-        uint_t offset = i * WORD_NUM_BITS;
-        fmd_bs_read_word(bs, fmi_ridx_start + offset, WORD_NUM_BITS, &read_bits);
-        fmd_bs_write_word(fmi_bits, offset, read_bits, WORD_NUM_BITS);
-    }
-    fmi->no_bits = (int_t)cache->key_fmi_size_in_bits;
-    /******************************************************
-    * Step 2e - Compute the cumulative sum from last block
-    ******************************************************/
-    fmi->char_counts = calloc(fmi->alphabet_size, sizeof(count_t));
-    count_t cum = 0;
-    uint_t rank_cache_idx = fmi->no_bits - fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
-    for(int_t i = 0; i < fmi->alphabet_size; i++) {
-        word_t count = 0;
-        fmi->char_counts[i] = cum;
-        fmd_bs_read_word(fmi->bits, rank_cache_idx + i * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &count);
-        cum += (count_t)count;
-    }
-    /******************************************************
-    * Step 2f - Finalize reading the FMI
-    ******************************************************/
-    /* Don't forget to set ridx accordingly */
-    ridx = fmi_ridx_start + fmi_bits->cap_in_words * WORD_NUM_BITS;
-    cache->key_fmi = fmi;
-#endif
     /******************************************************
     * Step 3 - Parse the values
     ******************************************************/
-#ifdef FMD_SDSL
     word_t no_value_buffer_words = (word_t)(value_buffer_size_in_bits) >> WORD_LOG_BITS;
     cache->items = calloc(no_value_buffer_words, sizeof(word_t));
     memcpy(cache->items, bs->words + (ridx >> WORD_LOG_BITS), no_value_buffer_words * sizeof(word_t));
-#else
-    cache->items = bs->words + (ridx >> WORD_LOG_BITS);
-    cache->disk_buffer = (unsigned char*)bs->words;
-#endif
     /******************************************************
     * Step 4 - Cleanup
     ******************************************************/
-#ifdef FMD_SDSL
     fmd_bs_free(bs);
-#else
-    fmd_bs_free_disown(bs);
-#endif
     *cachew = cache;
 }
 
@@ -1430,20 +1357,12 @@ void fmd_fmd_cache_free(fmd_fmd_cache_t *cache) {
     if(!cache) return;
 #ifdef FMD_SDSL
     csa_wt_free(cache->key_fmi);
+#else
+    fmd_fmi_free(cache->key_fmi);
+#endif
     free(cache->items);
     free(cache->item_offsets);
     free(cache);
-#else
-    if(cache->disk_buffer) {
-        fmd_fmi_free_disown(cache->key_fmi);
-        free(cache->disk_buffer);
-    } else {
-        fmd_fmi_free(cache->key_fmi);
-        free(cache->items);
-        free(cache->item_offsets);
-    }
-    free(cache);
-#endif
 }
 
 bool fmd_fmd_advance_fork(fmd_fmd_t *fmd, fmd_fork_node_t *fork, fmd_string_t *pattern) {
@@ -1568,7 +1487,7 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     /**************************************************************************
     * Step 3 - Reconstruct the FMI from the bitstream
     **************************************************************************/
-#ifdef FMD_SDSL
+
     word_t fmi_no_bits = 0;
     fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
     ridx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
@@ -1584,107 +1503,20 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
         fmi_buf_word[i] = word;
         ridx += WORD_NUM_BITS;
     }
+#ifdef FMD_SDSL
     fmd->graph_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
-    csa_wt_populate_alphabet(fmd->graph_fmi, &fmd->alphabet, &fmd->alphabet_size);
     fmd->no_chars = csa_wt_bwt_length(fmd->graph_fmi);
-    free(fmi_buf);
+    csa_wt_populate_alphabet(fmd->graph_fmi, &fmd->alphabet, &fmd->alphabet_size);
 #else
-    word_t fmi_no_bits;
-    fmd_bs_read_word(bs, ridx, FMD_FMD_FMI_NO_BITS_BIT_LENGTH, &fmi_no_bits);
-    ridx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
-    fmd_fmi_t *graph_fmi = calloc(1, sizeof(fmd_fmi_t));
-    uint_t fmi_ridx_start = ridx;
-    /******************************************************
-    * Step 3a - Read the header
-    ******************************************************/
-    word_t no_chars, no_chars_per_block, isa_sample_rate, alphabet_size;
-    fmd_bs_read_word(bs, ridx, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &no_chars);
-    ridx += FMD_FMI_CHAR_COUNT_BIT_LENGTH;
-
-    fmd_bs_read_word(bs, ridx, FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH, &no_chars_per_block);
-    ridx += FMD_FMI_RNK_SAMPLE_RATE_BIT_LENGTH;
-
-    fmd_bs_read_word(bs, ridx, FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH, &isa_sample_rate);
-    ridx += FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
-
-    fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_SIZE_BIT_LENGTH, &alphabet_size);
-    ridx += FMD_FMI_ALPHABET_SIZE_BIT_LENGTH;
-
-    graph_fmi->no_chars = (int_t)no_chars;
-    graph_fmi->no_chars_per_block = (int_t)no_chars_per_block;
-    graph_fmi->isa_sample_rate = (int_t)isa_sample_rate;
-    graph_fmi->alphabet_size = (int_t)alphabet_size;
-    graph_fmi->no_bits_per_char = fmd_ceil_log2((int_t)alphabet_size);
-    /******************************************************
-    * Step 3b - Read the alphabet
-    ******************************************************/
-    graph_fmi->alphabet = calloc(graph_fmi->alphabet_size, sizeof(int_t));
-    graph_fmi->e2c = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
-    graph_fmi->c2e = calloc(FMD_FMI_MAX_ALPHABET_SIZE, sizeof(int_t));
-    for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
-        word_t alphabet_char, encoding;
-        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH, &alphabet_char);
-        ridx+=FMD_FMI_ALPHABET_ENTRY_BIT_LENGTH;
-        graph_fmi->alphabet[i] = (int_t)alphabet_char;
-
-        fmd_bs_read_word(bs, ridx, FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH, &encoding);
-        ridx+=FMD_FMI_ALPHABET_ENCODING_BIT_LENGTH;
-
-        graph_fmi->c2e[alphabet_char] = (int_t)encoding;
-        graph_fmi->e2c[encoding] = (int_t)alphabet_char;
-    }
-    /****************************
-    * Align to word boundary
-    ****************************/
-    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
-    /******************************************************
-    * Step 3c - Copy the bits field, then set pointers to
-    * suffix array entries and occupancy bitvector
-    ******************************************************/
-    fmd_bs_t *fmi_bits;
-    fmd_bs_init(&fmi_bits);
-    fmd_bs_fit(fmi_bits, fmi_no_bits);
-    graph_fmi->sa_start_offset = (int_t)(ridx) - (int_t)fmi_ridx_start;
-    ridx += (1+graph_fmi->no_chars/graph_fmi->isa_sample_rate)*FMD_FMI_ISA_SAMPLE_RATE_BIT_LENGTH;
-    graph_fmi->sa_bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
-    int_t sa_bv_occ_size = (1+(graph_fmi->no_chars-1)/ FMD_FMI_SA_OCC_BV_PAYLOAD_BIT_LENGTH) << FMD_FMI_SA_OCC_BV_LOG_BLOCK_SIZE;
-    ridx += sa_bv_occ_size;
-    /****************************
-    * Align to word boundary
-    ****************************/
-    ridx=fmi_ridx_start+((1+(((ridx-fmi_ridx_start)-1)>>WORD_LOG_BITS))<<WORD_LOG_BITS);
-    /******************************************************
-    * Step 3d - Copy the actual bitvector and the caches
-    ******************************************************/
-    graph_fmi->bv_start_offset = (int_t)ridx - (int_t)fmi_ridx_start;
-    for(int_t i = 0; i < fmi_bits->cap_in_words; i++) {
-        word_t read_bits;
-        uint_t offset = i * WORD_NUM_BITS;
-        fmd_bs_read_word(bs, fmi_ridx_start + offset, WORD_NUM_BITS, &read_bits);
-        fmd_bs_write_word(fmi_bits, offset, read_bits, WORD_NUM_BITS);
-    }
-    fmd_bs_fit(fmi_bits, fmi_no_bits);
-    graph_fmi->bits = fmi_bits;
-    graph_fmi->no_bits = (int_t)fmi_no_bits;
-    /******************************************************
-    * Step 3e - Compute the cumulative sum from last block
-    ******************************************************/
-    graph_fmi->char_counts = calloc(graph_fmi->alphabet_size, sizeof(count_t));
-    count_t cum = 0;
-    uint_t rank_cache_idx = graph_fmi->no_bits - graph_fmi->alphabet_size * FMD_FMI_CHAR_COUNT_BIT_LENGTH;
-    for(int_t i = 0; i < graph_fmi->alphabet_size; i++) {
-        word_t count;
-        graph_fmi->char_counts[i] = cum;
-        fmd_bs_read_word(graph_fmi->bits, rank_cache_idx + i * FMD_FMI_CHAR_COUNT_BIT_LENGTH, FMD_FMI_CHAR_COUNT_BIT_LENGTH, &count);
-        cum += (count_t)count;
-    }
-    /******************************************************
-    * Step 3f - Finalize reading the FMI
-    ******************************************************/
-    /* Don't forget to set ridx accordingly */
-    fmd->graph_fmi = graph_fmi;
-    ridx = fmi_ridx_start + fmi_bits->cap_in_words * WORD_NUM_BITS;
+    fmd_fmi_serialize_from_buffer(fmi_buf, fmi_buf_size, &fmd->graph_fmi);
+    fmd->no_chars = fmd->graph_fmi->no_chars;
+    fmd->alphabet_size = fmd->graph_fmi->alphabet_size;
+    fmd->alphabet = calloc(fmd->alphabet_size, sizeof(int_t));
+    memcpy(fmd->alphabet, fmd->graph_fmi->alphabet, sizeof(int_t) * fmd->alphabet_size);
 #endif
+    free(fmi_buf);
+    // word align
+    ridx  = (1 + ((ridx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /**************************************************************************
     * Step 4 - Construct the interval-merge tree from the leaves
     **************************************************************************/
@@ -1714,6 +1546,29 @@ void fmd_fmd_serialize_from_buffer(fmd_fmd_t **fmd_ret, unsigned char *buf, uint
     fmd_imt_t *inverval_merge_tree;
     fmd_imt_init(&inverval_merge_tree, (int_t)no_vertices, kv_pairs);
     fmd->r2r_tree = inverval_merge_tree;
+    #ifdef FMD_ORACLE
+    int_t V = fmd->permutation->size;
+    int_t *alphabet = fmd->alphabet;
+    int_t alphabet_size = fmd->alphabet_size;
+    int_t *vertex_last_char_enc = calloc(V, sizeof(int_t));
+    #ifdef FMD_SDSL
+    csa_wt_bwt(fmd->graph_fmi, (uint64_t*)vertex_last_char_enc, V+1, 2*V);
+    #else
+    fmd_fmi_bwt(fmd->graph_fmi, (uint64_t*)vertex_last_char_enc, V+1, 2*V);
+    #endif
+    int_t *c2e = calloc(FMD_MAX_ALPHABET_SIZE, sizeof(int_t));
+    int_t t = 0;
+    for(int_t i = 0; i < alphabet_size; i++) {
+        c2e[alphabet[i]] = t;
+        t++;
+    }
+    for(int_t i = 0; i < V; i++) {
+        vertex_last_char_enc[i] = c2e[vertex_last_char_enc[i]];
+    }
+    free(c2e);
+    fmd_oimt_init(fmd->r2r_tree, vertex_last_char_enc, alphabet, (int_t)alphabet_size, &fmd->oracle_r2r);
+    free(vertex_last_char_enc);
+    #endif
     fmd_vector_free(kv_pairs);
     /**************************************************************************
     * Step 5 - Cleanup and return the reconstructed index
@@ -1760,10 +1615,14 @@ void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64
     /**************************************************************************
     * Step 3 - Write the FMI of the graph encoding
     **************************************************************************/
-#ifdef FMD_SDSL
+
     uint8_t *fmi_buf = NULL;
     uint64_t fmi_buf_size = 0;
+#ifdef FMD_SDSL
     csa_wt_to_buffer(fmd->graph_fmi, &fmi_buf, &fmi_buf_size);
+#else
+    fmd_fmi_serialize_to_buffer(fmd->graph_fmi, &fmi_buf, &fmi_buf_size);
+#endif
     int_t fmi_buf_size_in_bits = (int_t)fmi_buf_size << 3;
     fmd_bs_write_word(bs, widx, (word_t)fmi_buf_size_in_bits, FMD_FMD_FMI_NO_BITS_BIT_LENGTH);
     widx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
@@ -1775,15 +1634,8 @@ void fmd_fmd_serialize_to_buffer(fmd_fmd_t *fmd, unsigned char **buf_ret, uint64
         widx += WORD_NUM_BITS;
     }
     free(fmi_buf);
-#else
-    fmd_bs_write_word(bs, widx, (word_t)fmd->graph_fmi->no_bits, FMD_FMD_FMI_NO_BITS_BIT_LENGTH);
-    widx += FMD_FMD_FMI_NO_BITS_BIT_LENGTH;
-    fmd_bs_fit(fmd->graph_fmi->bits, fmd->graph_fmi->no_bits);
-    for(int_t i = 0; i < fmd->graph_fmi->bits->cap_in_words; i++) {
-        fmd_bs_write_word(bs, widx, (word_t)fmd->graph_fmi->bits->words[i], WORD_NUM_BITS);
-        widx += WORD_NUM_BITS;
-    }
-#endif
+    // word align
+    widx  = (1 + ((widx - 1) >> WORD_LOG_BITS)) << WORD_LOG_BITS;
     /**************************************************************************
     * Step 4 - Write the IMT bitstream
     **************************************************************************/

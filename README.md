@@ -79,7 +79,7 @@ with a `V` and edge lines start with an `E`.
 `V` lines contain three tab separated fields: first field is always `V`, the second field is a unique vertex ID
 and the third field is the string label associated with the vertex. Example:
 ```
-V	6	the industrial revolution and its consequences
+V	6	every state is a special force for the suppression of one...
 ```
 
 `E` lines contain three tab separated fields: first field is always `E`, the second field is the vertex ID of the source vertex, and the third field is the vertex ID

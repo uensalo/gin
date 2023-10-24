@@ -28,6 +28,14 @@ void csa_wt_sa(void* obj_handle, uint64_t *buf, uint64_t start, uint64_t end) {
     }
 }
 
+void csa_wt_bwt(void* obj_handle, uint64_t *buf, uint64_t start, uint64_t end) {
+    if (!obj_handle || !buf) return;
+    csa_type* csa = static_cast<csa_type*>(obj_handle);
+    for (uint64_t i = start; i <= end; ++i) {
+        buf[i - start] = csa->bwt[i];
+    }
+}
+
 void csa_wt_to_buffer(void* obj_handle, uint8_t **data, uint64_t *size) {
     if(!obj_handle || !data || !size) return;
 

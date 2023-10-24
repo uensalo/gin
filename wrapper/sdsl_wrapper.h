@@ -9,6 +9,7 @@ extern "C" {
 void* csa_wt_build(const char* str, uint64_t size);
 int64_t csa_wt_rank(void* obj_handle, uint64_t pos, char c);
 void csa_wt_sa(void* obj_handle, uint64_t *buf, uint64_t start, uint64_t end);
+void csa_wt_bwt(void* obj_handle, uint64_t *buf, uint64_t start, uint64_t end);
 void csa_wt_to_buffer(void* obj_handle, uint8_t **data, uint64_t *size);
 void* csa_wt_from_buffer(uint8_t *data, uint64_t size);
 int64_t csa_wt_bwt_length(void* obj_handle);
