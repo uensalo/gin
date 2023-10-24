@@ -214,7 +214,7 @@ def plot_principal(directory_name, output_filename, scale=None, title=False, xla
     if ylabel:
         plt.ylabel('Characters matched per second', fontsize=14)
     if title:
-        plt.title(f"Effective query length vs characters matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+        plt.title(f"Effective query length vs characters matched per second for {os.path.basename(directory_name).split('.ging')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
@@ -264,7 +264,7 @@ def plot_fm_gap_cache(directory_name, output_filename, scale=None, title=False, 
     if ylabel:
         plt.ylabel('Relative Effective Query Length', fontsize=14)
     if title:
-        plt.title(f"Cache Depth vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
+        plt.title(f"Cache Depth vs Relative Effective Query Length for {os.path.basename(directory_name).split('.ging')[0]}", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
@@ -315,7 +315,7 @@ def plot_fm_gap_permutation(directory_name, output_filename, scale=None, title=F
     if ylabel:
         plt.ylabel('Relative Effective Query Length', fontsize=14)
     if title:
-        plt.title(f"Permutation Time vs Relative Effective Query Length for {os.path.basename(directory_name).split('.fmdg')[0]}", fontsize=14)
+        plt.title(f"Permutation Time vs Relative Effective Query Length for {os.path.basename(directory_name).split('.ging')[0]}", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
@@ -389,7 +389,7 @@ def plot_baseline(directory_name, output_filename, scale=None, title=False, xlab
     if ylabel:
         plt.ylabel('Queries matched per second', fontsize=14)
     if title:
-        plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+        plt.title(f"Effective query length vs queries matched per second for {os.path.basename(directory_name).split('.ging')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
@@ -467,7 +467,7 @@ def plot_baseline_simple(directory_name, output_filename, scale=None, title=Fals
     if ylabel:
         plt.ylabel('Characters matched per second', fontsize=14)
     if title:
-        plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.fmdg')[0]} (log-log scale)", fontsize=14)
+        plt.title(f"Query length vs queries matched per second for {os.path.basename(directory_name).split('.ging')[0]} (log-log scale)", fontsize=14)
     plt.grid(True, which="both", ls="--", c='0.65')
     plt.savefig(output_filename, format='png', bbox_inches='tight')
     plt.close()
@@ -508,20 +508,20 @@ if __name__ == '__main__':
     fm_gap_cache_scale = ((-1,13),(1e-2,5e5))
     fm_gap_permuatation_scale = ((0,3800),(1e-2,5e5))
 
-    plot_baseline('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline.png', baseline_scale, ylabel=True) #a
-    plot_baseline('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline.png', baseline_scale) #b
+    plot_baseline('../log/GRCh38-20-0.10b.ging', '../plot/GRCh38-20-0.10b.ging_baseline.png', baseline_scale, ylabel=True) #a
+    plot_baseline('../log/gencode.v40.ging', '../plot/gencode.v40.ging_baseline.png', baseline_scale) #b
 
-    plot_baseline_simple('../log/GRCh38-20-0.10b.fmdg', '../plot/GRCh38-20-0.10b.fmdg_baseline_simple.png', baseline_simple_scale, ylabel=True, xlabel=True) #?
-    plot_baseline_simple('../log/gencode.v40.fmdg', '../plot/gencode.v40.fmdg_baseline_simple.png', baseline_simple_scale, xlabel=True) #?
+    plot_baseline_simple('../log/GRCh38-20-0.10b.ging', '../plot/GRCh38-20-0.10b.ging_baseline_simple.png', baseline_simple_scale, ylabel=True, xlabel=True) #?
+    plot_baseline_simple('../log/gencode.v40.ging', '../plot/gencode.v40.ging_baseline_simple.png', baseline_simple_scale, xlabel=True) #?
 
-    plot_principal('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_principal.png', principal_scale, xlabel=True, ylabel=True) #c
-    plot_principal('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_principal.png', principal_scale, xlabel=True) #d
+    plot_principal('../log/GRCh38-20-0.10b.ging_principal', '../plot/GRCh38-20-0.10b.ging_principal.png', principal_scale, xlabel=True, ylabel=True) #c
+    plot_principal('../log/gencode.v40.ging_principal', '../plot/gencode.v40.ging_principal.png', principal_scale, xlabel=True) #d
 
-    plot_fm_gap_permutation('../log/GRCh38-20-0.10b.fmdg_permutation', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True, ylabel=True) #e
-    plot_fm_gap_permutation('../log/gencode.v40.fmdg_permutation', '../plot/gencode.v40.fmdg_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True,)  #f
+    plot_fm_gap_permutation('../log/GRCh38-20-0.10b.ging_permutation', '../plot/GRCh38-20-0.10b.ging_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True, ylabel=True) #e
+    plot_fm_gap_permutation('../log/gencode.v40.ging_permutation', '../plot/gencode.v40.ging_fm_gap_permutation.png', fm_gap_permuatation_scale, xlabel=True,)  #f
 
-    plot_fm_gap_cache('../log/GRCh38-20-0.10b.fmdg_principal', '../plot/GRCh38-20-0.10b.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ylabel=True) #g
-    plot_fm_gap_cache('../log/gencode.v40.fmdg_principal', '../plot/gencode.v40.fmdg_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ) #h
+    plot_fm_gap_cache('../log/GRCh38-20-0.10b.ging_principal', '../plot/GRCh38-20-0.10b.ging_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ylabel=True) #g
+    plot_fm_gap_cache('../log/gencode.v40.ging_principal', '../plot/gencode.v40.ging_fm_gap_cache.png', fm_gap_cache_scale, xlabel=True, ) #h
 
-    tabulate_decode('../log/gencode.v40.fmdg_rate_decode', '../plot/gencode.v40.fmdg_rate_decode_table.tex')
-    tabulate_decode('../log/GRCh38-20-0.10b.fmdg_rate_decode', '../plot/GRCh38-20-0.10b.fmdg_rate_decode_table.tex')
+    tabulate_decode('../log/gencode.v40.ging_rate_decode', '../plot/gencode.v40.ging_rate_decode_table.tex')
+    tabulate_decode('../log/GRCh38-20-0.10b.ging_rate_decode', '../plot/GRCh38-20-0.10b.ging_rate_decode_table.tex')

@@ -1,15 +1,15 @@
 /*
- * fmd: FM-Index-like graph indexing algorithm toolkit.
+ * gin: FM-Index-like graph indexing algorithm toolkit.
  * Copyright (C) 2023, Unsal Ozturk
  *
- * rgfa_parser.h is part of fmd
+ * rgfa_parser.h is part of gin
  *
- * fmd is free software: you can redistribute it and/or modify
+ * gin is free software: you can redistribute it and/or modify
  * it under the terms of the GNU General Public License as published by
  * the Free Software Foundation, either version 3 of the License, or
  * (at your option) any later version.
  *
- * fmd is distributed in the hope that it will be useful,
+ * gin is distributed in the hope that it will be useful,
  * but WITHOUT ANY WARRANTY; without even the implied warranty of
  * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
  * GNU General Public License for more details.
@@ -17,13 +17,13 @@
  * You should have received a copy of the GNU General Public License
  * along with this program.  If not, see <http://www.gnu.org/licenses/>.
  */
-#ifndef FMD_RGFA_PARSER_H
-#define FMD_RGFA_PARSER_H
+#ifndef GIN_RGFA_PARSER_H
+#define GIN_RGFA_PARSER_H
 
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>
-#include <fmd_graph.h>
+#include <gin_graph.h>
 
 typedef struct {
     char* segId;
@@ -172,25 +172,25 @@ static void rgfa_free(rgfa_t * rgfa) {
     free(rgfa);
 }
 
-static fmd_graph_t *rgfa_to_fmd_graph(rgfa_t *rgfa) {
-    fmd_graph_t* graph;
-    fmd_graph_init(&graph);
+static gin_graph_t *rgfa_to_gin_graph(rgfa_t *rgfa) {
+    gin_graph_t* graph;
+    gin_graph_init(&graph);
 
     for (int_t i = 0; i < rgfa->num_slines; i++) {
         rgfa_sline_t sline = rgfa->slines[i];
-        fmd_string_t* label;
-        fmd_string_init_cstr(&label, sline.seq);
-        fmd_graph_insert_vertex(graph, (vid_t)(atoi(sline.segId+1)-1), label);
+        gin_string_t* label;
+        gin_string_init_cstr(&label, sline.seq);
+        gin_graph_insert_vertex(graph, (vid_t)(atoi(sline.segId+1)-1), label);
     }
 
     for (int_t i = 0; i < rgfa->num_llines; i++) {
         rgfa_lline_t lline = rgfa->llines[i];
         int_t source_id = (vid_t)(atoi(lline.segId1+1)-1);
         int_t destination_id = (vid_t)(atoi(lline.segId2+1)-1);
-        fmd_graph_insert_edge(graph, source_id, destination_id);
+        gin_graph_insert_edge(graph, source_id, destination_id);
     }
 
     return graph;
 }
 
-#endif //FMD_RGFA_PARSER_H
+#endif //GIN_RGFA_PARSER_H

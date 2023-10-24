@@ -1,6 +1,6 @@
-# fmd: One-shot FM-Indexing for Arbitrary String Labelled Graphs
+# GIN-TONIC: One-shot FM-Indexing for Arbitrary String Labelled Graphs
 
-**fmd** (**fm**-**d**irectory) is a data structure inspired by the FM-Index for the indexing of directed, string labelled graphs of (almost) arbitrary topology. 
+**GIN-TONIC** (**G**raph **I**ndexing **T**hrough **O**ptimal **N**ear **I**nterval **C**ompaction), or `gin` for short, is an implementation of FM-GIN, a data structure inspired by the FM-Index for the indexing of directed, string labelled graphs of (almost) arbitrary topology. 
 The data structure indexes all possible string walks on the graph and supports various implementations whose memory requirements scale linearly (or sub-linearly) 
 scale with the size of the input graph.   
 
@@ -10,24 +10,24 @@ scale with the size of the input graph.
 - [Usage](#usage)
   - [General](#general)
   - [Program Specific File Formats](#program-arguments-and-further-usage)
-    - [.fmdg](#fmdg)
-    - [.fmdq](#fmdq)
-    - [.fmdi](#fmdi)
-    - [.fmdc](#fmdc)
-    - [.fmdp](#fmdp)
-    - [.fmde](#fmde)
+    - [.ging](#ging)
+    - [.ginq](#ginq)
+    - [.gini](#gini)
+    - [.ginc](#ginc)
+    - [.ginp](#ginp)
+    - [.gine](#gine)
   - [Bare Minimum Indexing Pipeline](#bare-minimum-indexing-scheme)
   - [Full Indexing Pipeline](#full-indexing-pipeline)
-- [Output Format Description of `fmd query find` and `fmd decode walks`](#output-format-description-of-fmd-query-find-and-fmd-decode-walks)    
-  - [`fmd query`](#fmdquery)
-  - [`fmd decode`](#fmddecode)
+- [Output Format Description of `gin query find` and `gin decode walks`](#output-format-description-of-gin-query-find-and-gin-decode-walks)    
+  - [`gin query`](#ginquery)
+  - [`gin decode`](#gindecode)
 - [Program Arguments and Further Usage](#program-arguments-and-further-usage)
-    - [fmd:permutation](#fmdpermutation)
-    - [fmd:index](#fmdindex)
-    - [fmd:query](#fmdquery)
-    - [fmd:decode](#fmddecode)
-    - [fmd:utils](#fmdutils)
-    - [fmd:help](#fmdhelp)
+    - [gin:permutation](#ginpermutation)
+    - [gin:index](#ginindex)
+    - [gin:query](#ginquery)
+    - [gin:decode](#gindecode)
+    - [gin:utils](#ginutils)
+    - [gin:help](#ginhelp)
 - [Examples](#examples)
 - [Contributing](#contributing)
 - [License](#license)
@@ -56,7 +56,7 @@ The software package currently has four compile time CMake options.
 
 ### General
 
-The executable `fmd` contains a suite of programs that allows string graphs to be indexed and queried. The program has 
+The executable `gin` contains a suite of programs that allows string graphs to be indexed and queried. The program has 
 six subprograms, namely `index`, `query`, `decode`, `permutation`, `utils`, `help`.
 Subprograms may contain multiple modes of execution, which are discussed further into the section.
 
@@ -66,12 +66,12 @@ of the outputs of other programs might significantly boost the performance of in
 
 ### Program Specific File Formats
 
-`fmd` works with program specific file formats. 
+`gin` works with program specific file formats. 
 The file formats are as follows.
 
-#### .fmdg
+#### .ging
 
-Human readable tab separated string graph file supplied as input to various programs under `fmd`. The `.fmdg` format is defined as follows:
+Human readable tab separated string graph file supplied as input to various programs under `gin`. The `.ging` format is defined as follows:
 
 Each line defines either a string labelled vertex or a directed edge. Vertex lines start
 with a `V` and edge lines start with an `E`. 
@@ -79,7 +79,7 @@ with a `V` and edge lines start with an `E`.
 `V` lines contain three tab separated fields: first field is always `V`, the second field is a unique vertex ID
 and the third field is the string label associated with the vertex. Example:
 ```
-V	6	every state is a special force for the suppression of one...
+V	6	ATCAGTCATGCAGTACGT...
 ```
 
 `E` lines contain three tab separated fields: first field is always `E`, the second field is the vertex ID of the source vertex, and the third field is the vertex ID
@@ -95,7 +95,7 @@ There are additional constraints on the format.
   - Vertex labels may not contain the tab character or the newline character.
   - All `V` lines appear before `E` lines.
 
-Example conformant `.fmdg` file:
+Example conformant `.ging` file:
 ```
 V	0	CAGAC
 V	1	TCTCGTA
@@ -115,13 +115,13 @@ E	4	3
 ```
 which encodes the following string graph:
 
-<img src="img/fmdg_example.png" alt="String graph encoded by the example .fmdg file." width="25%">
+<img src="img/ging_example.png" alt="String graph encoded by the example .ging file." width="25%">
 
-#### .fmdq
+#### .ginq
 
-Human readable query file format. One query per line, terminated with an exit prompt (`exit();` by default, can be changed arbitrarily in `fmd.c`) to indicate the end of stream.
+Human readable query file format. One query per line, terminated with an exit prompt (`exit();` by default, can be changed arbitrarily in `gin.c`) to indicate the end of stream.
 
-Example .fmdq file:
+Example .ginq file:
 ```
 CCGTAAAGC
 GT
@@ -131,16 +131,16 @@ AAAAGCAT
 exit();
 ```
 
-#### .fmdi
+#### .gini
 Binary graph index file.
 
-#### .fmdc
+#### .ginc
 Binary precomputed suffix array range cache file.
 
-#### .fmdp
+#### .ginp
 Human readable vertex permutation file. One integer per line. `V0` is permuted to the vertex index in the first line, `V1` to the second index, and so on.
 
-Example .fmdp file:
+Example .ginp file:
 ```
 0
 3
@@ -149,24 +149,24 @@ Example .fmdp file:
 4
 ```
 
-#### .fmde
-Binary encoding of an .fmdg file.
+#### .gine
+Binary encoding of an .ging file.
 
 ### Bare Minimum Indexing Scheme
 To have a minimally working graph index, the following commands suffice:
 ```
-./fmd index -i <input_fmdg> -o <output_fmdi>
-./fmd query -r <output_fmdi> -i <input_fmdq> -o <output> --decode
+./gin index -i <input_ging> -o <output_gini>
+./gin query -r <output_gini> -i <input_ginq> -o <output> --decode
 ```
-The call to `fmd index` produces a graph self-index over the input graph, and the call to `fmd query` loads the index into memory and runs queries contained in the file `<input_fmdq>`, and writes the results to `<output>`. 
+The call to `gin index` produces a graph self-index over the input graph, and the call to `gin query` loads the index into memory and runs queries contained in the file `<input_ginq>`, and writes the results to `<output>`. 
 
 ### Full Indexing Pipeline
 
-## Output Format Description of `fmd query find` and `fmd decode walks`
+## Output Format Description of `gin query find` and `gin decode walks`
 
-### `fmd query find`
+### `gin query find`
 
-The output of `fmd query find` is structured in blocks, where each block represents information about a specific string query. The format of each block depends on the enabled flags, in particular `--verbose` and `--decode`.
+The output of `gin query find` is structured in blocks, where each block represents information about a specific string query. The format of each block depends on the enabled flags, in particular `--verbose` and `--decode`.
 Each query is responded to by a string query block, which is comprised of a string query line and tabbed lines. The syntax and semantics depend on the flags enabled.
 
 #### 1. String Query Line
@@ -190,7 +190,7 @@ Depending on whether `--decode` is enabled these lines represent one of the foll
   
 #### 3. Exit Prompt
 
-The program outputs the exit prompt once it has received the exit prompt to signal other piped `fmd` programs to terminate. 
+The program outputs the exit prompt once it has received the exit prompt to signal other piped `gin` programs to terminate. 
 
 #### 4. Examples
 
@@ -278,9 +278,9 @@ AAAAGCAT:
 exit();
 ```
 
-### `fmd decode walks`
+### `gin decode walks`
 
-Similarly to the output of `fmd query find`, the output of `fmd decode walks` is organised into blocks of string lines and tabbed lines, but flags don't change the output.
+Similarly to the output of `gin query find`, the output of `gin decode walks` is organised into blocks of string lines and tabbed lines, but flags don't change the output.
 
 Every block starts with a string query (e.g., `CCGTAAAGC`), followed by zero or more tabbed lines.
 Each tabbed line belonging to a string query block has the following syntax.
@@ -316,11 +316,11 @@ AAAAGCAT:
 
 ## Program Arguments and Further Usage
 
-### fmd:permutation
+### gin:permutation
 
-fmd permutation approximates a permutation of vertex indices.
+gin permutation approximates a permutation of vertex indices.
 
-### fmd:index
+### gin:index
 
 This program indexes a string labelled graph and produces a program-specific output for future querying.
 
@@ -330,18 +330,18 @@ This program indexes a string labelled graph and produces a program-specific out
 - `--rgfa` or `-g`: _Description here._
   ... _(continue for other parameters)_
 
-### fmd:query
+### gin:query
 
-fmd query loads a graph index in fmdi format into memory and runs the provided queries on the graph.
+gin query loads a graph index in gini format into memory and runs the provided queries on the graph.
 
 **Parameters:**
 
 - `--reference` or `-r`: _Description here._
   ... _(continue for other parameters)_
 
-### fmd:decode
+### gin:decode
 
-fmd decode loads a bit encoded graph into memory and enumerates full walks from the output of fmd query find.
+gin decode loads a bit encoded graph into memory and enumerates full walks from the output of gin query find.
 
 **Parameters:**
 
@@ -353,18 +353,18 @@ fmd decode loads a bit encoded graph into memory and enumerates full walks from 
 - `--input` or `-i`: _Description here._
   ... _(continue for other parameters)_
 
-### fmd:utils
+### gin:utils
 
-fmd utils converts rgfa and FASTQ files to fmdg files and fmd query files.
+gin utils converts rgfa and FASTQ files to ging files and gin query files.
 
 **Parameters:**
 
 - `--input` or `-i`: _Description here._
   ... _(continue for other parameters)_
 
-### fmd:help
+### gin:help
 
-fmd help prints general information about how other programs under fmd work.
+gin help prints general information about how other programs under gin work.
 
 ## Examples
 
