@@ -4,7 +4,7 @@
 The data structure indexes all possible string walks on the graph and supports various implementations whose memory requirements scale linearly (or sub-linearly) 
 scale with the size of the input graph.   
 
-#Known Issues
+# Known Issues
 - Please compile and use on Unix systems for the time being. This toolbox has not been properly tested for Windows and may provide incorrect results due different handling of line endings.
 - `gin decode walks` might sometimes give incorrect results due to a parsing bug. This will be fixed as soon as possible. As an alternative, resort to using `decode/gin_decode_paths.pl` for the time being.
 
