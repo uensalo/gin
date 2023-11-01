@@ -1,6 +1,3 @@
 [submodule "extern/sdsl"]
 	path = extern/sdsl
 	url = git://github.com/simongog/sdsl-lite
-[submodule "extern/libdivsufsort"]
-	path = extern/libdivsufsort
-	url = git://github.com/y-256/libdivsufsort
