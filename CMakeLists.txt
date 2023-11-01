@@ -111,7 +111,7 @@ add_library(gin_lib_static STATIC ${C_FILES} ${H_FILES})
 #)
 target_include_directories(
     gin_lib_static PUBLIC ${PROJECT_HEADER_DIR}
-    gin_lib_static PUBLIC ${CMAKE_BINARY_DIR}/extern/libdivsufsort/include
+    gin_lib_static PUBLIC ${CMAKE_BINARY_DIR}/extern/libdivsufsort-gin/include
 )
 
 ################################################################################

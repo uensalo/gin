@@ -1,3 +1,9 @@
+# try to pull
+execute_process(
+        COMMAND git submodule update --remote
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
+        RESULT_VARIABLE GIT_SUBMOD_REM_RESULT
+)
 #libdivsufsort
 set(LIBDIVSUFSORT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libdivsufsort-gin")
 if(NOT EXISTS "${LIBDIVSUFSORT_PATH}/.git")

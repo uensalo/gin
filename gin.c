@@ -1901,7 +1901,7 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
     if(!progname) {
         fprintf(stderr, "%s%s%s\n%s%s",
                 "[gin:help] gin! FM-Index like graph indexing algorithm toolkit \n",
-                "[gin:help] Needle in a haystack? More like string in a graph. Version 1.1",
+                "[gin:help] Needle in a haystack? More like string in a graph. Version: ",
                 gin_version,
                 "[gin:help] Please use gin help <program_name> to learn more about a particular program\n",
                 "[gin:help] List of currently available programs: ");
@@ -1926,7 +1926,7 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--isa-sample-rate  or -s: Optional parameter. Sampling rate of the suffix array. Reducing this parameter increases query speeds at the cost of larger index files. Default = 32\n");
             fprintf(stderr, "\t--rank-sample-rate or -r: Optional parameter. Frequency of rank caches. Reducing this parameter increases query speeds at the cost of larger index files. Default = 32\n");
             fprintf(stderr, "\t--verbose          or -v: Optional flag.      Provides more information (time, progress, memory requirements) about the indexing process.\n");
-            fprintf(stderr, "[gin:help] Example invocation: gin index -i mygraph.rgfa -g -o mygraph.gini -p myperm -s 64 -r 64 -v\n");
+            fprintf(stderr, "[gin:help] Example invocation: gin index -i mygraph.ging -g -o mygraph.gini -p myperm -s 64 -r 64 -v\n");
             return_code = 0;
             break;
         }
