@@ -120,9 +120,9 @@ target_include_directories(
 
 # divsufsort
 #target_link_libraries(gin_lib PUBLIC divsufsort)
-target_link_libraries(gin_lib_static PUBLIC divsufsortf)
+target_link_libraries(gin_lib_static PUBLIC divsufsort-gin)
 #target_link_libraries(gin_lib PUBLIC divsufsort64)
-target_link_libraries(gin_lib_static PUBLIC divsufsort64f)
+target_link_libraries(gin_lib_static PUBLIC divsufsort64-gin)
 
 # math
 #target_link_libraries(gin_lib PUBLIC m)
