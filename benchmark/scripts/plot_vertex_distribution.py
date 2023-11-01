@@ -120,4 +120,4 @@ def plot_side_by_side_scatterplots(filepath1, filepath2, threshold, output_path)
     plt.close()
 
 
-plot_side_by_side_scatterplots('../input/GRCh38-20-0.10b.fmdg', '../input/gencode.v40.fmdg', 10000000, '../plot/scatter_degree_len.png')
+plot_side_by_side_scatterplots('../input/GRCh38-20-0.10b.ging', '../input/gencode.v40.ging', 10000000, '../plot/scatter_degree_len.png')

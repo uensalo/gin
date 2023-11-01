@@ -13,7 +13,7 @@ done
 
 LOG_DIR="../log/$EXPERIMENT_NAME"
 mkdir -p "$LOG_DIR"
-BASENAME=$(basename "$INPUT_GRAPH" .fmdg)
+BASENAME=$(basename "$INPUT_GRAPH" .ging)
 
 # Define the inner loop as a function
 compute() {

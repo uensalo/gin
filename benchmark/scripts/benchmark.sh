@@ -3,8 +3,8 @@
 # Transcriptomics
 #########################################################
 # query length grouped by cache depth
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_c_l" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_c_l" \
 -c "0 2 4 6 8 10 12" \
 -r "16" \
 -m "-1" \
@@ -15,8 +15,8 @@
 -p "4"
 
 # query length grouped by matches returned
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_m_l" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_m_l" \
 -c "10" \
 -r "16" \
 -m "-1 1 4 16 64 512 4096" \
@@ -27,8 +27,8 @@
 -p "4"
 
 # thread benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_j_l" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_j_l" \
 -c "10" \
 -r "16" \
 -m "-1" \
@@ -39,8 +39,8 @@
 -p "4"
 
 # decoding speed benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_decode" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_decode" \
 -c "10" \
 -r "16 32 64" \
 -m "-1" \
@@ -55,8 +55,8 @@
 # Pangenomics
 #########################################################
 # query length grouped by cache depth
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_c_l" \
+./gin_run.sh ../input/GRCh38-20-0.10b.ging \
+-L "GRCh38-20-0.10b.ging_c_l" \
 -c "0 2 4 6 8 10 12" \
 -r "16" \
 -m "-1" \
@@ -67,8 +67,8 @@
 -p "4"
 
 # query length grouped by matches returned
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_m_l" \
+./gin_run.sh ../input/GRCh38-20-0.10b.ging \
+-L "GRCh38-20-0.10b.ging_m_l" \
 -c "10" \
 -r "16" \
 -m "-1 1 4 16 64 512 4096" \
@@ -79,8 +79,8 @@
 -p "4"
 
 # thread benchmark
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_j_l" \
+./gin_run.sh ../input/GRCh38-20-0.10b.ging \
+-L "GRCh38-20-0.10b.ging_j_l" \
 -c "10" \
 -r "16" \
 -m "-1" \
@@ -91,8 +91,8 @@
 -p "4"
 
 # decoding speed benchmark
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_decode" \
+./gin_run.sh ../input/GRCh38-20-0.10b.ging \
+-L "GRCh38-20-0.10b.ging_decode" \
 -c "10" \
 -r "16 32 64" \
 -m "-1" \
@@ -108,8 +108,8 @@
 #########################################################
 
 # partial match benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_c_l2" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_c_l2" \
 -c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
 -r "16" \
 -m "-1" \
@@ -120,8 +120,8 @@
 -p "4"
 
 # partial match benchmark
-./fmd_run.sh ../input/GRCh38-20-0.10b.fmdg \
--L "GRCh38-20-0.10b.fmdg_c_l2" \
+./gin_run.sh ../input/GRCh38-20-0.10b.ging \
+-L "GRCh38-20-0.10b.ging_c_l2" \
 -c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
 -r "16" \
 -m "-1" \

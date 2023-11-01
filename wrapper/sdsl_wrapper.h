@@ -1,5 +1,5 @@
-#ifndef FMD_SDSL_WRAPPER_H
-#define FMD_SDSL_WRAPPER_H
+#ifndef GIN_SDSL_WRAPPER_H
+#define GIN_SDSL_WRAPPER_H
 
 #ifdef __cplusplus
 extern "C" {
@@ -26,4 +26,4 @@ void* csa_wt_copy(void* obj_handle);
 }
 #endif
 
-#endif //FMD_SDSL_WRAPPER_H
+#endif //GIN_SDSL_WRAPPER_H

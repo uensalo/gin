@@ -1,6 +1,6 @@
 import argparse
 
-def create_fmdg_file(mode, V, output_path):
+def create_ging_file(mode, V, output_path):
     if mode not in ["connected", "bipartite"]:
         raise ValueError("Mode must be either 'connected' or 'bipartite'.")
 
@@ -22,10 +22,10 @@ def create_fmdg_file(mode, V, output_path):
                     file.write(f"E\t{i}\t{j}\n")
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Create an FMDG file.")
+    parser = argparse.ArgumentParser(description="Create an GING file.")
     parser.add_argument('mode', type=str, help="Mode: 'connected' or 'bipartite'.")
     parser.add_argument('V', type=int, help="Number of vertices.")
     parser.add_argument('output_path', type=str, help="Output file path.")
     args = parser.parse_args()
 
-    create_fmdg_file(args.mode, args.V, args.output_path)
+    create_ging_file(args.mode, args.V, args.output_path)

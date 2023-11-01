@@ -3,8 +3,8 @@
 # Transcriptomics
 #########################################################
 # permutation benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_permutation" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_permutation" \
 -c "12" \
 -r "32" \
 -m "-1" \
@@ -16,8 +16,8 @@
 -h
 
 # principal benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_principal" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_principal" \
 -c "0 1 2 3 4 5 6 7 8 9 10 11 12" \
 -r "32" \
 -m "-1" \
@@ -29,8 +29,8 @@
 -h
 
 # decode benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_rate_decode" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_rate_decode" \
 -c "12" \
 -r "32" \
 -m "-1" \
@@ -43,8 +43,8 @@
 -h
 
 # plain benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_baseline_plain" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_baseline_plain" \
 -c "0" \
 -r "32" \
 -m "-1" \
@@ -56,8 +56,8 @@
 -h
 
 # permutation baseline benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg  \
--L "gencode.v40.fmdg_baseline_permutation" \
+./gin_run.sh ../input/gencode.v40.ging  \
+-L "gencode.v40.ging_baseline_permutation" \
 -c "0" \
 -r "32" \
 -m "-1" \
@@ -69,8 +69,8 @@
 -h
 
 # cache baseline benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_baseline_cache" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_baseline_cache" \
 -c "12" \
 -r "32" \
 -m "-1" \
@@ -82,8 +82,8 @@
 -h
 
 # cache permutation baseline benchmark
-./fmd_run.sh ../input/gencode.v40.fmdg \
--L "gencode.v40.fmdg_baseline_cache_permutation" \
+./gin_run.sh ../input/gencode.v40.ging \
+-L "gencode.v40.ging_baseline_cache_permutation" \
 -c "12" \
 -r "32" \
 -m "-1" \
