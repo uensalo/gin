@@ -1,6 +1,6 @@
-# GIN-TONIC: One-shot FM-Indexing for Arbitrary String Labelled Graphs
+# GIN-TONIC: Non-hierarchical full-text indexing for graphs
 
-**GIN-TONIC** (**G**raph **IN**dexing **T**hrough **O**ptimal **N**ear **I**nterval **C**ompaction), or `gin` for short, is an implementation of FM-GIN, a data structure inspired by the FM-Index for the indexing of directed, string labelled graphs of (almost) arbitrary topology. 
+**GIN-TONIC** (**G**raph **IN**dexing **T**hrough **O**ptimal **N**ear **I**nterval **C**ompaction), or `gin` for short, is a data structure inspired by the FM-Index for the indexing of directed, string labelled graphs. 
 The data structure indexes all possible string walks on the graph and supports various implementations whose memory requirements scale linearly (or sub-linearly) 
 scale with the size of the input graph.   
 
