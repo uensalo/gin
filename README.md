@@ -190,7 +190,7 @@ under `decoder` with the name `gin_decode_paths.pl` that loads the corresponding
 ./gin_decode_paths.pl -r <input_ging> -i <input_roots> -o <output_walks>
 ```
 
-Alternatively, `gin` itself also supports efficient reconstruction scheme where the graph labels are bit-encoded. To decode walks, execute the following:
+Alternatively, `gin` itself also supports an efficient reconstruction scheme where the graph labels are bit-encoded. To decode walks, execute the following:
 ```bash
 ./gin decode encode -i <input_ging> -o <output_gine>
 ./gin decode walks -r <input_gine> -i <input_roots> -o <output_walks>
