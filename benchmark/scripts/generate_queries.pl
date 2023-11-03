@@ -17,7 +17,6 @@ GetOptions(
     's=i' => \$seed
 ) or die("Error in command line arguments\n");
 
-# Set random seed if provided
 srand($seed) if defined $seed;
 
 # Read the graph from the input file

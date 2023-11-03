@@ -1903,7 +1903,7 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
     int return_code = 0;
     if(!progname) {
         fprintf(stderr, "%s%s%s\n%s%s",
-                "[gin:help] gin! FM-Index like graph indexing algorithm toolkit \n",
+                "[gin:help] gin! Non-hierarchical full-text indexing for graphs \n",
                 "[gin:help] Needle in a haystack? More like string in a graph. Version: ",
                 gin_version,
                 "[gin:help] Please use gin help <program_name> to learn more about a particular program\n",

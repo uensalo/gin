@@ -4,7 +4,6 @@ use strict;
 use warnings;
 use Getopt::Long;
 
-# Compute reverse complement of a sequence
 sub reverse_complement {
     my $seq = shift;
     $seq = reverse($seq);

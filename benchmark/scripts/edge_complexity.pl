@@ -4,7 +4,6 @@ use strict;
 use warnings;
 use Getopt::Long;
 
-# A hash to store the complexity of each edge
 my %edge_complexity;
 my $input_file;
 
@@ -12,7 +11,6 @@ GetOptions(
     'i=s' => \$input_file
 ) or die("Error in command line arguments\n");
 
-# Function to calculate the width of an interval
 sub get_interval_width {
     my ($interval) = @_;
     my ($start, $end) = split /,/, $interval;
@@ -33,13 +31,11 @@ while (<$fh>) {
     my @offset_intervals = split /:/, $offsets;
     my @vertices = split /:/, $path;
 
-    # Calculate the total width of the intervals
     my $total_width = 0;
     for my $interval (@offset_intervals) {
         $total_width += get_interval_width($interval);
     }
 
-    # Update the complexity of each edge
     for my $i (0..$#vertices-1) {
         my $edge = "$vertices[$i]:$vertices[$i+1]";
         $edge_complexity{$edge} += $total_width;

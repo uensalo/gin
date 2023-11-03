@@ -51,7 +51,7 @@ git clone https://github.com/uensalo/libdivsufsort-gin
 git clone https://github.com/simongog/sdsl-lite sdsl
 ```
 
-The software package currently has seven compile time CMake options.
+The software package currently has six compile time CMake options.
 
 - **`BUILD_OPENMP`** (`set(BUILD_OPENMP ON)`)
   Enables OpenMP support for parallelization; if disabled the -j parameter has no effect.
@@ -70,9 +70,6 @@ The software package currently has seven compile time CMake options.
 
 - **`BUILD_ORACLE`** (`set(BUILD_ORACLE ON)`)
   Builds the project with the Oracle Interval-Merge Tree, which further partitions the intervals stored in the tree per alphabet character to decrease the overhead due to having to filter partial matches. Experimental. Disabling this is recommended.
-
-- **`BUILD_TESTS`** (`set(BUILD_TESTS OFF)`)
-  Disables building of the project's fuzz tests. Only interesting for development purposes.
 
 ## Reproducing Benchmarks and Data
 All relevant scripts to reproduce benchmarks and plots are given under the `benchmark` subdirectory. Firstly, navigate and bootstrap the directories for the benchmarks.
