@@ -3,17 +3,17 @@
 # Transcriptomics
 #########################################################
 # permutation benchmark
-./gin_run.sh ../input/gencode.v40.ging \
--L "gencode.v40.ging_permutation" \
--c "12" \
--r "32" \
--m "-1" \
--M "-1" \
--j "1" \
--l "16 32 64 128 256 512 1024 2048 4096" \
--t "225 450 900 1800 3600" \
--p "12" \
--h
+#./gin_run.sh ../input/gencode.v40.ging \
+#-L "gencode.v40.ging_permutation" \
+#-c "12" \
+#-r "32" \
+#-m "-1" \
+#-M "-1" \
+#-j "1" \
+#-l "16 32 64 128 256 512 1024 2048 4096" \
+#-t "225 450 900 1800 3600" \
+#-p "12" \
+#-h
 
 # principal benchmark
 ./gin_run.sh ../input/gencode.v40.ging \

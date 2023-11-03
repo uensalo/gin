@@ -1971,7 +1971,7 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
                             "\t\t\t(o1,oN);v1:...:vN\n");
             fprintf(stderr, "[gin:help] Parameters:\n");
             fprintf(stderr, "\t--reference   or -r: Required parameter (walks). Path to the index file. See gin index for more help.\n");
-            fprintf(stderr, "\t--input       or -i: Optional parameter (walks, encode). Path to the input file containing string queries, or the input ging graph to be encoded. Default: stdin\n");
+            fprintf(stderr, "\t--input       or -i: Optional parameter (walks, encode). Path to the input file containing walk roots or the input ging graph to be encoded. Walk roots produced from query find must be produced without the -v flag. Default: stdin.\n");
             fprintf(stderr, "\t--output      or -o: Optional parameter (walks, encode). Path to the output file. For encode, the bit encoded graph is written. For walks, resulting walks are written. Default: stdout\n");
             fprintf(stderr, "\t--batch-size  or -b: Optional parameter (walks).         Number of queries to be read and processed at once. Default: 8\n");
             fprintf(stderr, "\t--threads     or -j: Optional parameter (walks, encode). Number of threads to be used for parallel querying. Default: 1\n");

@@ -5,12 +5,12 @@ The data structure indexes all possible string walks on the graph and supports v
 scale with the size of the input graph.   
 
 # Known Issues
-- Please compile and use on Unix systems for the time being. This toolbox has not been properly tested for Windows and may provide incorrect results due different handling of line endings.
-- `gin decode walks` might sometimes give incorrect results due to a parsing bug. This will be fixed as soon as possible. As an alternative, resort to using `decode/gin_decode_paths.pl` for the time being.
+- Please compile and use on Unix systems for the time being. This toolbox has not been properly tested with Windows and may provide incorrect results due different handling of line endings.
 
 ## Table of Contents
 
 - [Compiling From Source](#compiling-from-source)
+- [Reproducing Benchmarks and Data](#reproducing-benchmarks-and-data)
 - [Usage](#usage)
   - [General](#general)
   - [Program Specific File Formats](#program-arguments-and-further-usage)
@@ -40,7 +40,18 @@ The following script can be used to build the binaries from source:
 ```bash
 mkdir build && (cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && make)
 ```
-The software package currently has four compile time CMake options.
+Submodules might not be initialised when building `gin` for the first time. To make sure, please navigate to the root directory of the project and run
+```bash
+git submodule update --init
+```
+If this also fails to clone the repositories, please clone `sdsl-lite` and `libdivsufsort-gin` under the directory `extern` manually and renate `sdsl-lite` to sdsl, i.e.
+```bash
+cd extern
+git clone https://github.com/uensalo/libdivsufsort-gin
+git clone https://github.com/simongog/sdsl-lite sdsl
+```
+
+The software package currently has seven compile time CMake options.
 
 - **`BUILD_OPENMP`** (`set(BUILD_OPENMP ON)`)
   Enables OpenMP support for parallelization; if disabled the -j parameter has no effect.
@@ -63,6 +74,38 @@ The software package currently has four compile time CMake options.
 - **`BUILD_TESTS`** (`set(BUILD_TESTS OFF)`)
   Disables building of the project's fuzz tests. Only interesting for development purposes.
 
+## Reproducing Benchmarks and Data
+All relevant scripts to reproduce benchmarks and plots are given under the `benchmark` subdirectory. Firstly, navigate and bootstrap the directories for the benchmarks.
+```bash
+cd benchmark
+cd scripts
+./bootstrap.sh
+```
+This will create the necessary folders under which logs and plots will be placed. Then, under the same directory, run
+```bash
+./build_bin.sh
+```
+to build the binaries. Note that the binaries may fail to build for a variety of reasons, which range from not having the submodules initialised or `OpenMP` problems. If you encounter
+such problems, please disable `OpenMP` in the `CMakeLists.txt` residing in the root directory.
+
+Next, place the two input items with names `GRCh38-20-0.10b.ging` and `gencode.v40.ging` under `benchmark/input`. `GRCh38-20-0.10b.ging` can be produced via
+`rgfa2ging` in the `gin` toolkit, and `gencode.v40.ging` can be produced via `gencode-2-ging` located under `tools` in the root directory of the project.
+`gencode-2-ging` [requires BiOCamLib to be installed](https://github.com/PaoloRibeca/BiOCamLib). 
+
+The input files to these programs can be obtained from the [minigraph repository](https://github.com/lh3/minigraph) and [GENCODE Release 40](https://www.gencodegenes.org/human/release_40.html).
+For the pangenome, to simplify things, one might also convert nucleotide substitution codes to `N`s.
+
+Alternatively, [this Google Drive link hosts the input files ready to be benchmarked, including the vertex permutations](`https://drive.google.com/drive/folders/1q27lbbjXbHatMXARKhcHacWGnwaCISkO?usp=sharing`). Note that generating vertex permutations
+is a memory intensive procedure, and it is recommended to download these from the Google Drive link and place them under `benchmark/res/permutation`.
+
+Then, run
+```bash
+./benchmark_pangenome_hard.sh
+./benchmark_annotation_hard.sh
+```
+to benchmark `gin`. All related logs will be put under `benchmark/log`. Note that the permutation benchmarks are commented out, as they are memory intensive. Enable them at your own risk.
+
+Finally, running `plot_logs.py` under `benchmark/scripts` will produce the relevant plots under `plots`.
 
 ## Usage
 
@@ -195,7 +238,8 @@ Alternatively, `gin` itself also supports an efficient reconstruction scheme whe
 ./gin decode encode -i <input_ging> -o <output_gine>
 ./gin decode walks -r <input_gine> -i <input_roots> -o <output_walks>
 ```
-The first command produces a bit-encoded graph that is later used as a graph index in `decode walks`.
+The first command produces a bit-encoded graph that is later used as a graph index in `decode walks`. __Note that the input roots produced by `./gin query find ... --decode`
+must be produced without the verbose flag.__
 
 ## Output Format Description of `gin query find` and `gin decode walks`
 
@@ -432,7 +476,7 @@ AAAAGCAT:
 
 **Parameters:**
 - **`--reference` or `-r` (Required for walks):** Path to the index file.
-- **`--input` or `-i` (Optional for walks, encode):** Path to the input file containing string queries or the input ging graph to be encoded. Default: stdin.
+- **`--input` or `-i` (Optional for walks, encode):** Path to the input file containing walk roots or the input ging graph to be encoded. Walk roots produced from query find must be produced without the -v flag. Default: stdin.
 - **`--output` or `-o` (Optional for walks, encode):** Path to the output file. Writes the bit encoded graph for `encode`, and the resulting walks for `walks`. Default: stdout.
 - **`--batch-size` or `-b` (Optional for walks):** Number of queries to read and process at once. Default: 8.
 - **`--threads` or `-j` (Optional for walks, encode):** Number of threads for parallel processing. Default: 1.
