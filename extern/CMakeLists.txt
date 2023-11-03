@@ -1,42 +1,45 @@
-# try to pull
-execute_process(
-        COMMAND git submodule update --remote
-        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
-        RESULT_VARIABLE GIT_SUBMOD_REM_RESULT
-)
-#libdivsufsort
-set(LIBDIVSUFSORT_PATH "${CMAKE_CURRENT_SOURCE_DIR}/libdivsufsort-gin")
-if(NOT EXISTS "${LIBDIVSUFSORT_PATH}/.git")
-    message(STATUS "libdivsufsort-gin not found or not initialized. Initializing and updating...")
-    execute_process(
-            COMMAND git submodule update --init extern/libdivsufsort-gin --recursive
-            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
-            RESULT_VARIABLE GIT_SUBMOD_INIT_RESULT
-            )
-    if(NOT GIT_SUBMOD_INIT_RESULT EQUAL "0")
-        message(FATAL_ERROR "git submodule update --init extern/libdivsufsort-gin failed for libdivsufsort with ${GIT_SUBMOD_INIT_RESULT}")
-    endif()
+find_package(Git QUIET)
+if(NOT GIT_FOUND)
+    message(FATAL_ERROR "Git not found, please make sure it is installed and in the PATH.")
 endif()
-set(BUILD_SHARED_LIBS OFF CACHE BOOL "Do not build a shared library for libdivsufsort")
-set(BUILD_EXAMPLES OFF CACHE BOOL "Do not build libdivsufsort example")
-set(BUILD_DIVSUFSORT64 ON CACHE BOOL "Build libdivsufsort in 64-bits mode")
-add_subdirectory(libdivsufsort-gin)
 
-#sdsl
-if(BUILD_SDSL)
-    set(SDSL_PATH "${CMAKE_CURRENT_SOURCE_DIR}/sdsl")
-    if(NOT EXISTS "${SDSL_PATH}/.git")
-        message(STATUS "sdsl not found or not initialized. Initializing and updating...")
+function(init_submodule path)
+    if(NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/${path}/.git")
+        message(STATUS "${path} submodule not found or not initialized. Initializing and updating...")
         execute_process(
-                COMMAND git submodule update --init extern/sdsl --recursive
-                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}/..
-                RESULT_VARIABLE GIT_SUBMOD_INIT_RESULT
+                COMMAND ${GIT_EXECUTABLE} submodule update --init -- ${path}
+                WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+                RESULT_VARIABLE GIT_SUBMOD_RESULT
         )
         if(NOT GIT_SUBMOD_RESULT EQUAL "0")
-            message(FATAL_ERROR "git submodule update --init failed for sdsl with ${GIT_SUBMOD_RESULT}")
+            message(FATAL_ERROR "git submodule update --init failed for ${path} with ${GIT_SUBMOD_RESULT}")
         endif()
+    else()
+        message(STATUS "${path} submodule already initialized.")
     endif()
-    add_subdirectory(sdsl)
+endfunction()
+
+option(UPDATE_SUBMODULES "Update submodules to the latest commit" OFF)
+if(UPDATE_SUBMODULES)
+    message(STATUS "Updating submodules to the latest commit...")
+    execute_process(
+            COMMAND ${GIT_EXECUTABLE} submodule update --init --remote
+            WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+            RESULT_VARIABLE GIT_SUBMOD_REM_RESULT
+    )
+    if(NOT GIT_SUBMOD_REM_RESULT EQUAL "0")
+        message(FATAL_ERROR "git submodule update --remote failed with ${GIT_SUBMOD_REM_RESULT}")
+    endif()
 endif()
 
+init_submodule(libdivsufsort-gin)
+init_submodule(sdsl)
 
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Do not build a shared library for libdivsufsort")
+set(BUILD_EXAMPLES OFF CACHE BOOL "Do not build libdivsufsort examples")
+set(BUILD_DIVSUFSORT64 ON CACHE BOOL "Build libdivsufsort in 64-bit mode")
+add_subdirectory(libdivsufsort-gin)
+
+if(BUILD_SDSL)
+    add_subdirectory(sdsl)
+endif()
