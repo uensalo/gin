@@ -1174,7 +1174,7 @@ int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode) {
                         // finalize previous block if necessary
                         if (!iter_first) {
                             // encode the string if necessary
-                            if (blocks[j].no_tasks) {
+                            if (blocks[j].no_tasks && !blocks[j].encoded_str) {
                                 gin_bs_t *encoded_query;
                                 int_t bits_per_char = gin_ceil_log2(encoded_graph->alphabet_size);
                                 int_t no_words_in_encoding = 1 + (blocks[j].str->size * bits_per_char - 1) / WORD_NUM_BITS;
@@ -1190,6 +1190,7 @@ int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode) {
                         } else if (carryover) {
                             gin_string_free(blocks[j].str);
                             gin_bs_free(blocks[j].encoded_str);
+                            blocks[j].str = NULL;
                             blocks[j].encoded_str = NULL;
                         }
                         // parse the string for the new block
@@ -1215,7 +1216,7 @@ int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode) {
                     iter_first = false;
                 }
                 if (!iter_first) { // encode the last block
-                    if(blocks[j].no_tasks) {
+                    if(blocks[j].no_tasks && !blocks[j].encoded_str) {
                         gin_bs_t *encoded_query;
                         int_t bits_per_char = gin_ceil_log2(encoded_graph->alphabet_size);
                         int_t no_words_in_encoding = 1 + (blocks[j].str->size * bits_per_char - 1) / WORD_NUM_BITS;
@@ -1297,7 +1298,7 @@ int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode) {
                     } else {
                         fprintf(foutput, "\t-\n");
                     }
-                    if(b != j-1) {
+                    if(b != j - 1) {
                         gin_string_free(blocks[b].str);
                         gin_bs_free(blocks[b].encoded_str);
                         blocks[b].str = NULL;
@@ -1306,9 +1307,9 @@ int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode) {
                 }
 
                 // move the contents of the last block to the first index
-                blocks[0].str = blocks[j-1].str;
-                blocks[0].encoded_str = blocks[j-1].encoded_str;
-                if(j > 1) { // self swap
+                if(j > 1) { // self swap else
+                    blocks[0].str = blocks[j-1].str;
+                    blocks[0].encoded_str = blocks[j-1].encoded_str;
                     blocks[j - 1].str = NULL;
                     blocks[j - 1].encoded_str = NULL;
                 }
@@ -1320,6 +1321,8 @@ int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode) {
             free(buf);
             free(outbuf);
             for(int_t b = 0; b < batch_size; b++) {
+                gin_string_free(blocks[b].str);
+                gin_bs_free(blocks[b].encoded_str);
                 free(blocks[b].tasks);
             }
             free(blocks);
