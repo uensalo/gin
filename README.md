@@ -4,6 +4,25 @@
 The data structure indexes all possible string walks on the graph and supports various implementations whose memory requirements scale linearly (or sub-linearly) 
 scale with the size of the input graph.   
 
+# Manuscript
+A [bioRxiv preprint](https://www.biorxiv.org/content/10.1101/2023.11.01.565214v1) is available. If you'd like to include GIN-TONIC in your work, please cite the preprint as follows.
+
+```
+@article {{\"O}zt{\"u}rk2023.11.01.565214,
+	author = {{\"U}nsal {\"O}zt{\"u}rk and Marco Mattavelli and Paolo Ribeca},
+	title = {{GIN-TONIC}: {N}on-hierarchical full-text indexing for graph-genomes},
+	elocation-id = {2023.11.01.565214},
+	year = {2023},
+	doi = {10.1101/2023.11.01.565214},
+	publisher = {Cold Spring Harbor Laboratory},
+	abstract = {This paper presents a new data structure, GIN-TONIC, designed to index arbitrary string-labelled directed graphs representing, for instance, pangenomes or transcriptomes. GIN-TONIC provides several capabilities not offered by other graph-indexing methods based on the FM-index. It is non-hierarchical, handling a graph as a single monolithic object; it indexes at nucleotide resolution all possible walks in the graph without the need to explicitly store them; it supports exact substring queries in polynomial time and space for all possible walk roots in the graph, even if there are exponentially many walks corresponding to such roots. Specific ad-hoc optimisations, such as a precomputed cache, allow GIN-TONIC to achieve excellent performance for input graphs of various topologies and sizes. Robust scalability capabilities and a querying performance close to that of a linear FM-Index are demonstrated for two real-world applications, a human pangenome and transcriptome. Source code and associated benchmarks are available on GitHub.Competing Interest StatementThe authors have declared no competing interest.},
+	URL = {https://www.biorxiv.org/content/early/2023/11/04/2023.11.01.565214},
+	eprint = {https://www.biorxiv.org/content/early/2023/11/04/2023.11.01.565214.full.pdf},
+	journal = {bioRxiv}
+}
+```
+The input data used in this paper is available via another GitHub repository, [gin-data](https://github.com/uensalo/gin-data). The repository contains two graph genomes in `.ging` format.
+
 # Known Issues
 - Please compile and use on Unix systems for the time being. This toolbox has not been properly tested with Windows and may provide incorrect results due different handling of line endings.
 
