@@ -84,57 +84,67 @@ do
       PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.ginp"
       PERM_LOG_FILE="$LOG_DIR/perm_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.txt"
       if [[ ! -f $PERMUTATION_FILE ]]; then
-        $GIN_DIR/gin permutation -i "$INPUT_FILE" -t "$PERMUTATION_TIME" -u "$PERMUTATION_TIME" -e $TEMPERATURE -c $COOLING -d "$PERMUTATION_DEPTH" -o "$PERMUTATION_FILE" -j $PERMUTATION_NUM_THREADS -v 2>> "$PERM_LOG_FILE"
+        $GIN_DIR/gin permutation -i "$INPUT_FILE" -t "$PERMUTATION_TIME" -u "$PERMUTATION_TIME" -e $TEMPERATURE -c $COOLING -d "$PERMUTATION_DEPTH" -o "$PERMUTATION_FILE" -j $PERMUTATION_NUM_THREADS -v 2>> "$PERM_LOG_FILE" &
       fi
+      # Make sure only two tasks are running at the same time
+      while [ $(jobs | wc -l) -ge 2 ]; do
+        sleep 1
+      done
     fi
   done
 done
 
-# Compute all the indexes in parallel over sample rates
-for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
+# Compute all the indexes in parallel over sample rates (4 at a time)
+for SAMPLE_RATE_IDX in $(seq 0 3 $((${#SAMPLE_RATES[@]} - 1)))
 do
-  for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
+  for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
   do
-    PERMUTATION_FLAG=""
-    PERMUTATION_FILE=""
-    if [[ "$PERMUTATION_TIME" -ne 0 && "$PERMUTATION_DEPTH" -ne 0 ]]; then
-      PERMUTATION_FLAG="-p"
-      PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.ginp"
-    fi
-    for IDX in "${!SAMPLE_RATES[@]}"
+    for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
     do
-      SAMPLE_RATE=${SAMPLE_RATES[$IDX]}
-      INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.gini"
-      INDEX_LOG_FILE="$LOG_DIR/index_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.txt"
-      if [[ ! -f $INDEX_FILE ]]; then # Check if the file exists
-        $GIN_DIR/gin index -i "$INPUT_FILE" $PERMUTATION_FLAG "$PERMUTATION_FILE" -o "$INDEX_FILE" -s "$SAMPLE_RATE" -r "$SAMPLE_RATE" -v 2>> "$INDEX_LOG_FILE"
+      PERMUTATION_FLAG=""
+      PERMUTATION_FILE=""
+      if [[ "$PERMUTATION_TIME" -ne 0 && "$PERMUTATION_DEPTH" -ne 0 ]]; then
+        PERMUTATION_FLAG="-p"
+        PERMUTATION_FILE="$PERMUTATION_DIR/${BASENAME}_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_threads_${PERMUTATION_NUM_THREADS}.ginp"
       fi
-    done
-  done
-done
-
-
-# Compute the caches
-for IDX in "${!CACHE_DEPTHS[@]}" # Iterate over all indices of CACHE_DEPTHS
-do
-  CACHE_DEPTH=${CACHE_DEPTHS[$IDX]}
-  if [[ "$CACHE_DEPTH" -ne "0" ]]; then
-    for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
-    do
-      for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
+      for IDX in $(seq "$SAMPLE_RATE_IDX" $(($SAMPLE_RATE_IDX + 3)))
       do
-        FIRST_SAMPLE_RATE=${SAMPLE_RATES[0]}
-        CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.ginc"
-        CACHE_LOG_FILE="$LOG_DIR/cache_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.txt"
-        INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${FIRST_SAMPLE_RATE}.gini"
-        if [[ ! -f $CACHE_FILE ]]; then
-          $GIN_DIR/gin query cache -r "$INDEX_FILE" -o "$CACHE_FILE" -j 8 -c "$CACHE_DEPTH" -v 2>> "$CACHE_LOG_FILE"
+        SAMPLE_RATE=${SAMPLE_RATES[$IDX]}
+        INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.gini"
+        INDEX_LOG_FILE="$LOG_DIR/index_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${SAMPLE_RATE}.txt"
+        if [[ ! -f $INDEX_FILE && $IDX -lt ${#SAMPLE_RATES[@]} ]]; then
+          $GIN_DIR/gin index -i "$INPUT_FILE" $PERMUTATION_FLAG "$PERMUTATION_FILE" -o "$INDEX_FILE" -s "$SAMPLE_RATE" -r "$SAMPLE_RATE" -v 2>> "$INDEX_LOG_FILE" &
         fi
       done
+      wait
     done
-  fi
+  done
 done
 
+# Compute the caches in parallel (4 at a time)
+for CACHE_DEPTH_IDX in $(seq 0 3 $((${#CACHE_DEPTHS[@]} - 1)))
+do
+  for IDX in $(seq "$CACHE_DEPTH_IDX" $(($CACHE_DEPTH_IDX + 3)))
+  do
+    CACHE_DEPTH=${CACHE_DEPTHS[$IDX]}
+    if [[ "$CACHE_DEPTH" -ne "0" && $IDX -lt ${#CACHE_DEPTHS[@]} ]]; then
+      for PERMUTATION_TIME in "${PERMUTATION_TIMES[@]}"
+      do
+        for PERMUTATION_DEPTH in "${PERMUTATION_DEPTHS[@]}"
+        do
+          FIRST_SAMPLE_RATE=${SAMPLE_RATES[0]}
+          CACHE_FILE="$CACHE_DIR/${BASENAME}_cache_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.ginc"
+          CACHE_LOG_FILE="$LOG_DIR/cache_log_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_depth_${CACHE_DEPTH}.txt"
+          INDEX_FILE="$INDEX_DIR/${BASENAME}_index_ptime_${PERMUTATION_TIME}_pdepth_${PERMUTATION_DEPTH}_sampling_rate_${FIRST_SAMPLE_RATE}.gini"
+          if [[ ! -f $CACHE_FILE ]]; then
+            $GIN_DIR/gin query cache -r "$INDEX_FILE" -o "$CACHE_FILE" -j 8 -c "$CACHE_DEPTH" -v 2>> "$CACHE_LOG_FILE" &
+          fi
+        done
+      done
+    fi
+  done
+  wait
+done
 
 # Querying
 for CACHE_DEPTH in "${CACHE_DEPTHS[@]}"
