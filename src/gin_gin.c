@@ -390,15 +390,20 @@ void gin_gin_decode(gin_gin_t *gin, gin_graph_t **graph, gin_vector_t **permutat
             vid++;
             ibwt[pos] = tmp;
         }
+        pos++;
     }
     // Insert edges
     for(vid_t i = 0; i < g->vertex_list->size; i++) {
-        vid_t dst = i;
+        vid_t dst = (vid_t)gin->bwt_to_vid->data[i];
         gin_vector_t *neighbors = NULL;
         gin_imt_query(gin->r2r_tree, i, i, -1, &neighbors);
         for(uint64_t j = 0; j < neighbors->size; j++) {
-            vid_t src = (vid_t)gin->bwt_to_vid->data[(vid_t)neighbors->data[j]-1];
-            gin_graph_insert_edge(g, src, dst);
+            gin_imt_interval_t *interval = (gin_imt_interval_t*)neighbors->data[j];
+            for(uint64_t k = interval->lo; k <= interval->hi; k++) {
+                vid_t src = (vid_t)gin->permutation->data[k];
+                gin_graph_insert_edge(g, src, dst);
+            }
+
         }
         gin_vector_free(neighbors);
     }

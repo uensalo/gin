@@ -568,16 +568,14 @@ int gin_main_deindex(int argc, char **argv) {
     // Vertices
     uint64_t no_total_chars = 0;
     for(uint64_t i = 0; i < graph->vertex_list->size; i++) {
-        vid_t vid = (vid_t)graph->vertex_list->data[i];
-        void *_ = NULL;
-        gin_table_lookup(graph->vertices, (void*)vid, &_);
-        gin_vertex_t *v = (gin_vertex_t*)_;
+        gin_vertex_t *v = (gin_vertex_t*)graph->vertex_list->data[i];
         fprintf(foutput, "V\t%llu\t%s\n", v->id, v->label->seq);
         no_total_chars += v->label->size;
     }
     // Edges
     for(uint64_t i = 0; i < graph->vertex_list->size; i++) {
-        vid_t vid = (vid_t)graph->vertex_list->data[i];
+        gin_vertex_t *v = (gin_vertex_t*)graph->vertex_list->data[i];
+        vid_t vid = v->id;
         void *_ = NULL;
         gin_table_lookup(graph->outgoing_neighbors, (void*)vid, &_);
         gin_vector_t *n = (gin_vector_t*)_;
@@ -2162,7 +2160,7 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--input            or -i: Optional parameter. Path to the input file in gini format. Default: stdin\n");
             fprintf(stderr, "\t--output           or -o: Optional parameter. Path to the output file, produced in ging format. Default: stdout\n");
             fprintf(stderr, "\t--permutation      or -p: Optional parameter. Path to the output permutation file. See gin permutation for more help. Default: stdout\n");
-            fprintf(stderr, "\t--verbose          or -v: Optional flag.      Provides more information (time, progress, memory requirements) about the indexing process.\n");
+            fprintf(stderr, "\t--verbose          or -v: Optional flag.      Provides more information (time) about the decoding process.\n");
             fprintf(stderr, "[gin:help] Example invocation: gin deindex -i myindex.gini -o mygraph.ging -p myperm.ginp -v\n");
             return_code = 0;
             break;
