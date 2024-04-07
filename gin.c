@@ -39,16 +39,17 @@
 #define GIN_MAIN_QUERY_EXIT_PROMPT "exit();"
 
 char *gin_version = "1.0";
-char* gin_mode_names[] = {"index","query","decode","permutation","utils","help"};
+char* gin_mode_names[] = {"index","deindex", "query","decode","permutation","utils","help"};
 
 typedef enum gin_mode_ {
     gin_mode_index=0,
-    gin_mode_query=1,
-    gin_mode_decode=2,
-    gin_mode_permutation=3,
-    gin_mode_utils=4,
-    gin_mode_help=5,
-    gin_mode_no_modes=6
+    gin_mode_deindex=1,
+    gin_mode_query=2,
+    gin_mode_decode=3,
+    gin_mode_permutation=4,
+    gin_mode_utils=5,
+    gin_mode_help=6,
+    gin_mode_no_modes=7
 } gin_mode_t;
 
 char* gin_query_mode_names[] = {"find","cache"};
@@ -78,6 +79,7 @@ typedef enum gin_utils_mode_ {
 } gin_utils_mode_t;
 
 int gin_main_index(int argc, char **argv);
+int gin_main_deindex(int argc, char **argv);
 int gin_main_query(int argc, char **argv, gin_query_mode_t mode);
 int gin_main_decode(int argc, char **argv, gin_decode_mode_t mode);
 int gin_main_permutation(int argc, char **argv);
@@ -142,6 +144,10 @@ int main(int argc, char *argv[]) {
     switch (progmode) {
         case gin_mode_index: {
             return_code = gin_main_index(argcp, argvp);
+            break;
+        }
+        case gin_mode_deindex: {
+            return_code = gin_main_deindex(argcp, argvp);
             break;
         }
         case gin_mode_query : {
@@ -400,6 +406,222 @@ int gin_main_index(int argc, char **argv) {
     }
 
     free(gin_buf);
+    return return_code;
+}
+
+int gin_main_deindex(int argc, char **argv) {
+    int return_code = 0;
+    int_t num_threads = 0;
+
+    char *finput_path = NULL;
+    char *foutput_path = NULL;
+    char *fperm_path = NULL;
+
+    FILE *finput = stdin;
+    FILE *foutput = stdout;
+    FILE *fperm = stdout;
+
+    bool verbose = false;
+
+    struct timespec t1;
+    struct timespec t2;
+
+    // statistics for path enumeration
+    double index_parse_time = .0;
+    double index_decode_time = .0;
+
+    static struct option options[] = {
+            {"input",           required_argument, NULL, 'i'},
+            {"output",          required_argument, NULL, 'o'},
+            {"permutation",     required_argument, NULL, 'p'},
+            {"threads",         required_argument, NULL, 'j'},
+            {"verbose",         no_argument,       NULL, 'v'},
+    };
+    opterr = 0;
+    int optindex,c;
+    while((c = getopt_long(argc, argv, "i:o:p:j:v", options, &optindex)) != -1) {
+        switch(c) {
+            case 'i': {
+                finput_path = optarg;
+                finput = fopen(finput_path, "r");
+                if(!finput) {
+                    fprintf(stderr, "[gin:deindex] Input index path %s could not be opened, quitting.\n", finput_path);
+                    return_code = -1;
+                    return return_code;
+                }
+                break;
+            }
+            case 'o': {
+                foutput_path = optarg;
+                break;
+            }
+            case 'p': {
+                fperm_path = optarg;
+                break;
+            }
+            case 'j': {
+                num_threads = (int_t)strtoull(optarg, NULL, 10);
+#ifdef GIN_OMP
+                omp_set_num_threads((int)num_threads);
+#endif
+                break;
+            }
+            case 'v': {
+                verbose = true;
+                break;
+            }
+            default: {
+                fprintf(stderr, "[gin:deindex] Option %s not recognized, please see gin help deindex for more.\n",optarg);
+                return_code = -1;
+                break;
+            }
+        }
+    }
+    /**************************************************************************
+    * 1 - Read the graph index from disk, gin_buf and gin_buf_size should be
+    * populated and finput is to be closed by the end of this block
+    **************************************************************************/
+    clock_gettime(CLOCK_REALTIME, &t1);
+    if(finput_path) {
+        finput = fopen(finput_path, "r");
+        if (!finput) {
+            fprintf(stderr, "[gin:deindex] Could not open index reference file %s, quitting.\n", finput_path);
+            return_code = -1;
+            return return_code;
+        }
+    }
+
+    uint64_t gin_buf_capacity = 65536;
+    uint64_t gin_buf_size = 0;
+    uint8_t *gin_buf = calloc(gin_buf_capacity, sizeof(uint8_t));
+
+    uint64_t read_size;
+    uint8_t *read_buf = calloc(GIN_MAIN_BUF_READ_SIZE, sizeof(uint8_t));
+    while((read_size = fread(read_buf,sizeof(uint8_t), GIN_MAIN_BUF_READ_SIZE, finput))) {
+        if(read_size + gin_buf_size > gin_buf_capacity) {
+            gin_buf = realloc(gin_buf, (gin_buf_capacity *= 2)*sizeof(uint8_t));
+            memset(gin_buf + (gin_buf_capacity/2), 0, sizeof(uint8_t)*(gin_buf_capacity/2));
+        }
+        memcpy(gin_buf+gin_buf_size,read_buf,read_size);
+        gin_buf_size+=read_size;
+    }
+    gin_buf = realloc(gin_buf, gin_buf_size*sizeof(uint8_t));
+    free(read_buf);
+    if(finput_path) {
+        fclose(finput);
+    }
+
+    /**************************************************************************
+    * 2 - Parse the bitstream into data structures, by the end of this block
+    * gin, should be populated and gin_buf should be freed
+    **************************************************************************/
+    if(verbose) {
+        fprintf(stderr, "[gin:deindex] Parsing reference index into data structures.\n");
+    }
+    gin_gin_t *gin;
+    gin_gin_serialize_from_buffer(&gin, gin_buf, gin_buf_size);
+    clock_gettime(CLOCK_REALTIME, &t2);
+    index_parse_time += to_sec(t1,t2);
+
+    if(!gin) {
+        fprintf(stderr, "[gin:deindex] Error encountered while parsing reference index. Quitting.\n");
+        return_code = -1;
+        return return_code;
+    }
+
+    /**************************************************************************
+    * 3 - Decode the index into a string graph, by the end of this block graph,
+    * permutation should be populated and gin should be freed
+    **************************************************************************/
+    if(verbose) {
+        fprintf(stderr, "[gin:deindex] Decoding the index into a string graph.\n");
+    }
+    gin_graph_t *graph = NULL;
+    gin_vector_t *permutation = NULL;
+    clock_gettime(CLOCK_REALTIME, &t1);
+    gin_gin_decode(gin, &graph, &permutation);
+    clock_gettime(CLOCK_REALTIME, &t2);
+    index_decode_time += to_sec(t1,t2);
+    gin_gin_free(gin);
+
+    /**************************************************************************
+    * 4 - Output the graph to the output in the .ging format, and the permutat-
+    * ion as .ginp format. By the end of this block, graph and permutation
+    * should be freed.
+    **************************************************************************/
+    if(foutput_path) {
+        foutput = fopen(foutput_path, "w");
+        if(!foutput) {
+            fprintf(stderr, "[gin:deindex] Can't open output file %s, quitting.\n", foutput_path);
+            return_code = -1;
+            return return_code;
+        }
+    }
+    if(fperm_path) {
+        fperm = fopen(fperm_path, "w");
+        if(!fperm) {
+            fprintf(stderr, "[gin:deindex] Can't open output permutation file %s, quitting.\n", fperm_path);
+            return_code = -1;
+            return return_code;
+        }
+    }
+    // Vertices
+    uint64_t no_total_chars = 0;
+    for(uint64_t i = 0; i < graph->vertex_list->size; i++) {
+        vid_t vid = (vid_t)graph->vertex_list->data[i];
+        void *_ = NULL;
+        gin_table_lookup(graph->vertices, (void*)vid, &_);
+        gin_vertex_t *v = (gin_vertex_t*)_;
+        fprintf(foutput, "V\t%llu\t%s\n", v->id, v->label->seq);
+        no_total_chars += v->label->size;
+    }
+    // Edges
+    for(uint64_t i = 0; i < graph->vertex_list->size; i++) {
+        vid_t vid = (vid_t)graph->vertex_list->data[i];
+        void *_ = NULL;
+        gin_table_lookup(graph->outgoing_neighbors, (void*)vid, &_);
+        gin_vector_t *n = (gin_vector_t*)_;
+        for(uint64_t j = 0; j < n->size; j++) {
+            vid_t dst = (vid_t)n->data[j];
+            fprintf(foutput, "E\t%llu\t%llu\n", vid, dst);
+        }
+    }
+    // Permutation
+    for(uint64_t i = 0; i < permutation->size; i++) {
+        vid_t vid = (vid_t)permutation->data[i];
+        fprintf(fperm, "%llu\n", vid);
+    }
+
+    /**************************************************************************
+    * 5 - Cleanup: graph, permutation should be freed at the end of this block
+    * and foutput and fperm should be close if needed
+    **************************************************************************/
+    if(foutput_path) {
+        fclose(foutput);
+    }
+    if(fperm) {
+        fclose(fperm);
+    }
+    if(verbose) {
+        if (finput_path) {
+            fprintf(stderr, "[gin:deindex] Params: Index file name (-i): %s\n", finput_path);
+        }
+        if (foutput_path) {
+            fprintf(stderr, "[gin:deindex] Params: Output file name (-i): %s\n", foutput_path);
+        }
+        if (fperm_path) {
+            fprintf(stderr, "[gin:deindex] Params: Permutation output file name (-i): %s\n", fperm_path);
+        }
+        fprintf(stderr, "[gin:deindex] Deindex: Index parse time (s): %lf\n", index_parse_time);
+        fprintf(stderr, "[gin:deindex] Deindex: Index decode time (s): %lf\n", index_decode_time);
+        fprintf(stderr, "[gin:deindex] Deindex: Number of decoded vertices: %llu\n", graph->vertex_list->size);
+        fprintf(stderr, "[gin:deindex] Deindex: Number of decoded edges: %llu\n", graph->no_edges);
+        fprintf(stderr, "[gin:deindex] Deindex: Number of decoded characters: %llu\n", no_total_chars);
+        fprintf(stderr, "[gin:deindex] Deindex: Average vertex label length: %lf\n", graph->vertex_list->size ? (double)no_total_chars / (double)graph->vertex_list->size : -1);
+    }
+    gin_graph_free(graph);
+    gin_vector_free(permutation);
+
     return return_code;
 }
 
@@ -1930,6 +2152,18 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
             fprintf(stderr, "\t--rank-sample-rate or -r: Optional parameter. Frequency of rank caches. Reducing this parameter increases query speeds at the cost of larger index files. Default = 32\n");
             fprintf(stderr, "\t--verbose          or -v: Optional flag.      Provides more information (time, progress, memory requirements) about the indexing process.\n");
             fprintf(stderr, "[gin:help] Example invocation: gin index -i mygraph.ging -g -o mygraph.gini -p myperm -s 64 -r 64 -v\n");
+            return_code = 0;
+            break;
+        }
+        case gin_mode_deindex: {
+            fprintf(stderr, "[gin:help] ---------- gin:deindex ----------\n");
+            fprintf(stderr, "[gin:help] gin deindex decodes an gin index file (.gini) back into the input graph and a permutation file. Note that this may take some time.\n");
+            fprintf(stderr, "[gin:help] Parameters:\n");
+            fprintf(stderr, "\t--input            or -i: Optional parameter. Path to the input file in gini format. Default: stdin\n");
+            fprintf(stderr, "\t--output           or -o: Optional parameter. Path to the output file, produced in ging format. Default: stdout\n");
+            fprintf(stderr, "\t--permutation      or -p: Optional parameter. Path to the output permutation file. See gin permutation for more help. Default: stdout\n");
+            fprintf(stderr, "\t--verbose          or -v: Optional flag.      Provides more information (time, progress, memory requirements) about the indexing process.\n");
+            fprintf(stderr, "[gin:help] Example invocation: gin deindex -i myindex.gini -o mygraph.ging -p myperm.ginp -v\n");
             return_code = 0;
             break;
         }

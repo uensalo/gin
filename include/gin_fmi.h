@@ -113,5 +113,6 @@ static gin_fstruct_t gin_fstruct_fmi = {
 void gin_fmi_serialize_from_buffer(unsigned char *buf, uint64_t buf_size, gin_fmi_t **gin_ret);
 void gin_fmi_serialize_to_buffer(gin_fmi_t *gin, unsigned char **buf_ret, uint64_t *buf_size_re);
 void gin_fmi_bwt(gin_fmi_t *fmi, uint64_t *buf, uint64_t start, uint64_t end);
+void gin_fmi_decode(gin_fmi_t *fmi, char **str, uint64_t *len);
 
 #endif //GIN_GIN_FMI_H

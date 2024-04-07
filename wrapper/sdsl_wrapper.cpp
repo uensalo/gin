@@ -152,4 +152,29 @@ void* csa_wt_copy(void* obj_handle) {
     return static_cast<void*>(csa_dest);
 }
 
+void csa_wt_decode(void *obj_handle, char **str, uint64_t *len) {
+    if (!obj_handle) return;
+    csa_type* csa = static_cast<csa_type*>(obj_handle);
+    uint64_t original_length = csa->size();
+    char *decoded = (char*) calloc(original_length+1, sizeof(char));
+    if (!decoded) {
+        *str = NULL;
+        *len = 0;
+        return;
+    }
+    uint64_t pos = 0;
+    for (int64_t i = original_length-2; i >= 0; --i) {
+        char ch = (char)csa->bwt[pos];
+        if(!ch) {
+            decoded[original_length] = 0;
+        } else {
+            decoded[i] = ch;
+        }
+        pos = csa->C[csa->char2comp[ch]] + csa->wavelet_tree.rank(pos + 1, ch) - 1;
+    }
+    decoded[original_length] = '\0';
+    *str = decoded;
+    *len = original_length;
+}
+
 } // extern "C"
