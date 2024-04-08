@@ -47,6 +47,7 @@ The input data used in this paper is available via another GitHub repository, [g
 - [Program Arguments and Further Usage](#program-arguments-and-further-usage)
     - [gin:permutation](#ginpermutation)
     - [gin:index](#ginindex)
+    - [gin:deindex](#gindeindex)
     - [gin:query](#ginquery)
     - [gin:decode](#gindecode)
     - [gin:utils](#ginutils)
@@ -128,7 +129,7 @@ Finally, running `plot_logs.py` under `benchmark/scripts` will produce the relev
 ### General
 
 The executable `gin` contains a suite of programs that allows string graphs to be indexed and queried. The program has 
-six subprograms, namely `index`, `query`, `decode`, `permutation`, `utils`, `help`.
+six subprograms, namely `index`, `deindex`, `query`, `decode`, `permutation`, `utils`, `help`.
 Subprograms may contain multiple modes of execution, which are discussed further into the section.
 
 The indexing and querying algorithm has many moving parts, and setting up all the indices and files requires executing these subprograms in a particular order.
@@ -451,6 +452,19 @@ AAAAGCAT:
 ```bash
 ./gin index -i mygraph.ging -g -o mygraph.gini -p myperm -s 64 -r 64 -v
 ```
+
+### gin:deindex
+
+`gin deindex` decodes an index file (.gini) back into the input graph and a permutation file. This process can take some time.
+
+**Parameters:**
+- **`--input` or `-i` (Optional):** Path to the input file in gini format. Default: stdin.
+- **`--output` or `-o` (Optional):** Path to the output file, produced in ging format. Default: stdout.
+- **`--permutation` or `-p` (Optional):** Path to the output permutation file. For more help, see `gin permutation`. Default: stdout.
+- **`--verbose` or `-v` (Optional Flag):** Provides more information (time) about the decoding process.
+
+**Example invocation:**  
+`gin deindex -i myindex.gini -o mygraph.ging -p myperm.ginp -v`
 
 
 ### gin:query

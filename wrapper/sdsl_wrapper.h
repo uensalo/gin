@@ -16,6 +16,7 @@ int64_t csa_wt_bwt_length(void* obj_handle);
 void csa_wt_populate_alphabet(void* obj_handle, int64_t** alphabet, int64_t *alphabet_size);
 int64_t csa_wt_char_sa_base(void* obj_handle, char c);
 int64_t csa_wt_size_in_bytes(void* obj_handle);
+void csa_wt_decode(void *obj_handle, char **string, uint64_t *len);
 
 int csa_wt_comp(void* obj_handle1, void* obj_handle2);
 uint64_t csa_wt_hash(void* obj_handle);

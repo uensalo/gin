@@ -569,3 +569,25 @@ void gin_fmi_bwt(gin_fmi_t *fmi, uint64_t *buf, uint64_t start, uint64_t end) {
         buf[i] = gin_fmi_get(fmi, (int64_t)i);
     }
 }
+
+void gin_fmi_decode(gin_fmi_t *fmi, char **str, uint64_t *len) {
+    if(!fmi->no_chars) {
+        *str = NULL;
+        *len = 0;
+    }
+    char *decoded = (char*)calloc(fmi->no_chars, sizeof(char));
+    uint64_t decoded_len = fmi->no_chars;
+    uint64_t idx = 0;
+    for(int64_t i = (int64_t)fmi->no_chars-2; i >= 0; i--) {
+        word_t encoding = gin_fmi_get(fmi, (int_t)idx);
+        char sym = (char)fmi->e2c[encoding];
+        if(!sym) {
+            decoded[decoded_len] = 0;
+        } else {
+            decoded[i] = sym;
+        }
+        idx = fmi->char_counts[encoding] + gin_fmi_rank(fmi, encoding, (int_t)idx) - 1;
+    }
+    *str = decoded;
+    *len = decoded_len - 1;
+}

@@ -83,6 +83,7 @@ void gin_gin_init(gin_gin_t** gin, gin_graph_t *graph, gin_vector_t *permutation
 gin_vector_t *gin_gin_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords);
 void gin_gin_free(gin_gin_t *gin);
 int gin_gin_comp(gin_gin_t *f1, gin_gin_t *f2);
+void gin_gin_decode(gin_gin_t *gin, gin_graph_t **graph, gin_vector_t **permutation);
 
 // for gathering statistics
 typedef struct gin_gin_stats_ {
