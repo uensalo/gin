@@ -38,7 +38,7 @@
 #define GIN_MAIN_QUERY_BUF_LEN 65536
 #define GIN_MAIN_QUERY_EXIT_PROMPT "exit();"
 
-char *gin_version = "1.0";
+char *gin_version = "1.1";
 char* gin_mode_names[] = {"index","deindex", "query","decode","permutation","utils","help"};
 
 typedef enum gin_mode_ {
@@ -2155,7 +2155,7 @@ int gin_main_help(gin_mode_t progmode, char *progname) {
         }
         case gin_mode_deindex: {
             fprintf(stderr, "[gin:help] ---------- gin:deindex ----------\n");
-            fprintf(stderr, "[gin:help] gin deindex decodes an gin index file (.gini) back into the input graph and a permutation file. Note that this may take some time.\n");
+            fprintf(stderr, "[gin:help] gin deindex decodes an index file (.gini) back into the input graph and a permutation file. Note that this may take some time.\n");
             fprintf(stderr, "[gin:help] Parameters:\n");
             fprintf(stderr, "\t--input            or -i: Optional parameter. Path to the input file in gini format. Default: stdin\n");
             fprintf(stderr, "\t--output           or -o: Optional parameter. Path to the output file, produced in ging format. Default: stdout\n");
