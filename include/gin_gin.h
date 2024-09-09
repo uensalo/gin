@@ -56,7 +56,9 @@
 #define GIN_GIN_CACHE_FORK_BOUNDARY_BIT_LENGTH 64
 #define GIN_GIN_CACHE_FMI_DEFAULT_RANK_RATE 16
 
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+#include "gin_dna_fmi.h"
+#elifdef GIN_SDSL
 typedef void* sdsl_csa;
 #endif
 
@@ -68,7 +70,9 @@ typedef struct gin_gin_ {
     int_t *alphabet;
     int_t alphabet_size;
     int_t no_chars;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *dfmi;
+#elifdef GIN_SDSL
     sdsl_csa *graph_fmi; // fm-index of the graph encoding
 #else
     gin_fmi_t *graph_fmi; // fm-index of the graph encoding

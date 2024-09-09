@@ -12,6 +12,7 @@ set(BUILD_OPENMP             OFF)
 set(BUILD_MARCH_NATIVE_FLAG  OFF)
 set(BUILD_BUILTIN_POPCOUNT   OFF)
 set(BUILD_DEBUG              OFF)
+set(BUILD_DNA_FMI            ON)
 set(BUILD_SDSL               OFF)
 set(BUILD_ORACLE             OFF)
 
@@ -78,7 +79,10 @@ else()
     endif()
 endif()
 
-if(BUILD_SDSL)
+if(BUILD_DNA_FMI)
+    list(APPEND C_FILES ${PROJECT_SOURCE_DIR}/gin_dna_fmi.c)
+    list(APPEND H_FILES ${PROJECT_HEADER_DIR}/gin_dna_fmi.h)
+elseif(BUILD_SDSL)
     list(APPEND C_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.cpp)
     list(APPEND H_FILES ${PROJECT_WRAPPER_DIR}/sdsl_wrapper.h)
 endif()
@@ -128,7 +132,9 @@ target_link_libraries(gin_lib_static PUBLIC divsufsort64-gin)
 target_link_libraries(gin_lib_static PUBLIC m)
 
 #sdsl
-if(BUILD_SDSL)
+if(BUILD_DNA_FMI)
+    add_definitions(-DGIN_DNA_FMI)
+elseif(BUILD_SDSL)
     #target_include_directories(
     #    gin_lib PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include
     #)
