@@ -58,7 +58,7 @@
 
 #ifdef GIN_DNA_FMI
 #include "gin_dna_fmi.h"
-#elifdef GIN_SDSL
+#elif defined GIN_SDSL
 typedef void* sdsl_csa;
 #endif
 
@@ -72,7 +72,7 @@ typedef struct gin_gin_ {
     int_t no_chars;
 #ifdef GIN_DNA_FMI
     gin_dfmi_t *dfmi;
-#elifdef GIN_SDSL
+#elif defined GIN_SDSL
     sdsl_csa *graph_fmi; // fm-index of the graph encoding
 #else
     gin_fmi_t *graph_fmi; // fm-index of the graph encoding
@@ -147,7 +147,7 @@ typedef struct gin_gin_cache_ { // implements an "FM-table"
     // payload:
 #ifdef GIN_DNA_FMI
     gin_dfmi_t *key_fmi;
-#elifdef GIN_SDSL
+#elif defined GIN_SDSL
     sdsl_csa *key_fmi;
 #else
     gin_fmi_t *key_fmi;
