@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 #include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
 
 
 /*
@@ -13,27 +15,39 @@
  *
  */
 
-#define DFMI_SET_BIT(ARRAY, K) ((ARRAY)[(K) >> 6] |= (UINT64_C(1) << ((K) & 63)))
-#define DFMI_GET_BIT(ARRAY, K) (((ARRAY)[(K) >> 6] >> ((K) & 63)) & 1)
 #define DFMI_POPCOUNT(X) __builtin_popcountll(X)
+#define DFMI_POPCOUNT_MASK(m) ((UINT64_C(1) << ((m) + 1)) - 1)
 
-#define DFMI_NO_CHARS 6
+#define DFMI_NO_RANKED_CHARS 6
+#define DFMI_NO_ALL_CHARS 10
 
-#define DFMI_A 0
-#define DFMI_C 1
-#define DFMI_G 2
-#define DFMI_T 3
+#define DFMI_X 0
+#define DFMI_A 1
+#define DFMI_C 2
+#define DFMI_G 3
 #define DFMI_N 4
-#define DFMI_X 5
+#define DFMI_T 5
 
-const static char gin_dfmi_dec[DFMI_NO_CHARS] = {
-        'A', 'C', 'G', 'T', 'N', '('
+// Non-ranked characters
+#define DFMI_Y 6
+#define DFMI_$ 7
+#define DFMI_a 8
+#define DFMI_b 9
+
+#define DFMI_CEIL(a,b) (((a)-1) / (b) + 1)
+
+const static char gin_dfmi_dec_lex[DFMI_NO_ALL_CHARS] = {
+        '\0', '(', ')', ',', '.', 'A', 'C', 'G', 'N', 'T'
 };
 
-const static int8_t gin_dfmi_enc[256] = {
+const static char gin_dfmi_dec[DFMI_NO_ALL_CHARS] = {
+        '(', 'A', 'C', 'G', 'N', 'T', ')', '\0', ',', '.'
+};
+
+const static uint8_t gin_dfmi_enc[256] = {
+        DFMI_$, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
-        -1, -1, -1, -1, -1, -1, -1, -1,  DFMI_X, -1, -1, -1, -1, -1, -1, -1,
+        -1, -1, -1, -1, -1, -1, -1, -1,  DFMI_X, DFMI_Y, -1, -1, DFMI_a, -1, DFMI_b, -1,
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
         -1,  DFMI_A, -1,  DFMI_C, -1, -1, -1,  DFMI_G, -1, -1, -1, -1, -1, -1,  DFMI_N, -1,
         -1, -1, -1, -1,  DFMI_T, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1,
@@ -49,26 +63,6 @@ const static int8_t gin_dfmi_enc[256] = {
         -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1, -1
 };
 
-inline static uint64_t gin_dfmi_wavelet_enc(uint8_t enc, const uint64_t *bv) {
-    switch (enc) {
-        case DFMI_A:  // A: 001
-            return ((!bv[0]) & (!bv[1]) &   bv[2]);
-        case DFMI_C:  // C: 010
-            return ((!bv[0]) &   bv[1]  & (!bv[2]));
-        case DFMI_G:  // G: 011
-            return ((!bv[0]) &   bv[1]  &   bv[2]);
-        case DFMI_T:  // T: 100
-            return (bv[0]    & (!bv[1]) & (!bv[2]));
-        case DFMI_N:  // N: 101
-            return (bv[0]    & (!bv[1]) &   bv[2]);
-        case DFMI_X:  // X: 110
-            return ((!bv[0]) & (!bv[1]) &   bv[2]);
-        default:
-            fprintf(stderr, "[gin_dna_fmi]: invalid encoding\n");
-            return -1;
-    }
-}
-
 /*
  * 40 bit unsigned integer for popcounts
  */
@@ -76,15 +70,27 @@ typedef struct gin_uint40_ {
     uint8_t bytes[5];
 } gin_uint40_t;
 
-inline static uint64_t gin_uint40_get(gin_uint40_t u) {
-    uint64_t result = 0;
-    memcpy(&result, u.bytes, sizeof(u.bytes));
-    return result;
-}
+#define DFMI_UINT40_GET(U) ({ \
+    uint64_t result = 0; \
+    memcpy(&result, (U).bytes, sizeof((U).bytes)); \
+    result; \
+})
 
-inline static void gin_uint40_set(gin_uint40_t *u, uint64_t val) {
-    memcpy(u->bytes, &val, sizeof(u->bytes));
-}
+#define DFMI_UINT40_SET(U, VAL) \
+    memcpy((U)->bytes, &(VAL), sizeof((U)->bytes))
+
+typedef union gin_dfmi_header_ {
+    uint64_t buf[8];
+    struct {
+        uint64_t fmi_size_in_bytes;
+        uint64_t no_chars;
+        uint64_t isa_rate;
+        uint64_t str_term_pos;
+        uint64_t no_dfmi_x;
+        uint64_t no_sa_values;
+        uint64_t padding[2]; // reserved
+    } values;
+} gin_dfmi_header_t;
 
 /*
  * Cache aligned superblock - fits in two cache lines (2x64).
@@ -97,20 +103,78 @@ inline static void gin_uint40_set(gin_uint40_t *u, uint64_t val) {
  *  - G: 011: !bv[0] &   bv[1] &  bv[2]
  *  - T: 100:  bv[0] &  !bv[1] & !bv[2]
  *  - N: 101:  bv[0] &  !bv[1] &  bv[2]
- *  - X: 110: !bv[0] &  !bv[1] &  bv[2]
+ *  - X: 110: bv[0] &    bv[1] &  bv[2]
  */
-typedef union gin_dfmi_sbc_ {
+typedef union gin_dfmi_sb_ {
     uint64_t buf[16]; // 128 bytes per superblock
     struct {
-        gin_uint40_t sbc[DFMI_NO_CHARS]; // 6x5 byte integers, can index up to 1 TB
-        uint8_t pad[2];                // NOT used, here for cache alignment
+        gin_uint40_t sbc[DFMI_NO_RANKED_CHARS]; // 6x5 byte integers, can index up to 1 TB
+        uint8_t pad[2];                         // NOT used, here for cache alignment
         struct {
-            uint8_t  bc[DFMI_NO_CHARS];  // cumulative sum of each char in the block
+            uint8_t  bc[DFMI_NO_RANKED_CHARS];  // cumulative sum of each char in the block
             uint8_t  pad[2]; // NOT used, here for cache alignment
             uint64_t bv[3];  // bitvectors for rank access
         } blocks[3];
-    } sbc;
-} gin_dfmi_sbc_t;
+    } sb;
+} gin_dfmi_sb_t;
+
+inline static uint64_t gin_dfmi_wavelet_enc(uint8_t enc, const uint64_t *bv) {
+    switch (enc) {
+        case DFMI_X:  // X: 001
+            return ((!bv[0]) & (!bv[1]) & bv[2]);
+        case DFMI_A:  // A: 010
+            return ((!bv[0]) & bv[1] & (!bv[2]));
+        case DFMI_C:  // C: 011
+            return ((!bv[0]) & bv[1] & bv[2]);
+        case DFMI_G:  // G: 100
+            return (bv[0] & (!bv[1]) & (!bv[2]));
+        case DFMI_N:  // N: 101
+            return (bv[0] & (!bv[1]) & bv[2]);
+        case DFMI_T:  // T: 110
+            return (bv[0] & bv[1] & (!bv[2]));
+        default:
+            fprintf(stderr, "[gin_dna_fmi.h]: invalid encoding\n");
+            return -1;
+    }
+}
+
+#define DFMI_L_SET_BIT(SB, CH, K) do { \
+    int sb_index = (K) / 192; \
+    int block_index = ((K) % 192) / 64; \
+    int block_offset = ((K) % 192) % 64; \
+    switch (CH) { \
+        case DFMI_A: \
+            (SB)[sb_index].sb.blocks[block_index].bv[2] |= (UINT64_C(1) << block_offset); \
+            break; \
+        case DFMI_C: \
+            (SB)[sb_index].sb.blocks[block_index].bv[1] |= (UINT64_C(1) << block_offset); \
+            break; \
+        case DFMI_G: \
+            (SB)[sb_index].sb.blocks[block_index].bv[1] |= (UINT64_C(1) << block_offset); \
+            (SB)[sb_index].sb.blocks[block_index].bv[2] |= (UINT64_C(1) << block_offset); \
+            break; \
+        case DFMI_T: \
+            (SB)[sb_index].sb.blocks[block_index].bv[0] |= (UINT64_C(1) << block_offset); \
+            break; \
+        case DFMI_N: \
+            (SB)[sb_index].sb.blocks[block_index].bv[0] |= (UINT64_C(1) << block_offset); \
+            (SB)[sb_index].sb.blocks[block_index].bv[2] |= (UINT64_C(1) << block_offset); \
+            break; \
+        case DFMI_X: \
+            (SB)[sb_index].sb.blocks[block_index].bv[0] |= (UINT64_C(1) << block_offset); \
+            (SB)[sb_index].sb.blocks[block_index].bv[1] |= (UINT64_C(1) << block_offset); \
+            break; \
+    } \
+} while (0)
+
+#include <stdint.h>
+
+#define DFMI_L_CHAR(SB, j) ( \
+    ((((SB)[(j) / 192].sb.blocks[((j) % 192) / 64].bv[0] >> ((j) % 64)) & UINT64_C(1)) << 2) + \
+    ((((SB)[(j) / 192].sb.blocks[((j) % 192) / 64].bv[1] >> ((j) % 64)) & UINT64_C(1)) << 1) + \
+    ((((SB)[(j) / 192].sb.blocks[((j) % 192) / 64].bv[2] >> ((j) % 64)) & UINT64_C(1))) - 1 \
+)
+
 
 /*
  * Cache aligned suffix array occupancy bitvector - fits in one cache line.
@@ -119,20 +183,36 @@ typedef union gin_dfmi_sbc_ {
 typedef union gin_dfmi_sao_ {
     uint64_t buf[8];
     struct {
-        gin_uint40_t popcnt; // popcount until this point
-        uint16_t bc[5];      // cumulative in-block popcount
-        uint64_t bv[6];      // actual bitvectors
+        gin_uint40_t popcnt;  // popcount until this point
+        uint16_t bc[5];       // cumulative in-block popcount
+        uint64_t bv[6];       // actual bitvectors
+        uint8_t pad;
     } sa_occ_sbc;
 } gin_dfmi_sao_t;
+
+#define DFMI_SAO_SET_BIT(SAO, K) \
+    ((SAO)[(K) / 384].sa_occ_sbc.bv[((K) % 384) / 64] |= (UINT64_C(1) << (((K) % 384) % 64)))
+
+#define DFMI_SAO_GET_BIT(SAO, K) \
+    ((((SAO)[(K) / 384].sa_occ_sbc.bv[((K) % 384) / 64] >> (((K) % 384) % 64)) & UINT64_C(1)))
+
+#define DFMI_SAO_RANK(SAO, j) ( \
+    { \
+        uint64_t s = (j) / 384; \
+        uint64_t b = ((j) % 384) / 64; \
+        uint64_t m = (j) % 64; \
+        uint64_t popcnt = DFMI_UINT40_GET((SAO)[s].sa_occ_sbc.popcnt); \
+        uint64_t block_cache = b ? (uint64_t)(SAO)[s].sa_occ_sbc.bc[b - 1] : 0; \
+        uint64_t bv_popcount = DFMI_POPCOUNT((SAO)[s].sa_occ_sbc.bv[b] & DFMI_POPCOUNT_MASK(m)); \
+        popcnt + block_cache + bv_popcount; \
+    } \
+)
 
 /*
  * The L column is stored as flat wavelets in three bitvectors.
  *
  * Buffer write order:
- * no_chars (8 bytes)
- * inverse suffix array sampling rate (8 bytes)
- * Position of original string terminator in the BWT (8 bytes)
- * 40 byte padding for cache alignment, may be used for future use
+ * FMI Header (64 bytes, see gin_dfmi_header)
  * F column cumsum (64 bytes, 8 bytes per character)
  * L column (2 cache lines per superblock):
  *      128-byte superblocks, ceil(N/192) many:
@@ -150,23 +230,21 @@ typedef union gin_dfmi_sao_ {
  *          6 blocks:
  *              8 byte payload
  * SA values (5 bytes per entry, ceil(N/isa_r) many)
- * permutation bitvector (1, in ceil(M/8) bytes)
+ * // not implemented yet permutation bitvector (1, in ceil(M/8) bytes)
  */
 typedef struct gin_dfmi_ {
     // stored fields
-    uint64_t size;          // size in bytes of the dfmi
     uint64_t *buf;          // buffer containing *everything*
     // non-stored fields: these are in-memory pointers for convenience, derived from the buffer
-    uint64_t no_chars;      // includes the terminator and the permutation
-    uint64_t isa_r;         // suffix array sampling rate
-    uint64_t str_term_pos;  // string terminator position in L
+    gin_dfmi_header_t header;
     uint64_t *f;            // 8 element f column cumsum:   $, c0, c1, A, C, G, T, N
-    gin_dfmi_sbc_t *lf;     // superblocks & blocks
+    gin_dfmi_sb_t *l;       // superblocks & blocks
     gin_dfmi_sao_t *sa_occ; // sa headers: popcount cache
-    uint64_t *sa;           // sa entries themselves
-    uint64_t *bv_p;         // perm bitmap: stores permutation entries, needed for decoding
+    gin_uint40_t *sa;       // sa entries, sampled
+    uint64_t *unr;          // unranked bitmap: stores permutation chars, terminator, and vertex start markers
 } gin_dfmi_t;
 
+// Generic functions
 gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate);
 int64_t gin_dfmi_rank(gin_dfmi_t *dfmi, uint64_t pos, char c);
 void gin_dfmi_sa(gin_dfmi_t *dfmi, uint64_t *buf, uint64_t start, uint64_t end);
