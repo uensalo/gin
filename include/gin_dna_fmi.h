@@ -145,17 +145,17 @@ typedef union gin_dfmi_sb_ {
 inline static uint64_t gin_dfmi_wavelet_enc(uint8_t enc, const uint64_t *bv) {
     switch (enc) {
         case DFMI_X:  // X: 001
-            return ((!bv[0]) & (!bv[1]) & bv[2]);
+            return ((~bv[0]) & (~bv[1]) & bv[2]);
         case DFMI_A:  // A: 010
-            return ((!bv[0]) & bv[1] & (!bv[2]));
+            return ((~bv[0]) & bv[1] & (~bv[2]));
         case DFMI_C:  // C: 011
-            return ((!bv[0]) & bv[1] & bv[2]);
+            return ((~bv[0]) & bv[1] & bv[2]);
         case DFMI_G:  // G: 100
-            return (bv[0] & (!bv[1]) & (!bv[2]));
+            return (bv[0] & (~bv[1]) & (~bv[2]));
         case DFMI_N:  // N: 101
-            return (bv[0] & (!bv[1]) & bv[2]);
+            return (bv[0] & (~bv[1]) & bv[2]);
         case DFMI_T:  // T: 110
-            return (bv[0] & bv[1] & (!bv[2]));
+            return (bv[0] & bv[1] & (~bv[2]));
         default:
             fprintf(stderr, "[gin_dna_fmi.h]: invalid encoding\n");
             return -1;
