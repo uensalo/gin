@@ -1093,7 +1093,11 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     * rearrange the value list to match the ranks of the special character
     * c_0
     **********************************************************************/
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *key_fmi = gin_dfmi_build(encode_params.key_encoding->seq, encode_params.key_encoding->size, encode_params.key_encoding->size+1);
+    uint64_t *sa = calloc(c->no_entries, sizeof(uint64_t));//printf("%s\n", encode_params.key_encoding->seq);
+    gin_dfmi_sa(key_fmi, sa, 1, c->no_entries);
+#elifdef GIN_SDSL
     sdsl_csa *key_fmi = csa_wt_build(encode_params.key_encoding->seq, encode_params.key_encoding->size);
     uint64_t *sa = calloc(c->no_entries, sizeof(uint64_t));//printf("%s\n", encode_params.key_encoding->seq);
     csa_wt_sa(key_fmi, sa, 1, c->no_entries);
@@ -1113,7 +1117,11 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     // now rearrange the items
     gin_vector_t *rearranged_values, *args;
     gin_vector_init(&rearranged_values, c->no_entries, &prm_fstruct);
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    for(int_t i = 0; i < c->no_entries; i++) {
+        rearranged_values->data[i] = (void*)sa[i];
+    }
+#elifdef GIN_SDSL
     for(int_t i = 0; i < c->no_entries; i++) {
         rearranged_values->data[i] = (void*)sa[i];
     }
@@ -1181,7 +1189,9 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     c->key_fmi = key_fmi;
     c->item_offsets = word_offsets;
     c->value_buffer_size_in_bits = (int_t)no_words_value_bits << WORD_LOG_BITS;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    c->key_fmi_size_in_bits = gin_dfmi_size_in_bytes(key_fmi) << 3;
+#elifdef GIN_SDSL
     c->key_fmi_size_in_bits = csa_wt_size_in_bytes(key_fmi) << 3;
 #else
     c->key_fmi_size_in_bits = key_fmi->no_bits;
@@ -1190,7 +1200,16 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
 }
 
 bool gin_gin_cache_advance_query(gin_gin_cache_t *cache, gin_gin_cache_qr_t *qr) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    char c = qr->pattern->seq[qr->pos];
+    count_t rank_lo_m_1 = qr->lo ? gin_dfmi_rank(cache->key_fmi, qr->lo-1, c) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? gin_dfmi_rank(cache->key_fmi, qr->hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(cache->key_fmi,c);
+    qr->lo = (int_t)(base + rank_lo_m_1);
+    qr->hi = (int_t)(base + rank_hi_m_1);
+    --qr->pos;
+    return qr->hi > qr->lo;
+#elifdef GIN_SDSL
     char c = qr->pattern->seq[qr->pos];
     count_t rank_lo = qr->lo ? csa_wt_rank(cache->key_fmi, qr->lo, c) : 0ull;
     count_t rank_hi = csa_wt_rank(cache->key_fmi, qr->hi, c);
@@ -1212,7 +1231,14 @@ bool gin_gin_cache_advance_query(gin_gin_cache_t *cache, gin_gin_cache_qr_t *qr)
 }
 
 bool gin_gin_cache_query_precedence_range(gin_gin_cache_t *cache, gin_gin_cache_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    count_t rank_lo_m_1 = qr->lo ? gin_dfmi_rank(cache->key_fmi, qr->lo-1, c) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? gin_dfmi_rank(cache->key_fmi, qr->hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(cache->key_fmi,c);
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
+    return *hi > *lo;
+#elifdef GIN_SDSL
     count_t rank_lo = qr->lo ? csa_wt_rank(cache->key_fmi, qr->lo, c) : 0ull;
     count_t rank_hi = csa_wt_rank(cache->key_fmi, qr->hi, c);
     uint64_t base = csa_wt_char_sa_base(cache->key_fmi, c);
@@ -1234,7 +1260,9 @@ void gin_gin_cache_lookup(gin_gin_cache_t *cache, gin_string_t *string, int_t st
     gin_vector_t *forks;
     gin_gin_cache_qr_t query;
     query.lo = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    query.hi = gin_dfmi_bwt_length(cache->key_fmi)+1;
+#elifdef GIN_SDSL
     query.hi = csa_wt_bwt_length(cache->key_fmi);
 #else
     query.hi = cache->key_fmi->no_chars+1;
@@ -1316,7 +1344,9 @@ void gin_gin_cache_serialize_to_buffer(gin_gin_cache_t *cache, unsigned char **b
 
     uint8_t *fmi_buf = NULL;
     uint64_t fmi_buf_size = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
+#elifdef GIN_SDSL
     csa_wt_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
 #else
     gin_fmi_serialize_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
@@ -1411,7 +1441,9 @@ void gin_gin_cache_serialize_from_buffer(gin_gin_cache_t **cachew, unsigned char
         fmi_buf_word[i] = word;
         ridx += WORD_NUM_BITS;
     }
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    cache->key_fmi = gin_dfmi_from_buffer(fmi_buf, fmi_buf_size);
+#elifdef GIN_SDSL
     cache->key_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
 #else
     gin_fmi_serialize_from_buffer(fmi_buf, fmi_buf_size, &cache->key_fmi);
@@ -1435,7 +1467,9 @@ void gin_gin_cache_serialize_from_buffer(gin_gin_cache_t **cachew, unsigned char
 
 void gin_gin_cache_free(gin_gin_cache_t *cache) {
     if(!cache) return;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_free(cache->key_fmi);
+#elifdef GIN_SDSL
     csa_wt_free(cache->key_fmi);
 #else
     gin_fmi_free(cache->key_fmi);

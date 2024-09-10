@@ -145,7 +145,9 @@ typedef struct gin_gin_cache_ { // implements an "FM-table"
     word_t *item_offsets;
     word_t *items;
     // payload:
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *key_fmi;
+#elifdef GIN_SDSL
     sdsl_csa *key_fmi;
 #else
     gin_fmi_t *key_fmi;
