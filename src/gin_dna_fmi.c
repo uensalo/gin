@@ -130,7 +130,7 @@ gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate) {
 
     // Tally character counts for L
     uint64_t ct[DFMI_NO_ALL_CHARS];     // Keep global counts
-    uint64_t bct[DFMI_NO_RANKED_CHARS]; // In superblock-counts
+    uint64_t bct[DFMI_NO_ALL_CHARS]; // In superblock-counts
     memset(ct, 0, sizeof(ct));
     memset(bct, 0, sizeof(bct));
     for(uint64_t i = 0; i < N; i++) {
@@ -194,9 +194,9 @@ int64_t gin_dfmi_rank(gin_dfmi_t *dfmi, uint64_t pos, char c) {
     // Possible prefetch here -- fetch the entire superblock
     // Then, go to its superblock and retrieve
     // a) superblock count b) block count c) the wavelet
-    register uint64_t s =  pos / 192;
-    register uint64_t b  = (pos % 192) / 64;
-    register uint64_t m  = pos % 64;
+    uint64_t s =  pos / 192;
+    uint64_t b  = (pos % 192) / 64;
+    uint64_t m  = pos % 64;
     uint64_t sbc = DFMI_UINT40_GET(dfmi->l[s].sb.sbc[enc]);
     uint64_t bc  = (uint64_t)dfmi->l[s].sb.blocks[b].bc[enc];
     uint64_t wav = gin_dfmi_wavelet_enc(enc, dfmi->l[s].sb.blocks[b].bv);
@@ -290,7 +290,7 @@ void* gin_dfmi_from_buffer(uint8_t *data, uint64_t size) {
 }
 
 int64_t gin_dfmi_bwt_length(gin_dfmi_t *dfmi) {
-    return (int64_t)dfmi->header.values.no_chars;
+    return (int64_t)dfmi->header.values.no_chars-1;
 }
 
 void gin_dfmi_populate_alphabet(gin_dfmi_t *dfmi, int64_t** alphabet, int64_t *alphabet_size) {
@@ -366,3 +366,53 @@ void* gin_dfmi_copy(gin_dfmi_t *dfmi) {
     copy->unr    = (copy->buf + wptr);
     return copy;
 }
+
+uint64_t gin_dfmi_count(gin_dfmi_t *dfmi, char *str) {
+    uint64_t lo = 0;
+    uint64_t hi = dfmi->header.values.no_chars+1;
+    int64_t pos = (int64_t)strlen(str)-1;
+    while(pos > -1) {
+        char c = str[pos];
+        uint8_t enc = gin_dfmi_enc[c];
+        uint64_t rank_lo_m_1 = lo ? gin_dfmi_rank(dfmi,lo-1,c) : 0ull;
+        uint64_t rank_hi_m_1 = hi ? gin_dfmi_rank(dfmi,hi-1,c) : 0ull;
+        uint64_t base = dfmi->f[enc];
+        lo = (base + rank_lo_m_1);
+        hi = (base + rank_hi_m_1);
+        if(hi <= lo) {
+            lo = hi;
+            break;
+        }
+        --pos;
+    }
+    return hi-lo;
+}
+
+void gin_dfmi_locate(gin_dfmi_t *dfmi, char *str, uint64_t **locs, uint64_t *nlocs) {
+    uint64_t lo = 0;
+    uint64_t hi = dfmi->header.values.no_chars+1;
+    int64_t pos = (int64_t)strlen(str)-1;
+    while(pos > -1) {
+        char c = str[pos];
+        uint8_t enc = gin_dfmi_enc[c];
+        uint64_t rank_lo_m_1 = lo ? gin_dfmi_rank(dfmi,lo-1,c) : 0ull;
+        uint64_t rank_hi_m_1 = hi ? gin_dfmi_rank(dfmi,hi-1,c) : 0ull;
+        uint64_t base = dfmi->f[enc];
+        lo = (base + rank_lo_m_1);
+        hi = (base + rank_hi_m_1);
+        if(hi <= lo) {
+            lo = hi;
+            break;
+        }
+        --pos;
+    }
+    if(hi > lo) {
+        *locs = calloc(hi-lo, sizeof(uint64_t));
+        *nlocs = hi - lo;
+        gin_dfmi_sa(dfmi, *locs, lo, hi-1);
+    } else {
+        *locs = NULL;
+        *nlocs = 0;
+    }
+}
+

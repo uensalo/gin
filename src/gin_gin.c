@@ -1447,13 +1447,13 @@ void gin_gin_cache_free(gin_gin_cache_t *cache) {
 
 bool gin_gin_advance_fork(gin_gin_t *gin, gin_fork_node_t *fork, gin_string_t *pattern) {
 #ifdef GIN_DNA_FMI
-    gin_dfmi_t *fmi = gin->dfmi;
+    gin_dfmi_t *dfmi = gin->dfmi;
     char c = pattern->seq[fork->pos];
-    count_t rank_lo = fork->sa_lo ? gin_dfmi_rank(fmi, fork->sa_lo, c) : 0ull;
-    count_t rank_hi = gin_dfmi_rank(fmi, fork->sa_hi, c);
-    uint64_t base = gin_dfmi_char_sa_base(fmi, c);
-    fork->sa_lo = (int_t)(base + rank_lo);
-    fork->sa_hi = (int_t)(base + rank_hi);
+    count_t rank_lo_m_1 = fork->sa_lo ? gin_dfmi_rank(dfmi, fork->sa_lo-1, c) : 0ull;
+    count_t rank_hi_m_1 = fork->sa_hi ? gin_dfmi_rank(dfmi, fork->sa_hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(dfmi,c);
+    fork->sa_lo = (int_t)(base + rank_lo_m_1);
+    fork->sa_hi = (int_t)(base + rank_hi_m_1);
     --fork->pos;
     return fork->sa_hi > fork->sa_lo;
 #elifdef GIN_SDSL
@@ -1481,12 +1481,12 @@ bool gin_gin_advance_fork(gin_gin_t *gin, gin_fork_node_t *fork, gin_string_t *p
 
 bool gin_gin_fork_precedence_range(gin_gin_t *gin, gin_fork_node_t *fork, char_t c, int_t *lo, int_t *hi) {
 #ifdef GIN_DNA_FMI
-    gin_dfmi_t *fmi = gin->dfmi;
-    count_t rank_lo = fork->sa_lo ? gin_dfmi_rank(fmi, fork->sa_lo, c) : 0ull;
-    count_t rank_hi = gin_dfmi_rank(fmi, fork->sa_hi, c);
-    uint64_t base = gin_dfmi_char_sa_base(fmi, c);
-    *lo = (int_t)(base + rank_lo);
-    *hi = (int_t)(base + rank_hi);
+    gin_dfmi_t *dfmi = gin->dfmi;
+    uint64_t rank_lo_m_1 = fork->sa_lo ? gin_dfmi_rank(dfmi, fork->sa_lo-1, c) : 0ull;
+    uint64_t rank_hi_m_1 = fork->sa_hi ? gin_dfmi_rank(dfmi, fork->sa_hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(dfmi,c);
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
     return *hi > *lo;
 #elifdef GIN_SDSL
     sdsl_csa *fmi = gin->graph_fmi;
