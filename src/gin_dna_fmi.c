@@ -1,19 +1,39 @@
+/*
+ * gin: FM-Index-like graph indexing algorithm toolkit.
+ * Copyright (C) 2023-2024, Unsal Ozturk
+ *                    2024, Paolo Ribeca
+ *
+ * gin_dna_fmi.c is part of gin
+ *
+ * gin is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * gin is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #include "gin_dna_fmi.h"
 #include "divsufsort64.h"
 
 gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate) {
     // Run important alignment and size checks, notify user of misalignment if any
     if(sizeof(gin_dfmi_header_t) != 64) {
-        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_dfmi_header_t is not 64 bytes in width. This will cause cache line alignment problems.\n");
+        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_dfmi_header_t (size %d) is not 64 bytes in width. This will cause cache line alignment problems.\n", sizeof(gin_dfmi_header_t));
     }
     if(sizeof(gin_dfmi_sb_t) != 128) {
-        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_dfmi_sbc_t is not 128 bytes in width. This will cause cache line alignment problems.\n");
+        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_dfmi_sbc_t (size %d) is not 128 bytes in width. This will cause cache line alignment problems.\n", sizeof(gin_dfmi_sb_t));
     }
     if(sizeof(gin_dfmi_sao_t) != 64) {
-        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_dfmi_sao_t is not 64 bytes in width. This will cause cache line alignment problems.\n");
+        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_dfmi_sao_t (size %d) is not 64 bytes in width. This will cause cache line alignment problems.\n", sizeof(gin_dfmi_sao_t));
     }
-    if(sizeof(gin_uint40_t) != 40) {
-        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_uint40_t is not 5 bytes in width. This will cause cache line alignment problems.\n");
+    if(sizeof(gin_uint40_t) != 5) {
+        fprintf(stderr, "[gin_dna_fmi.c] Warning: gin_uint40_t (size %d) is not 5 bytes in width. This will cause cache line alignment problems.\n", sizeof(gin_uint40_t));
     }
 
     gin_dfmi_t *dfmi = calloc(1, sizeof(gin_dfmi_t));
@@ -22,12 +42,13 @@ gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate) {
     uint64_t N = size+1;
     uint64_t n_sb        = DFMI_CEIL(N,192);
     uint64_t n_sa_occ_sb = DFMI_CEIL(N,384);
+    uint64_t V = 0; // Number of ( characters
+    uint64_t P = 0; // Number of , and . characters
     // Compute the SA and bwt now.
     char *bwt = (char*)malloc(N*sizeof(char));
     int64_t *sa = calloc(size+1, sizeof(uint64_t));
     divsufsort64((sauchar_t*)str, (saidx64_t*)sa, (saidx64_t)size+1);
     // Compute the BWT
-    uint64_t n_sa_val = 0;
     for(uint64_t i = 0; i < N; i++) {
         if(sa[i]) {
             bwt[i] = str[sa[i] - 1];
@@ -35,14 +56,23 @@ gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate) {
             dfmi->header.values.str_term_pos = i;
             bwt[i] = (char)'\0';
         }
-        dfmi->header.values.no_dfmi_x += bwt[i] == '(';
-        // Count samples manually because there's no way of
-        // Knowing if '(' coincides with the sampling period
-        // without computing the BWT
-        if(bwt[i] == '(' || !(sa[i] % isa_rate)) {
+        V += bwt[i] == '(';
+        P += (bwt[i] == ',' || bwt[i] == '.');
+    }
+
+    // Count samples manually because there's no way of
+    // Knowing if '()' coincides with the sampling period
+    // without computing the BWT. The trick is: always store
+    // SA entries for '(' and ')'. For permutation chars, don't
+    // store anything as they will never be decoded. For the rest,
+    // sample at periods.
+    uint64_t n_sa_val = 2*V+1;
+    for(uint64_t i = 2*V+1+P; i < N; i++) {
+        if(!(sa[i] % isa_rate)) {
             n_sa_val++;
         }
     }
+
     // Number of words needed to store things
     uint64_t nw_header = sizeof(gin_dfmi_header_t) / sizeof(uint64_t);
     uint64_t nw_f = 8;
@@ -62,19 +92,28 @@ gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate) {
     dfmi->header.values.no_chars = N; // includes terminator
     dfmi->header.values.str_term_pos = -1; // fill in later
     dfmi->header.values.no_sa_values = n_sa_val;
+    dfmi->header.values.no_dfmi_x = V;
     wptr += nw_header;
 
+
     // Set proper pointers in memory
-    dfmi->f      = dfmi->buf + wptr; wptr += nw_f;
-    dfmi->l      = (gin_dfmi_sb_t *)dfmi->buf + wptr; wptr += nw_l;
-    dfmi->sa_occ = (gin_dfmi_sao_t*)dfmi->buf + wptr; wptr += nw_sa_occ;
-    dfmi->sa     = (gin_uint40_t  *)dfmi->buf + wptr; wptr += nw_sa;
-    dfmi->unr    = dfmi->buf + wptr;
+    dfmi->f      = (dfmi->buf + wptr); wptr += nw_f;
+    dfmi->l      = (gin_dfmi_sb_t *)(dfmi->buf + wptr); wptr += nw_l;
+    dfmi->sa_occ = (gin_dfmi_sao_t*)(dfmi->buf + wptr); wptr += nw_sa_occ;
+    dfmi->sa     = (gin_uint40_t  *)(dfmi->buf + wptr); wptr += nw_sa;
+    dfmi->unr    = (dfmi->buf + wptr);
 
     // Sample the inverse suffix array
     uint64_t k = 0;
-    for(uint64_t i = 0; i < size+1; i++) {
-        if(bwt[i] == '(' || !(sa[i] % isa_rate)) {
+    // Always sample the terminator, '(' and ')'.
+    for(uint64_t i = 0; i < 2*V+1; i++) {
+        DFMI_SAO_SET_BIT(dfmi->sa_occ, i);
+        DFMI_UINT40_SET(&dfmi->sa[k], sa[i]);
+        k++;
+    }
+    // Skip the permutation characters and sample the text
+    for(uint64_t i =  2*V+1+P; i < N; i++) {
+        if(!(sa[i] % isa_rate)) {
             DFMI_SAO_SET_BIT(dfmi->sa_occ, i);
             DFMI_UINT40_SET(&dfmi->sa[k], sa[i]);
             k++;
@@ -86,7 +125,7 @@ gin_dfmi_t* gin_dfmi_build(const char* str, uint64_t size, uint64_t isa_rate) {
     // Populate the L bitvector
     for(uint64_t i = 0; i < N; i++) {
         uint64_t enc = gin_dfmi_enc[bwt[i]];
-        DFMI_L_SET_BIT(dfmi->l, bwt[i], enc); // heavy lifting
+        DFMI_L_SET_BIT(dfmi->l, enc, i); // heavy lifting
     }
 
     // Tally character counts for L
@@ -226,6 +265,7 @@ void* gin_dfmi_from_buffer(uint8_t *data, uint64_t size) {
         free(dfmi);
         return NULL;
     }
+    memcpy(copy, data, size * sizeof(uint8_t));
     // Parse the header
     dfmi->buf = (uint64_t*)copy;
     dfmi->header = *(gin_dfmi_header_t*)dfmi->buf;
@@ -241,11 +281,11 @@ void* gin_dfmi_from_buffer(uint8_t *data, uint64_t size) {
     uint64_t nw_sa_occ = n_sa_occ_sb * sizeof(gin_dfmi_sao_t) / sizeof(uint64_t);
     uint64_t nw_sa = DFMI_CEIL(n_sa_val * sizeof(gin_uint40_t), sizeof(uint64_t));
     uint64_t wptr = nw_header;
-    dfmi->f      = dfmi->buf + wptr; wptr += nw_f;
-    dfmi->l      = (gin_dfmi_sb_t *)dfmi->buf + wptr; wptr += nw_l;
-    dfmi->sa_occ = (gin_dfmi_sao_t*)dfmi->buf + wptr; wptr += nw_sa_occ;
-    dfmi->sa     = (gin_uint40_t  *)dfmi->buf + wptr; wptr += nw_sa;
-    dfmi->unr    = dfmi->buf + wptr;
+    dfmi->f      = (dfmi->buf + wptr); wptr += nw_f;
+    dfmi->l      = (gin_dfmi_sb_t *)(dfmi->buf + wptr); wptr += nw_l;
+    dfmi->sa_occ = (gin_dfmi_sao_t*)(dfmi->buf + wptr); wptr += nw_sa_occ;
+    dfmi->sa     = (gin_uint40_t  *)(dfmi->buf + wptr); wptr += nw_sa;
+    dfmi->unr    = (dfmi->buf + wptr);
     return dfmi;
 }
 
@@ -257,7 +297,7 @@ void gin_dfmi_populate_alphabet(gin_dfmi_t *dfmi, int64_t** alphabet, int64_t *a
     *alphabet_size = DFMI_NO_ALL_CHARS;
     *alphabet = (int64_t*) calloc(*alphabet_size, sizeof(int64_t));
     for(uint64_t i = 0; i < DFMI_NO_ALL_CHARS; i++) {
-        *alphabet[i] = (int64_t)gin_dfmi_dec_lex[i];
+        (*alphabet)[i] = (int64_t)gin_dfmi_dec_lex[i];
     }
 }
 
@@ -319,10 +359,10 @@ void* gin_dfmi_copy(gin_dfmi_t *dfmi) {
     uint64_t nw_sa_occ = n_sa_occ_sb * sizeof(gin_dfmi_sao_t) / sizeof(uint64_t);
     uint64_t nw_sa = DFMI_CEIL(n_sa_val * sizeof(gin_uint40_t), sizeof(uint64_t));
     uint64_t wptr = nw_header;
-    copy->f      = copy->buf + wptr; wptr += nw_f;
-    copy->l      = (gin_dfmi_sb_t *)copy->buf + wptr; wptr += nw_l;
-    copy->sa_occ = (gin_dfmi_sao_t*)copy->buf + wptr; wptr += nw_sa_occ;
-    copy->sa     = (gin_uint40_t  *)copy->buf + wptr; wptr += nw_sa;
-    copy->unr    = copy->buf + wptr;
+    copy->f      = (copy->buf + wptr); wptr += nw_f;
+    copy->l      = (gin_dfmi_sb_t *)(copy->buf + wptr); wptr += nw_l;
+    copy->sa_occ = (gin_dfmi_sao_t*)(copy->buf + wptr); wptr += nw_sa_occ;
+    copy->sa     = (gin_uint40_t  *)(copy->buf + wptr); wptr += nw_sa;
+    copy->unr    = (copy->buf + wptr);
     return copy;
 }

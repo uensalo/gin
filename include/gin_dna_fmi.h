@@ -1,3 +1,23 @@
+/*
+ * gin: FM-Index-like graph indexing algorithm toolkit.
+ * Copyright (C) 2023-2024, Unsal Ozturk
+ *                    2024, Paolo Ribeca
+ *
+ * gin_dna_fmi.h is part of gin
+ *
+ * gin is free software: you can redistribute it and/or modify
+ * it under the terms of the GNU General Public License as published by
+ * the Free Software Foundation, either version 3 of the License, or
+ * (at your option) any later version.
+ *
+ * gin is distributed in the hope that it will be useful,
+ * but WITHOUT ANY WARRANTY; without even the implied warranty of
+ * MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ * GNU General Public License for more details.
+ *
+ * You should have received a copy of the GNU General Public License
+ * along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ */
 #ifndef GIN_DNA_FMI_H
 #define GIN_DNA_FMI_H
 
@@ -77,7 +97,11 @@ typedef struct gin_uint40_ {
 })
 
 #define DFMI_UINT40_SET(U, VAL) \
-    memcpy((U)->bytes, &(VAL), sizeof((U)->bytes))
+    do { \
+        uint64_t temp_val = (VAL) & ((1ULL << 40) - 1); \
+        memcpy((U)->bytes, &temp_val, 5); \
+    } while(0)
+
 
 typedef union gin_dfmi_header_ {
     uint64_t buf[8];
@@ -143,29 +167,32 @@ inline static uint64_t gin_dfmi_wavelet_enc(uint8_t enc, const uint64_t *bv) {
     int block_index = ((K) % 192) / 64; \
     int block_offset = ((K) % 192) % 64; \
     switch (CH) { \
-        case DFMI_A: \
+        case DFMI_X: /* X: 001 */ \
             (SB)[sb_index].sb.blocks[block_index].bv[2] |= (UINT64_C(1) << block_offset); \
             break; \
-        case DFMI_C: \
+        case DFMI_A: /* A: 010 */ \
             (SB)[sb_index].sb.blocks[block_index].bv[1] |= (UINT64_C(1) << block_offset); \
             break; \
-        case DFMI_G: \
+        case DFMI_C: /* C: 011 */ \
             (SB)[sb_index].sb.blocks[block_index].bv[1] |= (UINT64_C(1) << block_offset); \
             (SB)[sb_index].sb.blocks[block_index].bv[2] |= (UINT64_C(1) << block_offset); \
             break; \
-        case DFMI_T: \
+        case DFMI_G: /* G: 100 */ \
             (SB)[sb_index].sb.blocks[block_index].bv[0] |= (UINT64_C(1) << block_offset); \
             break; \
-        case DFMI_N: \
+        case DFMI_N: /* N: 101 */ \
             (SB)[sb_index].sb.blocks[block_index].bv[0] |= (UINT64_C(1) << block_offset); \
             (SB)[sb_index].sb.blocks[block_index].bv[2] |= (UINT64_C(1) << block_offset); \
             break; \
-        case DFMI_X: \
+        case DFMI_T: /* T: 110 */ \
             (SB)[sb_index].sb.blocks[block_index].bv[0] |= (UINT64_C(1) << block_offset); \
             (SB)[sb_index].sb.blocks[block_index].bv[1] |= (UINT64_C(1) << block_offset); \
+            break; \
+        default: \
             break; \
     } \
 } while (0)
+
 
 #include <stdint.h>
 
@@ -186,7 +213,7 @@ typedef union gin_dfmi_sao_ {
         gin_uint40_t popcnt;  // popcount until this point
         uint16_t bc[5];       // cumulative in-block popcount
         uint64_t bv[6];       // actual bitvectors
-        uint8_t pad;
+        //uint8_t pad;        // Compiler sometimes complains, so keep this commented
     } sa_occ_sbc;
 } gin_dfmi_sao_t;
 
