@@ -12,7 +12,7 @@ set(BUILD_OPENMP             OFF)
 set(BUILD_MARCH_NATIVE_FLAG  OFF)
 set(BUILD_BUILTIN_POPCOUNT   OFF)
 set(BUILD_DEBUG              OFF)
-set(BUILD_DNA_FMI            ON)
+set(BUILD_DNA_FMI            OFF)
 set(BUILD_SDSL               OFF)
 set(BUILD_ORACLE             OFF)
 

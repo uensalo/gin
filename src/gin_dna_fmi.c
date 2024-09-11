@@ -252,9 +252,10 @@ void gin_dfmi_to_buffer(gin_dfmi_t *dfmi, uint8_t **data, uint64_t *size) {
 
 void* gin_dfmi_from_buffer(uint8_t *data, uint64_t size) {
     if(!size) return NULL;
-    if(size % 64) {
-        fprintf(stderr, "[gin_dna_fmi] Warning: gin_dna_fmi buffer not aligned to 64 bytes!\n");
-    }
+    // The buffer will be padded to 64 bit words in a future patch
+    //if(size % 64) {
+    //    fprintf(stderr, "[gin_dna_fmi] Warning: gin_dna_fmi buffer not aligned to 64 bytes!\n");
+    //}
     gin_dfmi_t *dfmi = calloc(1,sizeof(gin_dfmi_t));
     if(!dfmi) {
         return NULL;
