@@ -1,5 +1,7 @@
 #!/bin/bash
 mkdir -p ../bin
+mkdir -p ../bin-sdsl
+mkdir -p ../bin-fast
 mkdir -p ../log
 mkdir -p ../res
 mkdir -p ../res/index
