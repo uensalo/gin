@@ -1618,7 +1618,7 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
     for (int_t i = 0; i < merged->size; i++) {
         gin_fork_node_t *fork = merged->data[i];
         gin_gin_advance_fork(gin, fork, string);
-        if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
+        if (fork->sa_lo >= fork->sa_hi) {
             fork->type = DEAD;
 #pragma omp critical(partial_matches_append)
             {
@@ -1632,7 +1632,6 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
         }
     }
     stats->no_calls_to_advance_fork += forks->size + merged->size;
-    stats->no_calls_to_precedence_range += forks->size;
     gin_vector_free_disown(merged);
     gin_vector_free_disown(forks);
     *cur_forks = next_iter_forks;
@@ -1645,19 +1644,17 @@ void gin_gin_advance_fork_double_rank(gin_gin_t *gin, gin_fork_node_t *fork, gin
     char c1 = pattern->seq[fork->pos];
     char c2 = gin->c_0;
 
-    int64_t rank_lo_m_1;
-    int64_t rank_hi_m_1;
-    int64_t rank_c0_lo_m_1;
-    int64_t rank_c0_hi_m_1;
+    int64_t rank_lo_m_1 = 0;
+    int64_t rank_hi_m_1 = 0;
+    int64_t rank_c0_lo_m_1 = 0;
+    int64_t rank_c0_hi_m_1 = 0;
 
-    gin_dfmi_double_rank(dfmi, fork->sa_lo-1, c1, c2, &rank_lo_m_1, &rank_c0_lo_m_1);
-    gin_dfmi_double_rank(dfmi, fork->sa_hi-1, c1, c2, &rank_hi_m_1, &rank_c0_hi_m_1);
-
-    rank_lo_m_1 = fork->sa_lo ? rank_lo_m_1 : 0ll;
-    rank_hi_m_1 = fork->sa_hi ? rank_hi_m_1 : 0ll;
-
-    rank_c0_lo_m_1 = fork->sa_lo ? rank_c0_lo_m_1 : 0ll;
-    rank_c0_hi_m_1 = fork->sa_hi ? rank_c0_hi_m_1 : 0ll;
+    if(fork->sa_lo) {
+        gin_dfmi_double_rank(dfmi, fork->sa_lo - 1, c1, c2, &rank_lo_m_1, &rank_c0_lo_m_1);
+    }
+    if(fork->sa_hi) {
+        gin_dfmi_double_rank(dfmi, fork->sa_hi - 1, c1, c2, &rank_hi_m_1, &rank_c0_hi_m_1);
+    }
 
     uint64_t base    = gin_dfmi_char_sa_base(dfmi,c1);
     uint64_t base_c0 = gin_dfmi_char_sa_base(dfmi,c2);
@@ -1668,16 +1665,6 @@ void gin_gin_advance_fork_double_rank(gin_gin_t *gin, gin_fork_node_t *fork, gin
 
     *lo = (int_t)(base_c0 + rank_c0_lo_m_1);
     *hi = (int_t)(base_c0 + rank_c0_hi_m_1);
-
-    return;
-
-    //gin_dfmi_t *dfmi = gin->dfmi;
-    //uint64_t rank_lo_m_1 = fork->sa_lo ? gin_dfmi_rank(dfmi, fork->sa_lo-1, c) : 0ull;
-    //uint64_t rank_hi_m_1 = fork->sa_hi ? gin_dfmi_rank(dfmi, fork->sa_hi-1, c) : 0ull;
-    //uint64_t base = gin_dfmi_char_sa_base(dfmi,c);
-    //*lo = (int_t)(base + rank_lo_m_1);
-    //*hi = (int_t)(base + rank_hi_m_1);
-    //return *hi > *lo;
 }
 #endif
 
