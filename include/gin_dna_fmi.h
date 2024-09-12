@@ -228,7 +228,7 @@ inline static uint64_t gin_dfmi_wavelet_enc(uint8_t enc, const uint64_t *bv) {
         case DFMI_T:  // T: 110
             return (bv[0] & bv[1] & (~bv[2]));
         default:
-            fprintf(stderr, "[gin_dna_fmi.h]: invalid encoding\n");
+            fprintf(stderr, "[gin_dna_fmi.h]: invalid encoding: %d\n", enc);
             return -1;
     }
 }
