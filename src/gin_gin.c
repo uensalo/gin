@@ -1572,7 +1572,7 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
             for (int_t j = 0; j < no_forks_to_add; j++) {
                 gin_imt_interval_t *interval = incoming_sa_intervals->data[j];
                 gin_fork_node_t *new_fork = gin_fork_node_init(V+1+interval->lo, V+2+interval->hi,
-                                                               fork->pos,
+                                                               fork->pos+1, // take from previous position when double rank
                                                                MAIN);
 #pragma omp critical(forks_append)
                 {
