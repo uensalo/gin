@@ -12,7 +12,8 @@ set(BUILD_OPENMP             OFF)
 set(BUILD_MARCH_NATIVE_FLAG  OFF)
 set(BUILD_BUILTIN_POPCOUNT   OFF)
 set(BUILD_DEBUG              OFF)
-set(BUILD_DNA_FMI            OFF)
+set(BUILD_DNA_FMI            ON)
+set(BUILD_DNA_FMI_DR         ON)
 set(BUILD_SDSL               OFF)
 set(BUILD_ORACLE             OFF)
 
@@ -134,6 +135,9 @@ target_link_libraries(gin_lib_static PUBLIC m)
 #sdsl
 if(BUILD_DNA_FMI)
     add_definitions(-DGIN_DNA_FMI)
+    if(BUILD_DNA_FMI_DR)
+        add_definitions(-DGIN_DNA_FMI_DR)
+    endif()
 elseif(BUILD_SDSL)
     #target_include_directories(
     #    gin_lib PUBLIC ${PROJECT_EXTERN_DIR}/sdsl/include

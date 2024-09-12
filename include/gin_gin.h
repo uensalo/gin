@@ -208,6 +208,11 @@ void gin_gin_query_find_bootstrapped(gin_gin_t *gin, gin_vector_t *bootstrap, in
 void gin_gin_query_find(gin_gin_t *gin, gin_gin_cache_t *cache, gin_string_t *string, int_t max_forks, gin_vector_t **paths, gin_vector_t **dead_ends, gin_gin_stats_t **stats);
 void gin_gin_compact_forks(gin_gin_t *gin, gin_vector_t *forks, gin_vector_t **merged_forks);
 
+#ifdef GIN_DNA_FMI_DR
+void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, int_t max_forks, int_t *t, gin_vector_t **forks, gin_vector_t **partial_matches, gin_gin_stats_t *stats);
+void gin_gin_advance_fork_double_rank(gin_gin_t *gin, gin_fork_node_t *qr, gin_string_t *pattern, int_t *lo, int_t *hi);
+#endif
+
 /******************************************************************************
  * Result reporting and decoding
  *****************************************************************************/

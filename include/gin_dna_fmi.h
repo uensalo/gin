@@ -355,6 +355,9 @@ int64_t gin_dfmi_char_sa_base(gin_dfmi_t *dfmi, char c);
 int64_t gin_dfmi_size_in_bytes(gin_dfmi_t *dfmi);
 void gin_dfmi_decode(gin_dfmi_t *dfmi, char **string, uint64_t *len);
 
+// memory optimised double rank for two characters in the same cache line
+void gin_dfmi_double_rank(gin_dfmi_t *dfmi, uint64_t pos, char c1, char c2, int64_t *r1, int64_t *r2);
+
 uint64_t gin_dfmi_count(gin_dfmi_t *dfmi, char *str);
 void gin_dfmi_locate(gin_dfmi_t *dfmi, char *str, uint64_t **locs, uint64_t *nlocs);
 

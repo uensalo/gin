@@ -417,3 +417,28 @@ void gin_dfmi_locate(gin_dfmi_t *dfmi, char *str, uint64_t **locs, uint64_t *nlo
     }
 }
 
+
+void gin_dfmi_double_rank(gin_dfmi_t *dfmi, uint64_t pos, char c1, char c2, int64_t *r1, int64_t *r2) {
+    // Encode chars
+    uint8_t enc1 = gin_dfmi_enc[c1];
+    uint8_t enc2 = gin_dfmi_enc[c2];
+    // Then, go to the superblock and retrieve
+    // a) superblock counts b) block counts c) the wavelets
+    uint64_t s  =  pos / 192;
+    uint64_t b  = (pos % 192) / 64;
+    uint64_t m  =  pos % 64;
+    // Character 1
+    uint64_t sbc1 = DFMI_UINT40_GET(dfmi->l[s].sb.sbc[enc1]);
+    uint64_t bc1  = (uint64_t)dfmi->l[s].sb.blocks[b].bc[enc1];
+    uint64_t wav1 = gin_dfmi_wavelet_enc(enc1, dfmi->l[s].sb.blocks[b].bv);
+    // Character 2
+    uint64_t sbc2 = DFMI_UINT40_GET(dfmi->l[s].sb.sbc[enc2]);
+    uint64_t bc2  = (uint64_t)dfmi->l[s].sb.blocks[b].bc[enc2];
+    uint64_t wav2 = gin_dfmi_wavelet_enc(enc2, dfmi->l[s].sb.blocks[b].bv);
+    // Popcounts
+    uint64_t pc1 = DFMI_POPCOUNT(wav1 & DFMI_POPCOUNT_MASK(m));
+    uint64_t pc2 = DFMI_POPCOUNT(wav2 & DFMI_POPCOUNT_MASK(m));
+    // Mask the wavelet up until pos, and return the sum of cached counts
+    *r1 = (int64_t)(sbc1 + bc1 + pc1);
+    *r2 = (int64_t)(sbc2 + bc2 + pc2);
+}

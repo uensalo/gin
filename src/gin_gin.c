@@ -650,7 +650,11 @@ void gin_gin_query_find_bootstrapped(gin_gin_t *gin, gin_vector_t *bootstrap, in
 
     int_t t = bootstrap_depth; // stores the position last matched
     while(forks->size && t > 0) {
+#ifdef GIN_DNA_FMI_DR
+        gin_gin_query_find_step_double_rank(gin, string, max_forks, &t, &forks, &partial_matches, stats);
+#else
         gin_gin_query_find_step(gin, string, max_forks, &t, &forks, &partial_matches, stats);
+#endif
     }
     /* experimental */
     // compact forks one more time to prevent the reporting of duplicate matches
@@ -1541,6 +1545,141 @@ bool gin_gin_fork_precedence_range(gin_gin_t *gin, gin_fork_node_t *fork, char_t
     return *hi > *lo;
 #endif
 }
+
+#ifdef GIN_DNA_FMI_DR
+void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, int_t max_forks, int_t *t, gin_vector_t **cur_forks, gin_vector_t **partial_matches, gin_gin_stats_t *stats) {
+    gin_vector_t *forks= *cur_forks;
+    int_t V = gin->permutation->size;
+    /**********************************************************************
+    * Step 1 - Fork and advance with double rank
+    **********************************************************************/
+    gin_vector_t *new_forks;
+    gin_vector_init(&new_forks, GIN_VECTOR_INIT_SIZE, &gin_fstruct_fork_node);
+#pragma omp parallel for default(none) shared(forks, gin, max_forks, new_forks, V)
+    for (int_t i = 0; i < forks->size; i++) {
+        gin_fork_node_t *fork = forks->data[i];
+        int_t c_0_lo, c_0_hi;
+        gin_gin_advance_fork_double_rank(gin, fork, string, &c_0_lo, &c_0_hi);
+        bool more_to_track = max_forks == -1 || max_forks > forks->size;
+        if(more_to_track && c_0_lo < c_0_hi) {
+            gin_vector_t *incoming_sa_intervals;
+#ifdef GIN_ORACLE
+            gin_oimt_query(gin->oracle_r2r, c_0_lo - 1, c_0_hi - 2, string->seq[fork->pos], max_forks, &incoming_sa_intervals);
+#else
+            gin_imt_query(gin->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
+#endif
+            int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
+            for (int_t j = 0; j < no_forks_to_add; j++) {
+                gin_imt_interval_t *interval = incoming_sa_intervals->data[j];
+                gin_fork_node_t *new_fork = gin_fork_node_init(V+1+interval->lo, V+2+interval->hi,
+                                                               fork->pos,
+                                                               MAIN);
+#pragma omp critical(forks_append)
+                {
+                    gin_vector_append(new_forks, new_fork);
+                }
+            }
+            gin_vector_free(incoming_sa_intervals);
+        }
+    }
+    /**********************************************************************
+    * Step 2 - Merge phase: merge overlapping ranges on the vertices
+    **********************************************************************/
+    gin_vector_t *merged;
+    gin_gin_compact_forks(gin, new_forks, &merged);
+    gin_vector_free(new_forks);
+    /**********************************************************************
+    * Step 3 - Advance Phase: advance each fork once
+    **********************************************************************/
+    gin_vector_t *next_iter_forks;
+    gin_vector_init(&next_iter_forks, forks->size + merged->size, &gin_fstruct_fork_node);
+    // Filter previous queries
+#pragma omp parallel for default(none) shared(forks, gin, partial_matches, next_iter_forks, string, t)
+    for(int_t i = 0; i < forks->size; i++) {
+        gin_fork_node_t *fork = forks->data[i];
+        if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
+            fork->type = DEAD;
+#pragma omp critical(partial_matches_append)
+            {
+                gin_vector_append(*partial_matches, fork);
+            }
+        } else {
+            if(*t==1) {
+                fork->type = LEAF;
+            }
+#pragma omp critical(next_iter_queries_append)
+            {
+                gin_vector_append(next_iter_forks, fork);
+            }
+        }
+    }
+    // Advance and filter next forks
+#pragma omp parallel for default(none) shared(merged,V,gin,string,partial_matches,next_iter_forks, t)
+    for (int_t i = 0; i < merged->size; i++) {
+        gin_fork_node_t *fork = merged->data[i];
+        gin_gin_advance_fork(gin, fork, string);
+        if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
+            fork->type = DEAD;
+#pragma omp critical(partial_matches_append)
+            {
+                gin_vector_append(*partial_matches, fork);
+            }
+        } else {
+#pragma omp critical(next_iter_queries_append)
+            {
+                gin_vector_append(next_iter_forks, fork);
+            }
+        }
+    }
+    stats->no_calls_to_advance_fork += forks->size + merged->size;
+    stats->no_calls_to_precedence_range += forks->size;
+    gin_vector_free_disown(merged);
+    gin_vector_free_disown(forks);
+    *cur_forks = next_iter_forks;
+    --(*t);
+}
+
+
+void gin_gin_advance_fork_double_rank(gin_gin_t *gin, gin_fork_node_t *fork, gin_string_t *pattern, int_t *lo, int_t *hi) {
+    gin_dfmi_t *dfmi = gin->dfmi;
+    char c1 = pattern->seq[fork->pos];
+    char c2 = gin->c_0;
+
+    int64_t rank_lo_m_1;
+    int64_t rank_hi_m_1;
+    int64_t rank_c0_lo_m_1;
+    int64_t rank_c0_hi_m_1;
+
+    gin_dfmi_double_rank(dfmi, fork->sa_lo-1, c1, c2, &rank_lo_m_1, &rank_c0_lo_m_1);
+    gin_dfmi_double_rank(dfmi, fork->sa_hi-1, c1, c2, &rank_hi_m_1, &rank_c0_hi_m_1);
+
+    rank_lo_m_1 = fork->sa_lo ? rank_lo_m_1 : 0ll;
+    rank_hi_m_1 = fork->sa_hi ? rank_hi_m_1 : 0ll;
+
+    rank_c0_lo_m_1 = fork->sa_lo ? rank_c0_lo_m_1 : 0ll;
+    rank_c0_hi_m_1 = fork->sa_hi ? rank_c0_hi_m_1 : 0ll;
+
+    uint64_t base    = gin_dfmi_char_sa_base(dfmi,c1);
+    uint64_t base_c0 = gin_dfmi_char_sa_base(dfmi,c2);
+
+    fork->sa_lo = (int_t)(base + rank_lo_m_1);
+    fork->sa_hi = (int_t)(base + rank_hi_m_1);
+    --fork->pos;
+
+    *lo = (int_t)(base_c0 + rank_c0_lo_m_1);
+    *hi = (int_t)(base_c0 + rank_c0_hi_m_1);
+
+    return;
+
+    //gin_dfmi_t *dfmi = gin->dfmi;
+    //uint64_t rank_lo_m_1 = fork->sa_lo ? gin_dfmi_rank(dfmi, fork->sa_lo-1, c) : 0ull;
+    //uint64_t rank_hi_m_1 = fork->sa_hi ? gin_dfmi_rank(dfmi, fork->sa_hi-1, c) : 0ull;
+    //uint64_t base = gin_dfmi_char_sa_base(dfmi,c);
+    //*lo = (int_t)(base + rank_lo_m_1);
+    //*hi = (int_t)(base + rank_hi_m_1);
+    //return *hi > *lo;
+}
+#endif
 
 gin_vector_t *gin_gin_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords) {
     gin_vector_t *rval;
