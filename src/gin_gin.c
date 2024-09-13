@@ -544,7 +544,7 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
     **********************************************************************/
     gin_vector_t *new_forks;
     gin_vector_init(&new_forks, GIN_VECTOR_INIT_SIZE, &gin_fstruct_fork_node);
-    #pragma omp parallel for default(none) shared(forks, gin, max_forks, new_forks, V)
+    //#pragma omp parallel for default(none) shared(forks, gin, max_forks, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
@@ -563,10 +563,10 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
                 gin_fork_node_t *new_fork = gin_fork_node_init(V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                MAIN);
-                #pragma omp critical(forks_append)
-                {
-                    gin_vector_append(new_forks, new_fork);
-                }
+                //#pragma omp critical(forks_append)
+                //{
+                gin_vector_append(new_forks, new_fork);
+                //}
             }
             gin_vector_free(incoming_sa_intervals);
         }
@@ -583,42 +583,42 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
     gin_vector_t *next_iter_forks;
     gin_vector_init(&next_iter_forks, forks->size + merged->size, &gin_fstruct_fork_node);
     // advance and filter previous queries
-    #pragma omp parallel for default(none) shared(forks, gin, partial_matches, next_iter_forks, string, t)
+    //#pragma omp parallel for default(none) shared(forks, gin, partial_matches, next_iter_forks, string, t)
     for(int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         gin_gin_advance_fork(gin, fork, string);
         if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-            #pragma omp critical(partial_matches_append)
-            {
-                gin_vector_append(*partial_matches, fork);
-            }
+            //#pragma omp critical(partial_matches_append)
+            //{
+            gin_vector_append(*partial_matches, fork);
+            //}
         } else {
             if(*t==1) {
                 fork->type = LEAF;
             }
-            #pragma omp critical(next_iter_queries_append)
-            {
-                gin_vector_append(next_iter_forks, fork);
-            }
+            //#pragma omp critical(next_iter_queries_append)
+            //{
+            gin_vector_append(next_iter_forks, fork);
+            //}
         }
     }
     // advance and filter next forks
-    #pragma omp parallel for default(none) shared(merged,V,gin,string,partial_matches,next_iter_forks, t)
+    //#pragma omp parallel for default(none) shared(merged,V,gin,string,partial_matches,next_iter_forks, t)
     for (int_t i = 0; i < merged->size; i++) {
         gin_fork_node_t *fork = merged->data[i];
         gin_gin_advance_fork(gin, fork, string);
         if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-            #pragma omp critical(partial_matches_append)
-            {
-                gin_vector_append(*partial_matches, fork);
-            }
+            //#pragma omp critical(partial_matches_append)
+            //{
+            gin_vector_append(*partial_matches, fork);
+            //}
         } else {
-            #pragma omp critical(next_iter_queries_append)
-            {
-                gin_vector_append(next_iter_forks, fork);
-            }
+            //#pragma omp critical(next_iter_queries_append)
+            //{
+            gin_vector_append(next_iter_forks, fork);
+            //}
         }
     }
     stats->no_calls_to_advance_fork += forks->size + merged->size;
@@ -834,7 +834,7 @@ void gin_gin_decoder_decode_one(gin_gin_decoder_t *dec, int_t sa_lo, int_t sa_hi
     T = gin_fmi_sa(dec->gin->graph_fmi, &whole_rec);
 #endif
 
-#pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
+//#pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
     for(int_t i = 0; i < no_to_decode; i++) {
         // find the closest preceding vid in text space via binary search
         int_t lo = 0;
