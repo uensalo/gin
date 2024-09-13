@@ -205,7 +205,6 @@ int64_t gin_dfmi_rank(gin_dfmi_t *dfmi, uint64_t pos, char c) {
 }
 
 void gin_dfmi_sa(gin_dfmi_t *dfmi, uint64_t *buf, uint64_t start, uint64_t end) {
-    #pragma omp parallel for default(none) shared(qr, fmi, rval)
     for(uint64_t j = start; j <= end; j++) {
         uint64_t count = 0;
         uint64_t i = j;
