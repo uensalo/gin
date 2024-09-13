@@ -1555,7 +1555,7 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
     **********************************************************************/
     gin_vector_t *new_forks;
     gin_vector_init(&new_forks, GIN_VECTOR_INIT_SIZE, &gin_fstruct_fork_node);
-#pragma omp parallel for default(none) shared(forks, gin, max_forks, new_forks, V)
+#pragma omp parallel for default(none) shared(forks, gin, string, max_forks, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
