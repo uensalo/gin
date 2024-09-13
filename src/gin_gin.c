@@ -1555,7 +1555,6 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
     **********************************************************************/
     gin_vector_t *new_forks;
     gin_vector_init(&new_forks, GIN_VECTOR_INIT_SIZE, &gin_fstruct_fork_node);
-#pragma omp parallel for default(none) shared(forks, gin, string, max_forks, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
@@ -1574,10 +1573,7 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
                 gin_fork_node_t *new_fork = gin_fork_node_init(V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos+1, // take from previous position when double rank
                                                                MAIN);
-#pragma omp critical(forks_append)
-                {
-                    gin_vector_append(new_forks, new_fork);
-                }
+                gin_vector_append(new_forks, new_fork);
             }
             gin_vector_free(incoming_sa_intervals);
         }
@@ -1594,41 +1590,27 @@ void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, i
     gin_vector_t *next_iter_forks;
     gin_vector_init(&next_iter_forks, forks->size + merged->size, &gin_fstruct_fork_node);
     // Filter previous queries
-#pragma omp parallel for default(none) shared(forks, gin, partial_matches, next_iter_forks, string, t)
     for(int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
-            {
-                gin_vector_append(*partial_matches, fork);
-            }
+            gin_vector_append(*partial_matches, fork);
         } else {
             if(*t==1) {
                 fork->type = LEAF;
             }
-#pragma omp critical(next_iter_queries_append)
-            {
-                gin_vector_append(next_iter_forks, fork);
-            }
+            gin_vector_append(next_iter_forks, fork);
         }
     }
     // Advance and filter next forks
-#pragma omp parallel for default(none) shared(merged,V,gin,string,partial_matches,next_iter_forks, t)
     for (int_t i = 0; i < merged->size; i++) {
         gin_fork_node_t *fork = merged->data[i];
         gin_gin_advance_fork(gin, fork, string);
         if (fork->sa_lo >= fork->sa_hi) {
             fork->type = DEAD;
-#pragma omp critical(partial_matches_append)
-            {
-                gin_vector_append(*partial_matches, fork);
-            }
+            gin_vector_append(*partial_matches, fork);
         } else {
-#pragma omp critical(next_iter_queries_append)
-            {
-                gin_vector_append(next_iter_forks, fork);
-            }
+            gin_vector_append(next_iter_forks, fork);
         }
     }
     stats->no_calls_to_advance_fork += forks->size + merged->size;
