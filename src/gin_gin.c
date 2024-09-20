@@ -134,7 +134,11 @@ void gin_gin_init(gin_gin_t** gin, gin_graph_t *graph, gin_vector_t *permutation
     * Step 2 - Compute the suffix array of the encoding and build an FMI
     **************************************************************************/
     gin_vector_free(cwords);
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    f->dfmi = gin_dfmi_build(graph_encoding->seq, graph_encoding->size, isa_sample_rate);
+    gin_dfmi_populate_alphabet(f->dfmi, &f->alphabet, &f->alphabet_size);
+    f->no_chars = gin_dfmi_bwt_length(f->dfmi);
+#elif defined GIN_SDSL
     f->graph_fmi = csa_wt_build(graph_encoding->seq, graph_encoding->size);
     csa_wt_populate_alphabet(f->graph_fmi, &f->alphabet, &f->alphabet_size);
     f->no_chars = csa_wt_bwt_length(f->graph_fmi);
@@ -183,7 +187,12 @@ void gin_gin_init(gin_gin_t** gin, gin_graph_t *graph, gin_vector_t *permutation
     gin_vector_t *c_0_bucket, *c_1_bucket;
     gin_vector_init(&c_0_bucket, V, &prm_fstruct);
     gin_vector_init(&c_1_bucket, V, &prm_fstruct);
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_sa(f->dfmi, (uint64_t *) c_0_bucket->data, 1, V);
+    gin_dfmi_sa(f->dfmi, (uint64_t *) c_1_bucket->data, V + 1, 2 * V);
+    c_0_bucket->size = V;
+    c_1_bucket->size = V;
+#elif defined GIN_SDSL
     csa_wt_sa(f->graph_fmi, (uint64_t *) c_0_bucket->data, 1, V);
     csa_wt_sa(f->graph_fmi, (uint64_t *) c_1_bucket->data, V + 1, 2 * V);
     c_0_bucket->size = V;
@@ -337,7 +346,9 @@ void gin_gin_free(gin_gin_t *gin) {
         gin_vector_free(gin->permutation);
         gin_vector_free(gin->bwt_to_vid);
         free(gin->alphabet);
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+        gin_dfmi_free(gin->dfmi);
+#elif defined GIN_SDSL
         csa_wt_free(gin->graph_fmi);
 #else
         gin_fmi_free(gin->graph_fmi);
@@ -351,7 +362,9 @@ void gin_gin_free(gin_gin_t *gin) {
 }
 
 int gin_gin_comp(gin_gin_t *f1, gin_gin_t *f2) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    int c1 = gin_dfmi_comp(f1->dfmi, f2->dfmi);
+#elif defined GIN_SDSL
     int c1 = csa_wt_comp(f1->graph_fmi, f2->graph_fmi);
 #else
     int c1 = gin_fmi_comp(f1->graph_fmi, f2->graph_fmi);
@@ -367,7 +380,9 @@ int gin_gin_comp(gin_gin_t *f1, gin_gin_t *f2) {
 void gin_gin_decode(gin_gin_t *gin, gin_graph_t **graph, gin_vector_t **permutation) {
     char *ibwt = NULL;
     uint64_t ibwt_len = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_decode(gin->dfmi, &ibwt, &ibwt_len);
+#elif defined GIN_SDSL
     csa_wt_decode(gin->graph_fmi, &ibwt, &ibwt_len);
 #else
     gin_fmi_decode(gin->graph_fmi, &ibwt, &ibwt_len);
@@ -423,7 +438,9 @@ void gin_gin_query_find_dfs(gin_gin_t *gin, gin_string_t *string, int_t max_fork
 
     // create initial task to fire
     int_t init_lo = 0;//1 + V * (2+gin_ceil_log2(V));
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    int_t init_hi = gin->no_chars;
+#elif defined GIN_SDSL
     int_t init_hi = gin->no_chars;
 #else
     int_t init_hi = gin->graph_fmi->no_chars;
@@ -527,7 +544,7 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
     **********************************************************************/
     gin_vector_t *new_forks;
     gin_vector_init(&new_forks, GIN_VECTOR_INIT_SIZE, &gin_fstruct_fork_node);
-    #pragma omp parallel for default(none) shared(forks, gin, max_forks, new_forks, V)
+    //#pragma omp parallel for default(none) shared(forks, gin, max_forks, new_forks, V)
     for (int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         int_t c_0_lo, c_0_hi;
@@ -546,10 +563,10 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
                 gin_fork_node_t *new_fork = gin_fork_node_init(V+1+interval->lo, V+2+interval->hi,
                                                                fork->pos,
                                                                MAIN);
-                #pragma omp critical(forks_append)
-                {
-                    gin_vector_append(new_forks, new_fork);
-                }
+                //#pragma omp critical(forks_append)
+                //{
+                gin_vector_append(new_forks, new_fork);
+                //}
             }
             gin_vector_free(incoming_sa_intervals);
         }
@@ -566,42 +583,42 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
     gin_vector_t *next_iter_forks;
     gin_vector_init(&next_iter_forks, forks->size + merged->size, &gin_fstruct_fork_node);
     // advance and filter previous queries
-    #pragma omp parallel for default(none) shared(forks, gin, partial_matches, next_iter_forks, string, t)
+    //#pragma omp parallel for default(none) shared(forks, gin, partial_matches, next_iter_forks, string, t)
     for(int_t i = 0; i < forks->size; i++) {
         gin_fork_node_t *fork = forks->data[i];
         gin_gin_advance_fork(gin, fork, string);
         if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-            #pragma omp critical(partial_matches_append)
-            {
-                gin_vector_append(*partial_matches, fork);
-            }
+            //#pragma omp critical(partial_matches_append)
+            //{
+            gin_vector_append(*partial_matches, fork);
+            //}
         } else {
             if(*t==1) {
                 fork->type = LEAF;
             }
-            #pragma omp critical(next_iter_queries_append)
-            {
-                gin_vector_append(next_iter_forks, fork);
-            }
+            //#pragma omp critical(next_iter_queries_append)
+            //{
+            gin_vector_append(next_iter_forks, fork);
+            //}
         }
     }
     // advance and filter next forks
-    #pragma omp parallel for default(none) shared(merged,V,gin,string,partial_matches,next_iter_forks, t)
+    //#pragma omp parallel for default(none) shared(merged,V,gin,string,partial_matches,next_iter_forks, t)
     for (int_t i = 0; i < merged->size; i++) {
         gin_fork_node_t *fork = merged->data[i];
         gin_gin_advance_fork(gin, fork, string);
         if (fork->sa_lo >= fork->sa_hi) { // query died while advancing
             fork->type = DEAD;
-            #pragma omp critical(partial_matches_append)
-            {
-                gin_vector_append(*partial_matches, fork);
-            }
+            //#pragma omp critical(partial_matches_append)
+            //{
+            gin_vector_append(*partial_matches, fork);
+            //}
         } else {
-            #pragma omp critical(next_iter_queries_append)
-            {
-                gin_vector_append(next_iter_forks, fork);
-            }
+            //#pragma omp critical(next_iter_queries_append)
+            //{
+            gin_vector_append(next_iter_forks, fork);
+            //}
         }
     }
     stats->no_calls_to_advance_fork += forks->size + merged->size;
@@ -633,7 +650,11 @@ void gin_gin_query_find_bootstrapped(gin_gin_t *gin, gin_vector_t *bootstrap, in
 
     int_t t = bootstrap_depth; // stores the position last matched
     while(forks->size && t > 0) {
+#ifdef GIN_DNA_FMI_DR
+        gin_gin_query_find_step_double_rank(gin, string, max_forks, &t, &forks, &partial_matches, stats);
+#else
         gin_gin_query_find_step(gin, string, max_forks, &t, &forks, &partial_matches, stats);
+#endif
     }
     /* experimental */
     // compact forks one more time to prevent the reporting of duplicate matches
@@ -764,7 +785,12 @@ void gin_gin_decoder_init(gin_gin_decoder_t **dec, gin_gin_t *gin) {
     gin_fmi_qr_t qr;
     qr.lo = 1;
     qr.hi = V + 1;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_vector_t *bases_permuted;
+    gin_vector_init(&bases_permuted, V, &prm_fstruct);
+    gin_dfmi_sa(gin->dfmi, (uint64_t*)bases_permuted->data, qr.lo, qr.hi-1);
+    bases_permuted->size = qr.hi - qr.lo;
+#elif defined GIN_SDSL
     gin_vector_t *bases_permuted;
     gin_vector_init(&bases_permuted, V, &prm_fstruct);
     csa_wt_sa(gin->graph_fmi, (uint64_t*)bases_permuted->data, qr.lo, qr.hi-1);
@@ -798,14 +824,17 @@ void gin_gin_decoder_decode_one(gin_gin_decoder_t *dec, int_t sa_lo, int_t sa_hi
     whole_rec.lo = sa_lo;
     whole_rec.hi = sa_lo + no_to_decode;
     gin_vector_t *T;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_vector_init(&T, no_to_decode, &prm_fstruct);
+    gin_dfmi_sa(dec->gin->dfmi, (uint64_t*)T->data, sa_lo, sa_hi-1);
+#elif defined GIN_SDSL
     gin_vector_init(&T, no_to_decode, &prm_fstruct);
     csa_wt_sa(dec->gin->graph_fmi, (uint64_t*)T->data, sa_lo, sa_hi-1);
 #else
     T = gin_fmi_sa(dec->gin->graph_fmi, &whole_rec);
 #endif
 
-#pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
+//#pragma omp parallel for default(none) shared(sa_lo, sa_hi, dec, m ,T, no_to_decode)
     for(int_t i = 0; i < no_to_decode; i++) {
         // find the closest preceding vid in text space via binary search
         int_t lo = 0;
@@ -928,7 +957,10 @@ void gin_gin_cache_init_helper_trav1(void *key, void *value, void *params) {
     gin_table_t **cache_tables = p->cache_tables;
     gin_string_t *base = (gin_string_t*)key;
     gin_vector_t *matching_forks = (gin_vector_t*)value;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    int_t *alphabet = gin->alphabet;
+    int_t alphabet_size = gin->alphabet_size;
+#elif defined GIN_SDSL
     int_t *alphabet = gin->alphabet;
     int_t alphabet_size = gin->alphabet_size;
 #else
@@ -1004,7 +1036,11 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     * Step 1 - Seed the cache with length 1 queries
     **********************************************************************/
     int_t init_lo = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    int_t init_hi = gin->no_chars;
+    int_t *alphabet = gin->alphabet;
+    int_t alphabet_size = gin->alphabet_size;
+#elif defined GIN_SDSL
     int_t init_hi = gin->no_chars;
     int_t *alphabet = gin->alphabet;
     int_t alphabet_size = gin->alphabet_size;
@@ -1061,7 +1097,11 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     * rearrange the value list to match the ranks of the special character
     * c_0
     **********************************************************************/
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *key_fmi = gin_dfmi_build(encode_params.key_encoding->seq, encode_params.key_encoding->size, encode_params.key_encoding->size+1);
+    uint64_t *sa = calloc(c->no_entries, sizeof(uint64_t));//printf("%s\n", encode_params.key_encoding->seq);
+    gin_dfmi_sa(key_fmi, sa, 1, c->no_entries);
+#elif defined GIN_SDSL
     sdsl_csa *key_fmi = csa_wt_build(encode_params.key_encoding->seq, encode_params.key_encoding->size);
     uint64_t *sa = calloc(c->no_entries, sizeof(uint64_t));//printf("%s\n", encode_params.key_encoding->seq);
     csa_wt_sa(key_fmi, sa, 1, c->no_entries);
@@ -1081,7 +1121,11 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     // now rearrange the items
     gin_vector_t *rearranged_values, *args;
     gin_vector_init(&rearranged_values, c->no_entries, &prm_fstruct);
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    for(int_t i = 0; i < c->no_entries; i++) {
+        rearranged_values->data[i] = (void*)sa[i];
+    }
+#elif defined GIN_SDSL
     for(int_t i = 0; i < c->no_entries; i++) {
         rearranged_values->data[i] = (void*)sa[i];
     }
@@ -1149,7 +1193,9 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
     c->key_fmi = key_fmi;
     c->item_offsets = word_offsets;
     c->value_buffer_size_in_bits = (int_t)no_words_value_bits << WORD_LOG_BITS;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    c->key_fmi_size_in_bits = gin_dfmi_size_in_bytes(key_fmi) << 3;
+#elif defined GIN_SDSL
     c->key_fmi_size_in_bits = csa_wt_size_in_bytes(key_fmi) << 3;
 #else
     c->key_fmi_size_in_bits = key_fmi->no_bits;
@@ -1158,7 +1204,16 @@ void gin_gin_cache_init(gin_gin_cache_t **cache, gin_gin_t *gin, int_t depth) {
 }
 
 bool gin_gin_cache_advance_query(gin_gin_cache_t *cache, gin_gin_cache_qr_t *qr) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    char c = qr->pattern->seq[qr->pos];
+    count_t rank_lo_m_1 = qr->lo ? gin_dfmi_rank(cache->key_fmi, qr->lo-1, c) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? gin_dfmi_rank(cache->key_fmi, qr->hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(cache->key_fmi,c);
+    qr->lo = (int_t)(base + rank_lo_m_1);
+    qr->hi = (int_t)(base + rank_hi_m_1);
+    --qr->pos;
+    return qr->hi > qr->lo;
+#elif defined GIN_SDSL
     char c = qr->pattern->seq[qr->pos];
     count_t rank_lo = qr->lo ? csa_wt_rank(cache->key_fmi, qr->lo, c) : 0ull;
     count_t rank_hi = csa_wt_rank(cache->key_fmi, qr->hi, c);
@@ -1180,7 +1235,14 @@ bool gin_gin_cache_advance_query(gin_gin_cache_t *cache, gin_gin_cache_qr_t *qr)
 }
 
 bool gin_gin_cache_query_precedence_range(gin_gin_cache_t *cache, gin_gin_cache_qr_t *qr, char_t c, int_t *lo, int_t *hi) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    count_t rank_lo_m_1 = qr->lo ? gin_dfmi_rank(cache->key_fmi, qr->lo-1, c) : 0ull;
+    count_t rank_hi_m_1 = qr->hi ? gin_dfmi_rank(cache->key_fmi, qr->hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(cache->key_fmi,c);
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
+    return *hi > *lo;
+#elif defined GIN_SDSL
     count_t rank_lo = qr->lo ? csa_wt_rank(cache->key_fmi, qr->lo, c) : 0ull;
     count_t rank_hi = csa_wt_rank(cache->key_fmi, qr->hi, c);
     uint64_t base = csa_wt_char_sa_base(cache->key_fmi, c);
@@ -1202,7 +1264,9 @@ void gin_gin_cache_lookup(gin_gin_cache_t *cache, gin_string_t *string, int_t st
     gin_vector_t *forks;
     gin_gin_cache_qr_t query;
     query.lo = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    query.hi = gin_dfmi_bwt_length(cache->key_fmi)+1;
+#elif defined GIN_SDSL
     query.hi = csa_wt_bwt_length(cache->key_fmi);
 #else
     query.hi = cache->key_fmi->no_chars+1;
@@ -1284,7 +1348,9 @@ void gin_gin_cache_serialize_to_buffer(gin_gin_cache_t *cache, unsigned char **b
 
     uint8_t *fmi_buf = NULL;
     uint64_t fmi_buf_size = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
+#elif defined GIN_SDSL
     csa_wt_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
 #else
     gin_fmi_serialize_to_buffer(cache->key_fmi, &fmi_buf, &fmi_buf_size);
@@ -1379,7 +1445,9 @@ void gin_gin_cache_serialize_from_buffer(gin_gin_cache_t **cachew, unsigned char
         fmi_buf_word[i] = word;
         ridx += WORD_NUM_BITS;
     }
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    cache->key_fmi = gin_dfmi_from_buffer(fmi_buf, fmi_buf_size);
+#elif defined GIN_SDSL
     cache->key_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
 #else
     gin_fmi_serialize_from_buffer(fmi_buf, fmi_buf_size, &cache->key_fmi);
@@ -1403,7 +1471,9 @@ void gin_gin_cache_serialize_from_buffer(gin_gin_cache_t **cachew, unsigned char
 
 void gin_gin_cache_free(gin_gin_cache_t *cache) {
     if(!cache) return;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_free(cache->key_fmi);
+#elif defined GIN_SDSL
     csa_wt_free(cache->key_fmi);
 #else
     gin_fmi_free(cache->key_fmi);
@@ -1414,7 +1484,17 @@ void gin_gin_cache_free(gin_gin_cache_t *cache) {
 }
 
 bool gin_gin_advance_fork(gin_gin_t *gin, gin_fork_node_t *fork, gin_string_t *pattern) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *dfmi = gin->dfmi;
+    char c = pattern->seq[fork->pos];
+    count_t rank_lo_m_1 = fork->sa_lo ? gin_dfmi_rank(dfmi, fork->sa_lo-1, c) : 0ull;
+    count_t rank_hi_m_1 = fork->sa_hi ? gin_dfmi_rank(dfmi, fork->sa_hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(dfmi,c);
+    fork->sa_lo = (int_t)(base + rank_lo_m_1);
+    fork->sa_hi = (int_t)(base + rank_hi_m_1);
+    --fork->pos;
+    return fork->sa_hi > fork->sa_lo;
+#elif defined GIN_SDSL
     sdsl_csa *fmi = gin->graph_fmi;
     char c = pattern->seq[fork->pos];
     count_t rank_lo = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
@@ -1438,7 +1518,15 @@ bool gin_gin_advance_fork(gin_gin_t *gin, gin_fork_node_t *fork, gin_string_t *p
 }
 
 bool gin_gin_fork_precedence_range(gin_gin_t *gin, gin_fork_node_t *fork, char_t c, int_t *lo, int_t *hi) {
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *dfmi = gin->dfmi;
+    uint64_t rank_lo_m_1 = fork->sa_lo ? gin_dfmi_rank(dfmi, fork->sa_lo-1, c) : 0ull;
+    uint64_t rank_hi_m_1 = fork->sa_hi ? gin_dfmi_rank(dfmi, fork->sa_hi-1, c) : 0ull;
+    uint64_t base = gin_dfmi_char_sa_base(dfmi,c);
+    *lo = (int_t)(base + rank_lo_m_1);
+    *hi = (int_t)(base + rank_hi_m_1);
+    return *hi > *lo;
+#elif defined GIN_SDSL
     sdsl_csa *fmi = gin->graph_fmi;
     count_t rank_lo = fork->sa_lo ? csa_wt_rank(fmi, fork->sa_lo, c) : 0ull;
     count_t rank_hi = csa_wt_rank(fmi, fork->sa_hi, c);
@@ -1457,6 +1545,110 @@ bool gin_gin_fork_precedence_range(gin_gin_t *gin, gin_fork_node_t *fork, char_t
     return *hi > *lo;
 #endif
 }
+
+#ifdef GIN_DNA_FMI_DR
+void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, int_t max_forks, int_t *t, gin_vector_t **cur_forks, gin_vector_t **partial_matches, gin_gin_stats_t *stats) {
+    gin_vector_t *forks= *cur_forks;
+    int_t V = gin->permutation->size;
+    /**********************************************************************
+    * Step 1 - Fork and advance with double rank
+    **********************************************************************/
+    gin_vector_t *new_forks;
+    gin_vector_init(&new_forks, GIN_VECTOR_INIT_SIZE, &gin_fstruct_fork_node);
+    for (int_t i = 0; i < forks->size; i++) {
+        gin_fork_node_t *fork = forks->data[i];
+        int_t c_0_lo, c_0_hi;
+        gin_gin_advance_fork_double_rank(gin, fork, string, &c_0_lo, &c_0_hi);
+        bool more_to_track = max_forks == -1 || max_forks > forks->size;
+        if(more_to_track && c_0_lo < c_0_hi) {
+            gin_vector_t *incoming_sa_intervals;
+#ifdef GIN_ORACLE
+            gin_oimt_query(gin->oracle_r2r, c_0_lo - 1, c_0_hi - 2, string->seq[fork->pos], max_forks, &incoming_sa_intervals);
+#else
+            gin_imt_query(gin->r2r_tree, c_0_lo - 1, c_0_hi - 2, max_forks, &incoming_sa_intervals);
+#endif
+            int_t no_forks_to_add = max_forks == -1 ? incoming_sa_intervals->size : MIN2(max_forks - forks->size, incoming_sa_intervals->size);
+            for (int_t j = 0; j < no_forks_to_add; j++) {
+                gin_imt_interval_t *interval = incoming_sa_intervals->data[j];
+                gin_fork_node_t *new_fork = gin_fork_node_init(V+1+interval->lo, V+2+interval->hi,
+                                                               fork->pos+1, // take from previous position when double rank
+                                                               MAIN);
+                gin_vector_append(new_forks, new_fork);
+            }
+            gin_vector_free(incoming_sa_intervals);
+        }
+    }
+    /**********************************************************************
+    * Step 2 - Merge phase: merge overlapping ranges on the vertices
+    **********************************************************************/
+    gin_vector_t *merged;
+    gin_gin_compact_forks(gin, new_forks, &merged);
+    gin_vector_free(new_forks);
+    /**********************************************************************
+    * Step 3 - Advance Phase: advance each fork once
+    **********************************************************************/
+    gin_vector_t *next_iter_forks;
+    gin_vector_init(&next_iter_forks, forks->size + merged->size, &gin_fstruct_fork_node);
+    // Filter previous queries
+    for(int_t i = 0; i < forks->size; i++) {
+        gin_fork_node_t *fork = forks->data[i];
+        if(fork->sa_lo >= fork->sa_hi) { // query died while advancing
+            fork->type = DEAD;
+            gin_vector_append(*partial_matches, fork);
+        } else {
+            if(*t==1) {
+                fork->type = LEAF;
+            }
+            gin_vector_append(next_iter_forks, fork);
+        }
+    }
+    // Advance and filter next forks
+    for (int_t i = 0; i < merged->size; i++) {
+        gin_fork_node_t *fork = merged->data[i];
+        gin_gin_advance_fork(gin, fork, string);
+        if (fork->sa_lo >= fork->sa_hi) {
+            fork->type = DEAD;
+            gin_vector_append(*partial_matches, fork);
+        } else {
+            gin_vector_append(next_iter_forks, fork);
+        }
+    }
+    stats->no_calls_to_advance_fork += forks->size + merged->size;
+    gin_vector_free_disown(merged);
+    gin_vector_free_disown(forks);
+    *cur_forks = next_iter_forks;
+    --(*t);
+}
+
+
+void gin_gin_advance_fork_double_rank(gin_gin_t *gin, gin_fork_node_t *fork, gin_string_t *pattern, int_t *lo, int_t *hi) {
+    gin_dfmi_t *dfmi = gin->dfmi;
+    char c1 = pattern->seq[fork->pos];
+    char c2 = gin->c_0;
+
+    int64_t rank_lo_m_1 = 0;
+    int64_t rank_hi_m_1 = 0;
+    int64_t rank_c0_lo_m_1 = 0;
+    int64_t rank_c0_hi_m_1 = 0;
+
+    if(fork->sa_lo) {
+        gin_dfmi_double_rank(dfmi, fork->sa_lo - 1, c1, c2, &rank_lo_m_1, &rank_c0_lo_m_1);
+    }
+    if(fork->sa_hi) {
+        gin_dfmi_double_rank(dfmi, fork->sa_hi - 1, c1, c2, &rank_hi_m_1, &rank_c0_hi_m_1);
+    }
+
+    uint64_t base    = gin_dfmi_char_sa_base(dfmi,c1);
+    uint64_t base_c0 = gin_dfmi_char_sa_base(dfmi,c2);
+
+    fork->sa_lo = (int_t)(base + rank_lo_m_1);
+    fork->sa_hi = (int_t)(base + rank_hi_m_1);
+    --fork->pos;
+
+    *lo = (int_t)(base_c0 + rank_c0_lo_m_1);
+    *hi = (int_t)(base_c0 + rank_c0_hi_m_1);
+}
+#endif
 
 gin_vector_t *gin_gin_init_pcodes_fixed_binary_helper(char_t a_0, char_t a_1, int_t no_codewords) {
     gin_vector_t *rval;
@@ -1551,7 +1743,11 @@ void gin_gin_serialize_from_buffer(gin_gin_t **gin_ret, unsigned char *buf, uint
         fmi_buf_word[i] = word;
         ridx += WORD_NUM_BITS;
     }
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin->dfmi = gin_dfmi_from_buffer(fmi_buf, fmi_buf_size);
+    gin->no_chars = gin_dfmi_bwt_length(gin->dfmi);
+    gin_dfmi_populate_alphabet(gin->dfmi, &gin->alphabet, &gin->alphabet_size);
+#elif defined GIN_SDSL
     gin->graph_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
     gin->no_chars = csa_wt_bwt_length(gin->graph_fmi);
     csa_wt_populate_alphabet(gin->graph_fmi, &gin->alphabet, &gin->alphabet_size);
@@ -1666,7 +1862,9 @@ void gin_gin_serialize_to_buffer(gin_gin_t *gin, unsigned char **buf_ret, uint64
 
     uint8_t *fmi_buf = NULL;
     uint64_t fmi_buf_size = 0;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_to_buffer(gin->dfmi, &fmi_buf, &fmi_buf_size);
+#elif defined GIN_SDSL
     csa_wt_to_buffer(gin->graph_fmi, &fmi_buf, &fmi_buf_size);
 #else
     gin_fmi_serialize_to_buffer(gin->graph_fmi, &fmi_buf, &fmi_buf_size);

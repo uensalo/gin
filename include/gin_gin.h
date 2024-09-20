@@ -56,7 +56,9 @@
 #define GIN_GIN_CACHE_FORK_BOUNDARY_BIT_LENGTH 64
 #define GIN_GIN_CACHE_FMI_DEFAULT_RANK_RATE 16
 
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+#include "gin_dna_fmi.h"
+#elif defined GIN_SDSL
 typedef void* sdsl_csa;
 #endif
 
@@ -68,7 +70,9 @@ typedef struct gin_gin_ {
     int_t *alphabet;
     int_t alphabet_size;
     int_t no_chars;
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *dfmi;
+#elif defined GIN_SDSL
     sdsl_csa *graph_fmi; // fm-index of the graph encoding
 #else
     gin_fmi_t *graph_fmi; // fm-index of the graph encoding
@@ -141,7 +145,9 @@ typedef struct gin_gin_cache_ { // implements an "FM-table"
     word_t *item_offsets;
     word_t *items;
     // payload:
-#ifdef GIN_SDSL
+#ifdef GIN_DNA_FMI
+    gin_dfmi_t *key_fmi;
+#elif defined GIN_SDSL
     sdsl_csa *key_fmi;
 #else
     gin_fmi_t *key_fmi;
@@ -201,6 +207,11 @@ void gin_gin_query_find_step(gin_gin_t *gin, gin_string_t *string, int_t max_for
 void gin_gin_query_find_bootstrapped(gin_gin_t *gin, gin_vector_t *bootstrap, int_t bootstrap_depth, gin_string_t *string, int_t max_forks, gin_vector_t **paths, gin_vector_t **dead_ends, gin_gin_stats_t *stats);
 void gin_gin_query_find(gin_gin_t *gin, gin_gin_cache_t *cache, gin_string_t *string, int_t max_forks, gin_vector_t **paths, gin_vector_t **dead_ends, gin_gin_stats_t **stats);
 void gin_gin_compact_forks(gin_gin_t *gin, gin_vector_t *forks, gin_vector_t **merged_forks);
+
+#ifdef GIN_DNA_FMI_DR
+void gin_gin_query_find_step_double_rank(gin_gin_t *gin, gin_string_t *string, int_t max_forks, int_t *t, gin_vector_t **forks, gin_vector_t **partial_matches, gin_gin_stats_t *stats);
+void gin_gin_advance_fork_double_rank(gin_gin_t *gin, gin_fork_node_t *qr, gin_string_t *pattern, int_t *lo, int_t *hi);
+#endif
 
 /******************************************************************************
  * Result reporting and decoding

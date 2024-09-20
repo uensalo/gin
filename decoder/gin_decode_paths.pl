@@ -1,6 +1,6 @@
 ##
 # gin: FM-Index-like graph indexing algorithm toolkit.
-# Copyright (C) 2023, Unsal Ozturk
+# Copyright (C) 2023-2024, Unsal Ozturk
 #
 # gin_decode_paths.pl is part of gin
 #
@@ -48,18 +48,26 @@ sub find_paths {
     my $label_len = length($label);
     my $remaining_len = length($string) - $string_pos;
 
-    if (substr($string, $string_pos, $label_len) eq $label) {
-        if ($string_pos + $label_len == length($string)) {
-            print OUT "\t($start_o,$o);" . join(':', @$path, $v) . "\n";
+    # Number of characters to compare in this label
+    my $compare_len = $label_len < $remaining_len ? $label_len : $remaining_len;
+
+    # Substrings to compare
+    my $label_substr = substr($label, 0, $compare_len);
+    my $string_substr = substr($string, $string_pos, $compare_len);
+
+    if ($label_substr eq $string_substr) {
+        if ($label_len >= $remaining_len) {
+            # We have matched all remaining characters of the string
+            my $end_o = $o + $remaining_len;
+            print OUT "\t($start_o,$end_o);" . join(':', @$path, $v) . "\n";
         } else {
+            # Continue matching with neighbors
             foreach my $neighbor (@{$graph{$v}}) {
                 find_paths($string, $neighbor, 0, [@$path, $v], $start_o, $string_pos + $label_len);
             }
         }
-    } elsif (substr($label, 0, $remaining_len) eq substr($string, $string_pos)) {
-        my $end_o = $o + $remaining_len;
-        print OUT "\t($start_o,$end_o);" . join(':', @$path, $v) . "\n";
     }
+    # Substrings don't match, we stop this path
 }
 
 sub usage {
