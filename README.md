@@ -85,6 +85,12 @@ The software package currently has six compile time CMake options.
 - **`BUILD_DEBUG`** (`set(BUILD_DEBUG OFF)`)
   Build in debug mode, with `-O0` and libasan. Only interesting for development purposes.
 
+- **`BUILD_DNA_FMI`** (`set(BUILD_DNA_FMI ON)`)
+  Enables DNA-optimised cache friendly FM-Index. Recommended if the input graph contains only (A,C,G,T,N).
+
+- **`BUILD_DNA_FMI_DR`** (`set(BUILD_DNA_FMI_DR ON)`)
+  Enables double rank queries with the DNA-optimised FM-Index. `BUILD_DNA_FMI` Must be on.
+
 - **`BUILD_SDSL`** (`set(BUILD_SDSL ON)`)
   Builds the project based on the `sdsl` implementation of an FM-Index. Renders sampling rate parameters useless. Indices generated with the option enabled or disabled have different bitstreams and are not compatible. Enabling the `sdsl` implementation can significantly decrease index size, but will scale poorly if the alphabet is large.
 
@@ -111,9 +117,6 @@ Next, place the two input items with names `GRCh38-20-0.10b.ging` and `gencode.v
 
 The input files to these programs can be obtained from the [minigraph repository](https://github.com/lh3/minigraph) and [GENCODE Release 40](https://www.gencodegenes.org/human/release_40.html).
 For the pangenome, to simplify things, one might also convert nucleotide substitution codes to `N`s.
-
-Alternatively, [this Google Drive link hosts the input files ready to be benchmarked, including the vertex permutations](`https://drive.google.com/drive/folders/1q27lbbjXbHatMXARKhcHacWGnwaCISkO?usp=sharing`). Note that generating vertex permutations
-is a memory intensive procedure, and it is recommended to download these from the Google Drive link and place them under `benchmark/res/permutation`.
 
 Then, run
 ```bash
