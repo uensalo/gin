@@ -4,21 +4,24 @@
 The data structure indexes all possible string walks on the graph and supports various implementations whose memory requirements scale linearly (or sub-linearly) 
 scale with the size of the input graph.   
 
-# Manuscript
-A [bioRxiv preprint](https://www.biorxiv.org/content/10.1101/2023.11.01.565214v1) is available. If you'd like to include GIN-TONIC in your work, please cite the preprint as follows.
+# Paper and Citing
+If you'd like to include GIN-TONIC in your work, please cite the paper as follows.
 
 ```
-@article {{\"O}zt{\"u}rk2023.11.01.565214,
-	author = {{\"U}nsal {\"O}zt{\"u}rk and Marco Mattavelli and Paolo Ribeca},
-	title = {{GIN-TONIC}: {N}on-hierarchical full-text indexing for graph-genomes},
-	elocation-id = {2023.11.01.565214},
-	year = {2023},
-	doi = {10.1101/2023.11.01.565214},
-	publisher = {Cold Spring Harbor Laboratory},
-	abstract = {This paper presents a new data structure, GIN-TONIC, designed to index arbitrary string-labelled directed graphs representing, for instance, pangenomes or transcriptomes. GIN-TONIC provides several capabilities not offered by other graph-indexing methods based on the FM-index. It is non-hierarchical, handling a graph as a single monolithic object; it indexes at nucleotide resolution all possible walks in the graph without the need to explicitly store them; it supports exact substring queries in polynomial time and space for all possible walk roots in the graph, even if there are exponentially many walks corresponding to such roots. Specific ad-hoc optimisations, such as a precomputed cache, allow GIN-TONIC to achieve excellent performance for input graphs of various topologies and sizes. Robust scalability capabilities and a querying performance close to that of a linear FM-Index are demonstrated for two real-world applications, a human pangenome and transcriptome. Source code and associated benchmarks are available on GitHub.Competing Interest StatementThe authors have declared no competing interest.},
-	URL = {https://www.biorxiv.org/content/early/2023/11/04/2023.11.01.565214},
-	eprint = {https://www.biorxiv.org/content/early/2023/11/04/2023.11.01.565214.full.pdf},
-	journal = {bioRxiv}
+@article{10.1093/nargab/lqae159,
+    author = {{\"O}zt{\"u}rk, {\"U}nsal and Mattavelli, Marco and Ribeca, Paolo},
+    title = {GIN-TONIC: non-hierarchical full-text indexing for graph genomes},
+    journal = {NAR Genomics and Bioinformatics},
+    volume = {6},
+    number = {4},
+    pages = {lqae159},
+    year = {2024},
+    month = {12},
+    abstract = {This paper presents a new data structure, GIN-TONIC (Graph INdexing Through Optimal Near Interval Compaction), designed to index arbitrary string-labelled directed graphs representing, for instance, pangenomes or transcriptomes. GIN-TONIC provides several capabilities not offered by other graph-indexing methods based on the FM-Index. It is non-hierarchical, handling a graph as a monolithic object; it indexes at nucleotide resolution all possible walks in the graph without the need to explicitly store them; it supports exact substring queries in polynomial time and space for all possible walk roots in the graph, even if there are exponentially many walks corresponding to such roots. Specific ad-hoc optimizations, such as precomputed caches, allow GIN-TONIC to achieve excellent performance for input graphs of various topologies and sizes. Robust scalability capabilities and a querying performance close to that of a linear FM-Index are demonstrated for two real-world applications on the scale of human pangenomes and transcriptomes. Source code and associated benchmarks are available on GitHub.},
+    issn = {2631-9268},
+    doi = {10.1093/nargab/lqae159},
+    url = {https://doi.org/10.1093/nargab/lqae159},
+    eprint = {https://academic.oup.com/nargab/article-pdf/6/4/lqae159/61033863/lqae159.pdf},
 }
 ```
 The input data used in this paper is available via another GitHub repository, [gin-data](https://github.com/uensalo/gin-data). The repository contains two graph genomes in `.ging` format.
