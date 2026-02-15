@@ -137,7 +137,7 @@ void gin_gin_init(gin_gin_t** gin, gin_graph_t *graph, gin_vector_t *permutation
 #ifdef GIN_DNA_FMI
     f->dfmi = gin_dfmi_build(graph_encoding->seq, graph_encoding->size, isa_sample_rate);
     gin_dfmi_populate_alphabet(f->dfmi, &f->alphabet, &f->alphabet_size);
-    f->no_chars = gin_dfmi_bwt_length(f->dfmi);
+    f->no_chars = gin_dfmi_bwt_length(f->dfmi) + 1;
 #elif defined GIN_SDSL
     f->graph_fmi = csa_wt_build(graph_encoding->seq, graph_encoding->size);
     csa_wt_populate_alphabet(f->graph_fmi, &f->alphabet, &f->alphabet_size);
@@ -1745,7 +1745,7 @@ void gin_gin_serialize_from_buffer(gin_gin_t **gin_ret, unsigned char *buf, uint
     }
 #ifdef GIN_DNA_FMI
     gin->dfmi = gin_dfmi_from_buffer(fmi_buf, fmi_buf_size);
-    gin->no_chars = gin_dfmi_bwt_length(gin->dfmi);
+    gin->no_chars = gin_dfmi_bwt_length(gin->dfmi) + 1;
     gin_dfmi_populate_alphabet(gin->dfmi, &gin->alphabet, &gin->alphabet_size);
 #elif defined GIN_SDSL
     gin->graph_fmi = csa_wt_from_buffer(fmi_buf, fmi_buf_size);
